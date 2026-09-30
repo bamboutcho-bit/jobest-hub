@@ -6167,13 +6167,20 @@
 
         // Topbar Setup Button
         const topBtn = document.getElementById('topbarSetupBtn');
-        const topPct = document.getElementById('topbarSetupPercent');
-        if (topBtn && topPct) {
-          topPct.textContent = `${res.completion_percent}%`;
+        if (topBtn) {
+          topBtn.style.display = 'inline-flex';
           if (res.completion_percent < 100) {
-            topBtn.style.display = 'inline-flex';
+            topBtn.style.background = 'rgba(245,158,11,0.18)';
+            topBtn.style.borderColor = 'rgba(245,158,11,0.5)';
+            topBtn.style.color = '#facc15';
+            topBtn.innerHTML = `<span>⚡ Setup:</span> <span>${res.completion_percent}%</span>`;
+            topBtn.title = 'Complete required information & environments to start using AutoHunt';
           } else {
-            topBtn.style.display = 'none';
+            topBtn.style.background = 'rgba(16,185,129,0.15)';
+            topBtn.style.borderColor = 'rgba(16,185,129,0.4)';
+            topBtn.style.color = '#34d399';
+            topBtn.innerHTML = `<span>✓ Setup:</span> <span>100% Ready</span>`;
+            topBtn.title = 'Setup is 100% complete! Click to review or adjust your profile & automation settings';
           }
         }
 
