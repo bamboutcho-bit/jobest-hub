@@ -138,6 +138,12 @@
           </div>
         </div>
 
+        <!-- Setup Assistant Quick Launch Button -->
+        <button id="topbarSetupBtn" onclick="openOnboardingModal()" class="btn btn-sm" style="display:none;align-items:center;gap:6px;background:rgba(245,158,11,0.18);border:1px solid rgba(245,158,11,0.5);color:#facc15;font-weight:700;padding:4px 10px;border-radius:8px;font-size:11px;cursor:pointer" title="Complete required information & environments to start using AutoHunt">
+          <span>⚡ Setup:</span>
+          <span id="topbarSetupPercent">0%</span>
+        </button>
+
         <!-- User Badge & RBAC Logout -->
         <div id="navUserBadge" style="display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.03);border:1px solid var(--border);padding:3px 10px;border-radius:10px">
           <div style="font-size:12px;font-weight:700" id="navUserName">Loading...</div>
@@ -148,6 +154,21 @@
         </div>
       </div>
     </header>
+
+    <!-- Global Dismissible Setup Notice Banner -->
+    <div id="setupAlertBanner" style="display:none;margin:12px 24px 0;background:linear-gradient(90deg, rgba(245,158,11,0.12) 0%, rgba(139,92,246,0.14) 100%);border:1px solid rgba(245,158,11,0.35);border-radius:12px;padding:12px 18px;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:12px">
+        <span style="font-size:22px">⚠️</span>
+        <div>
+          <div style="font-weight:700;color:#fff;font-size:13px">Setup Incomplete — <span id="bannerSetupPercent">40%</span> Ready</div>
+          <div style="color:var(--text-muted);font-size:11.5px">Complete your career roles, skills, CV, and SMTP email credentials to enable autonomous applications.</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button type="button" class="btn btn-sm btn-cyan" onclick="openOnboardingModal()" style="font-weight:700">⚡ Complete Setup Now</button>
+        <button type="button" class="btn btn-sm" onclick="dismissSetupBanner()" style="color:var(--text-muted);border:none;background:transparent;cursor:pointer" title="Dismiss for this session">✕</button>
+      </div>
+    </div>
 
     <!-- ================================================================= -->
     <!-- VIEW 1: FREELANCE & CLIENT ACQUISITION HUB -->
@@ -1139,7 +1160,8 @@
             </h3>
             <div style="font-size:12px;color:var(--text-muted)">Configure your personal sender credentials, SMTP/IMAP, notification channels, and custom environment variables.</div>
           </div>
-          <div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-sm" onclick="openOnboardingModal()" style="font-weight:700;border-color:rgba(168,85,247,0.5);color:var(--purple-light)">🚀 Open Setup Assistant & Tutorials</button>
             <button class="btn btn-sm btn-cyan" onclick="saveUserSettings()" style="font-weight:700">💾 Save All Settings</button>
           </div>
         </div>
@@ -2487,6 +2509,330 @@
     </div>
   </div>
 
+  <!-- ================================================================= -->
+  <!-- MODAL: FIRST-TIME USER SETUP & ONBOARDING ASSISTANT               -->
+  <!-- ================================================================= -->
+  <div id="onboardingModal" class="modal-backdrop" style="display:none;z-index:10050" onclick="if(event.target===this)closeOnboardingModal(true)">
+    <div class="onboarding-card">
+      
+      <!-- Modal Header -->
+      <div class="onboarding-header">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg, rgba(168,85,247,0.3), rgba(6,182,212,0.3));border:1px solid rgba(168,85,247,0.5);display:flex;align-items:center;justify-content:center;font-size:22px">
+            🚀
+          </div>
+          <div>
+            <h3 style="font-size:18px;font-weight:800;color:#fff;display:flex;align-items:center;gap:8px">
+              <span>AutoHunt Quick Setup & Launch Assistant</span>
+              <span id="onbBadgeMode" class="pill" style="font-size:10px;background:rgba(6,182,212,0.2);color:#22d3ee;border-color:rgba(6,182,212,0.4)">New User Guide</span>
+            </h3>
+            <div style="font-size:12px;color:var(--text-muted)">Configure your career profile, CV, and outbound email to unleash autonomous job discovery.</div>
+          </div>
+        </div>
+        <button type="button" class="btn btn-sm btn-icon" onclick="closeOnboardingModal(true)" title="Remind me later" style="font-size:14px;color:var(--text-muted)">✕</button>
+      </div>
+
+      <!-- Real-Time Setup Readiness Progress Bar -->
+      <div class="onb-progress-wrap">
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-weight:700;color:var(--text)">Setup Readiness:</span>
+            <span id="onbScoreBadge" class="pill" style="background:rgba(245,158,11,0.2);color:#facc15;font-weight:800;font-size:11px">25% (Incomplete)</span>
+          </div>
+          <div id="onbMissingSummary" style="color:var(--text-muted);font-size:11px">3 required items remaining</div>
+        </div>
+        <div class="onb-progress-bar-bg">
+          <div id="onbProgressBarFill" class="onb-progress-bar-fill" style="width:25%"></div>
+        </div>
+      </div>
+
+      <!-- Step Navigation Tabs -->
+      <div class="onb-step-tabs">
+        <button type="button" id="onbTabBtn1" class="onb-step-tab active" onclick="switchOnbStep(1)">
+          <span>1. Career & Roles</span>
+          <span id="onbCheck1" style="font-size:11px">⚠️</span>
+        </button>
+        <button type="button" id="onbTabBtn2" class="onb-step-tab" onclick="switchOnbStep(2)">
+          <span>2. Tech Stack</span>
+          <span id="onbCheck2" style="font-size:11px">⚠️</span>
+        </button>
+        <button type="button" id="onbTabBtn3" class="onb-step-tab" onclick="switchOnbStep(3)">
+          <span>3. CV / Resume</span>
+          <span id="onbCheck3" style="font-size:11px">⚠️</span>
+        </button>
+        <button type="button" id="onbTabBtn4" class="onb-step-tab" onclick="switchOnbStep(4)">
+          <span>4. Outbound Email (SMTP)</span>
+          <span id="onbCheck4" style="font-size:11px">⚠️</span>
+        </button>
+        <button type="button" id="onbTabBtn5" class="onb-step-tab" onclick="switchOnbStep(5)">
+          <span>5. Tutorial & How It Works</span>
+          <span>💡</span>
+        </button>
+      </div>
+
+      <!-- STEP 1: CAREER & TARGET ROLES -->
+      <div id="onbStep1" class="onb-step-panel active">
+        <div style="margin-bottom:16px">
+          <div style="font-size:15px;font-weight:700;color:var(--cyan-light);margin-bottom:4px">🎯 Target Job Titles & Career Identity</div>
+          <div style="font-size:12px;color:var(--text-muted)">Tell AutoHunt what job roles to look for. Our discovery spiders prioritize positions matching these titles.</div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+          <div>
+            <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;font-weight:600">Your Full Name *</label>
+            <input type="text" id="onbFullName" class="form-control" placeholder="e.g. Sarah Connor" style="width:100%">
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;font-weight:600">Professional Headline</label>
+            <input type="text" id="onbHeadline" class="form-control" placeholder="e.g. Senior Fullstack Engineer" style="width:100%">
+          </div>
+        </div>
+
+        <div style="margin-bottom:16px">
+          <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:6px;font-weight:600">Quick-Select Popular Titles (Click to add/remove):</label>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">
+            <button type="button" class="onb-pill-btn" onclick="toggleOnbTitle('Fullstack Developer', this)">+ Fullstack Developer</button>
+            <button type="button" class="onb-pill-btn" onclick="toggleOnbTitle('Backend Engineer', this)">+ Backend Engineer</button>
+            <button type="button" class="onb-pill-btn" onclick="toggleOnbTitle('Frontend Developer', this)">+ Frontend Developer</button>
+            <button type="button" class="onb-pill-btn" onclick="toggleOnbTitle('Python Developer', this)">+ Python Developer</button>
+            <button type="button" class="onb-pill-btn" onclick="toggleOnbTitle('Software Engineer', this)">+ Software Engineer</button>
+            <button type="button" class="onb-pill-btn" onclick="toggleOnbTitle('DevOps Engineer', this)">+ DevOps Engineer</button>
+            <button type="button" class="onb-pill-btn" onclick="toggleOnbTitle('Data Scientist', this)">+ Data Scientist</button>
+            <button type="button" class="onb-pill-btn" onclick="toggleOnbTitle('AI / ML Engineer', this)">+ AI / ML Engineer</button>
+          </div>
+          <div style="display:flex;gap:8px">
+            <input type="text" id="onbCustomTitleInput" class="form-control" placeholder="Type custom job title and press Enter..." style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();addOnbCustomTitle();}">
+            <button type="button" class="btn btn-sm btn-cyan" onclick="addOnbCustomTitle()">+ Add Title</button>
+          </div>
+          <div id="onbSelectedTitlesList" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;min-height:32px"></div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+          <div>
+            <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:6px;font-weight:600">Target Locations / Remote</label>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">
+              <button type="button" class="onb-pill-btn selected" onclick="toggleOnbLocation('Remote', this)">🌍 Remote</button>
+              <button type="button" class="onb-pill-btn" onclick="toggleOnbLocation('France', this)">🇫🇷 France</button>
+              <button type="button" class="onb-pill-btn" onclick="toggleOnbLocation('United States', this)">🇺🇸 US</button>
+              <button type="button" class="onb-pill-btn" onclick="toggleOnbLocation('United Kingdom', this)">🇬🇧 UK</button>
+              <button type="button" class="onb-pill-btn" onclick="toggleOnbLocation('Germany', this)">🇩🇪 Germany</button>
+              <button type="button" class="onb-pill-btn" onclick="toggleOnbLocation('Morocco', this)">🇲🇦 Morocco</button>
+            </div>
+            <div id="onbSelectedLocationsList" style="display:flex;flex-wrap:wrap;gap:6px;min-height:24px"></div>
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;font-weight:600">Total Years of Professional Experience</label>
+            <input type="number" id="onbExpYears" class="form-control" value="3" min="0" max="40" style="width:100%">
+            <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Used by NLP matching filters to exclude junior/senior mismatches.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 2: TECH STACK & SKILLS -->
+      <div id="onbStep2" class="onb-step-panel">
+        <div style="margin-bottom:16px">
+          <div style="font-size:15px;font-weight:700;color:var(--purple-light);margin-bottom:4px">💻 Core Tech Stack & Competencies</div>
+          <div style="font-size:12px;color:var(--text-muted)">The AI evaluates live job descriptions against your tech stack using TF-IDF and semantic similarity.</div>
+        </div>
+
+        <div style="margin-bottom:16px">
+          <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:6px;font-weight:600">Quick-Select Popular Technologies (Click to toggle):</label>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">
+            <button type="button" class="onb-pill-btn" onclick="toggleOnbStack('Python', this)">Python</button>
+            <button type="button" class="onb-pill-btn" onclick="toggleOnbStack('JavaScript', this)">JavaScript</button>
+            <button type="button" class="onb-pill-btn" onclick="toggleOnbStack('TypeScript', this)">TypeScript</button>
+            <button type="button" class="onb-pill-btn" onclick="toggleOnbStack('React', this)">React</button>
+            <button type="button" class="onb-pill-btn" onclick="toggleOnbStack('Node.js', this)">Node.js</button>
+            <button type="button" class="onb-pill-btn" onclick="toggleOnbStack('FastAPI', this)">FastAPI</button>
+            <button type="button" class="onb-pill-btn" onclick="toggleOnbStack('Docker', this)">Docker</button>
+            <button type="button" class="onb-pill-btn" onclick="toggleOnbStack('PostgreSQL', this)">PostgreSQL</button>
+            <button type="button" class="onb-pill-btn" onclick="toggleOnbStack('Java', this)">Java</button>
+            <button type="button" class="onb-pill-btn" onclick="toggleOnbStack('Spring Boot', this)">Spring Boot</button>
+            <button type="button" class="onb-pill-btn" onclick="toggleOnbStack('AWS', this)">AWS</button>
+            <button type="button" class="onb-pill-btn" onclick="toggleOnbStack('Kubernetes', this)">Kubernetes</button>
+            <button type="button" class="onb-pill-btn" onclick="toggleOnbStack('Next.js', this)">Next.js</button>
+            <button type="button" class="onb-pill-btn" onclick="toggleOnbStack('GraphQL', this)">GraphQL</button>
+          </div>
+          <div style="display:flex;gap:8px">
+            <input type="text" id="onbCustomStackInput" class="form-control" placeholder="Type custom technology and press Enter (e.g. Golang, Rust, Redis)..." style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();addOnbCustomStack();}">
+            <button type="button" class="btn btn-sm btn-cyan" onclick="addOnbCustomStack()">+ Add Skill</button>
+          </div>
+          <div id="onbSelectedStackList" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;min-height:32px"></div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:10px;padding:14px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <label style="font-size:12px;font-weight:700;color:var(--text)">Minimum Match Score Threshold</label>
+            <span id="onbScoreValueDisplay" style="font-weight:800;color:var(--cyan-light);font-size:14px">65%</span>
+          </div>
+          <input type="range" id="onbMinScoreSlider" min="50" max="90" value="65" style="width:100%" oninput="document.getElementById('onbScoreValueDisplay').textContent=this.value+'%'">
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-top:4px">
+            <span>50% (More volume, looser match)</span>
+            <span>65% (Recommended balanced)</span>
+            <span>90% (Strict exact matches)</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 3: CV / RESUME STUDIO -->
+      <div id="onbStep3" class="onb-step-panel">
+        <div style="margin-bottom:14px">
+          <div style="font-size:15px;font-weight:700;color:var(--cyan-light);margin-bottom:4px">📄 CV / Resume Studio & Text Extractor</div>
+          <div style="font-size:12px;color:var(--text-muted)">Upload your CV or paste resume text. AutoHunt's NLP engine extracts your accomplishments to tailor pitch emails.</div>
+        </div>
+
+        <!-- File Upload Dropzone -->
+        <div class="onb-dropzone" id="onbCvDropzone" onclick="document.getElementById('onbCvFileInput').click()">
+          <input type="file" id="onbCvFileInput" accept=".pdf,.docx,.txt" style="display:none" onchange="handleOnbCvFileSelect(event)">
+          <div style="font-size:32px;margin-bottom:6px">📁</div>
+          <div style="font-weight:700;color:#fff;font-size:13px" id="onbDropzoneTitle">Drop your CV here, or click to browse</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Supports PDF, DOCX, or TXT (Max 5MB)</div>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;margin:14px 0 6px">
+          <label style="font-size:11px;color:var(--text-muted);font-weight:600">Resume Plain Text / Accomplishments</label>
+          <button type="button" class="btn btn-sm" onclick="triggerOnbMlAnalysis()" id="btnOnbMlExtract" style="font-size:10px;padding:2px 8px;border-color:rgba(168,85,247,0.5);color:var(--purple-light)">
+            <span>⚡ Auto-Detect Skills from CV</span>
+          </button>
+        </div>
+        <textarea id="onbResumeText" class="form-control" rows="8" style="width:100%;font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.5" placeholder="Paste your CV text, key accomplishments, projects, and work history here, or upload your PDF above to automatically populate this studio..."></textarea>
+      </div>
+
+      <!-- STEP 4: OUTBOUND EMAIL & SMTP -->
+      <div id="onbStep4" class="onb-step-panel">
+        <div style="margin-bottom:14px">
+          <div style="font-size:15px;font-weight:700;color:var(--purple-light);margin-bottom:4px">✉️ Outbound Email & Sender Environment (SMTP)</div>
+          <div style="font-size:12px;color:var(--text-muted)">AutoHunt connects securely to your SMTP provider (Gmail, Outlook, Zoho, etc.) to send applications from your email.</div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+          <div>
+            <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;font-weight:600">Sender Full Name *</label>
+            <input type="text" id="onbSenderName" class="form-control" placeholder="e.g. Sarah Connor" style="width:100%">
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;font-weight:600">Sender Email Address *</label>
+            <input type="email" id="onbSenderEmail" class="form-control" placeholder="e.g. sarah@gmail.com" style="width:100%">
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:2fr 1fr 2fr;gap:10px;margin-bottom:12px">
+          <div>
+            <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;font-weight:600">SMTP Host</label>
+            <input type="text" id="onbSmtpHost" class="form-control" value="smtp.gmail.com" style="width:100%">
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;font-weight:600">Port</label>
+            <input type="number" id="onbSmtpPort" class="form-control" value="587" style="width:100%">
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;font-weight:600">SMTP App Password *</label>
+            <input type="password" id="onbSmtpPass" class="form-control" placeholder="16-letter App Password" style="width:100%">
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+          <div>
+            <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;font-weight:600">Alert Email (Where to notify you)</label>
+            <input type="email" id="onbAlertEmail" class="form-control" placeholder="e.g. sarah@gmail.com" style="width:100%">
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;font-weight:600">Auto-Apply Initial Mode</label>
+            <select id="onbAutoApplyMode" class="form-control" style="background:#0d1527;color:#fff;width:100%">
+              <option value="draft">Draft Mode (Review matches before sending)</option>
+              <option value="live">Live Auto-Send (Autonomous background dispatch)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Google App Password Step-by-Step Tutorial Box -->
+        <div class="onb-guide-box">
+          <div style="font-weight:700;color:var(--cyan-light);display:flex;align-items:center;gap:6px;margin-bottom:6px">
+            <span>🔑 Free Gmail SMTP Guide in 60 Seconds:</span>
+          </div>
+          <div style="color:var(--text);font-size:11.5px;line-height:1.6">
+            1. Open your <strong>Google Account</strong> (myaccount.google.com) &rarr; <strong>Security</strong>.<br>
+            2. Ensure <strong>2-Step Verification</strong> is ON.<br>
+            3. In the search box, type <strong>"App Passwords"</strong> (or scroll to 2-Step Verification &rarr; App Passwords).<br>
+            4. Name it <strong>"AutoHunt"</strong> and click <strong>Create</strong>.<br>
+            5. Copy the generated 16-letter code (e.g. <code>abcd efgh ijkl mnop</code>) and paste it into the password box above!
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 5: HOW IT WORKS & TUTORIAL -->
+      <div id="onbStep5" class="onb-step-panel">
+        <div style="margin-bottom:16px">
+          <div style="font-size:16px;font-weight:800;color:#fff;margin-bottom:4px">🚀 How AutoHunt Works & Interactive Tour</div>
+          <div style="font-size:12px;color:var(--text-muted)">Your autonomous 4-stage pipeline is now ready. Here is what happens under the hood:</div>
+        </div>
+
+        <div class="onb-tutorial-grid">
+          <div class="onb-tutorial-card">
+            <div style="font-size:24px">📡</div>
+            <div style="font-weight:700;color:var(--cyan-light);font-size:13px">1. Multi-Board Ingestion</div>
+            <div style="font-size:11.5px;color:var(--text-muted);line-height:1.5">
+              The scraper scans LinkedIn, Indeed, WeWorkRemotely, and Remotive for openings matching your titles and target countries.
+            </div>
+          </div>
+          <div class="onb-tutorial-card">
+            <div style="font-size:24px">🧠</div>
+            <div style="font-weight:700;color:var(--purple-light);font-size:13px">2. AI Relevance & Visa Gate</div>
+            <div style="font-size:11.5px;color:var(--text-muted);line-height:1.5">
+              Each job is scored against your tech stack (0-100%). Visa sponsorship and remote eligibility are automatically verified.
+            </div>
+          </div>
+          <div class="onb-tutorial-card">
+            <div style="font-size:24px">🎯</div>
+            <div style="font-weight:700;color:#ec4899;font-size:13px">3. HR & Recruiter Finder</div>
+            <div style="font-size:11.5px;color:var(--text-muted);line-height:1.5">
+              Identifies direct hiring managers and recruiters, verifying active email addresses to bypass black-hole portals.
+            </div>
+          </div>
+          <div class="onb-tutorial-card">
+            <div style="font-size:24px">🚀</div>
+            <div style="font-weight:700;color:var(--good);font-size:13px">4. Safe Autonomous Outreach</div>
+            <div style="font-size:11.5px;color:var(--text-muted);line-height:1.5">
+              Generates tailored pitches, attaches your CV, and dispatches applications within your plan's daily quota limit.
+            </div>
+          </div>
+        </div>
+
+        <!-- Dashboard Tour Highlights -->
+        <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:12px;padding:16px;margin-top:16px">
+          <div style="font-weight:700;font-size:13px;color:var(--text);margin-bottom:8px">🧭 Dashboard Key Controls & Navigation:</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:11.5px;color:var(--text-muted)">
+            <div>⚡ <strong>Run Discovery:</strong> Triggers immediate web search for new postings.</div>
+            <div>🚀 <strong>Auto-Apply:</strong> Dispatches applications to all pending qualified matches.</div>
+            <div>📬 <strong>Inbox & Replies:</strong> Monitors inbound responses & interviews in real-time.</div>
+            <div>💎 <strong>Plans & Billing:</strong> Upgrade your daily application limit anytime.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal Footer Controls -->
+      <div class="onb-footer">
+        <div style="display:flex;gap:8px">
+          <button type="button" class="btn btn-sm" id="onbBtnPrev" onclick="navigateOnbStep(-1)" style="display:none">
+            ← Previous
+          </button>
+          <button type="button" class="btn btn-sm" onclick="closeOnboardingModal(true)" style="color:var(--text-muted)">
+            I'll finish later
+          </button>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center">
+          <button type="button" class="btn btn-sm btn-cyan" id="onbBtnNext" onclick="navigateOnbStep(1)">
+            Next Step →
+          </button>
+          <button type="button" class="btn btn-primary" id="onbBtnFinish" onclick="submitOnboardingAndLaunch()" style="display:none;font-weight:800;padding:8px 18px">
+            ⚡ Save & Launch My First Discovery!
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
   <script src="/static/js/app.js?v=6.3.0"></script>
   <!-- Real-Time Floating Notification Toasts -->
   <div id="notifToastContainer" style="position:fixed;bottom:96px;right:24px;display:flex;flex-direction:column-reverse;gap:10px;z-index:99999;pointer-events:none"></div>
@@ -2524,6 +2870,7 @@
 
     <!-- Quick Prompt Suggestions Chips -->
     <div class="chatbot-quick-chips">
+      <button type="button" class="chatbot-chip" onclick="openOnboardingModal();toggleChatbot(false)" style="color:var(--cyan-light);border-color:rgba(6,182,212,0.4)">🚀 Setup Assistant</button>
       <button type="button" class="chatbot-chip" onclick="handleChipClick('How does automated applying work?')">⚡ How to apply?</button>
       <button type="button" class="chatbot-chip" onclick="handleChipClick('What are the subscription plans and global payment methods?')">💳 Plans & Payments</button>
       <button type="button" class="chatbot-chip" onclick="handleChipClick('How do I configure my personal Gmail SMTP in Settings?')">⚙️ Connect Email</button>

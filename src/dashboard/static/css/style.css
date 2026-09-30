@@ -1473,3 +1473,177 @@
       margin-top: 3px;
     }
 
+    /* =================================================================== */
+    /* ONBOARDING SETUP ASSISTANT & POPUP WIZARD                           */
+    /* =================================================================== */
+    .onboarding-card {
+      background: radial-gradient(circle at 15% 15%, rgba(30, 27, 75, 0.95) 0%, rgba(13, 21, 39, 0.98) 100%);
+      border: 1px solid rgba(168, 85, 247, 0.4);
+      border-radius: 18px;
+      width: 95%;
+      max-width: 840px;
+      max-height: 92vh;
+      overflow-y: auto;
+      box-shadow: 0 30px 90px rgba(0, 0, 0, 0.9), 0 0 45px rgba(139, 92, 246, 0.22);
+      display: flex;
+      flex-direction: column;
+    }
+    .onboarding-header {
+      padding: 20px 24px;
+      background: linear-gradient(135deg, rgba(30, 27, 75, 0.8) 0%, rgba(15, 23, 42, 0.95) 70%, rgba(6, 182, 212, 0.15) 100%);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 20;
+    }
+    .onb-progress-wrap {
+      background: rgba(255, 255, 255, 0.03);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      padding: 14px 24px;
+    }
+    .onb-progress-bar-bg {
+      height: 8px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 6px;
+      overflow: hidden;
+      margin-top: 8px;
+      position: relative;
+    }
+    .onb-progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #06b6d4 0%, #a855f7 60%, #ec4899 100%);
+      border-radius: 6px;
+      transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 0 12px rgba(168, 85, 247, 0.6);
+    }
+    .onb-step-tabs {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding: 10px 24px;
+      background: rgba(0, 0, 0, 0.25);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .onb-step-tab {
+      padding: 7px 14px;
+      border-radius: 8px;
+      font-size: 11.5px;
+      font-weight: 700;
+      color: var(--text-muted);
+      background: transparent;
+      border: 1px solid transparent;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+      transition: all 0.2s;
+    }
+    .onb-step-tab:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.04);
+    }
+    .onb-step-tab.active {
+      color: #fff;
+      background: rgba(168, 85, 247, 0.18);
+      border-color: rgba(168, 85, 247, 0.5);
+      box-shadow: 0 0 10px rgba(168, 85, 247, 0.2);
+    }
+    .onb-step-tab.completed {
+      color: var(--good);
+    }
+    .onb-step-panel {
+      padding: 24px;
+      display: none;
+    }
+    .onb-step-panel.active {
+      display: block;
+      animation: fadeIn 0.25s ease-out;
+    }
+    .onb-pill-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-size: 11.5px;
+      font-weight: 600;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: var(--text);
+      cursor: pointer;
+      transition: all 0.18s ease;
+      user-select: none;
+    }
+    .onb-pill-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.25);
+      transform: translateY(-1px);
+    }
+    .onb-pill-btn.selected {
+      background: rgba(6, 182, 212, 0.2);
+      border-color: #06b6d4;
+      color: #22d3ee;
+      box-shadow: 0 0 8px rgba(6, 182, 212, 0.35);
+    }
+    .onb-dropzone {
+      border: 2px dashed rgba(168, 85, 247, 0.4);
+      background: rgba(168, 85, 247, 0.04);
+      border-radius: 12px;
+      padding: 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.25s ease;
+    }
+    .onb-dropzone:hover, .onb-dropzone.dragover {
+      border-color: var(--cyan);
+      background: rgba(6, 182, 212, 0.08);
+      box-shadow: 0 0 16px rgba(6, 182, 212, 0.2);
+    }
+    .onb-tutorial-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 14px;
+      margin-top: 14px;
+    }
+    .onb-tutorial-card {
+      background: rgba(255, 255, 255, 0.025);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      transition: all 0.2s;
+    }
+    .onb-tutorial-card:hover {
+      background: rgba(255, 255, 255, 0.04);
+      border-color: rgba(168, 85, 247, 0.4);
+      transform: translateY(-2px);
+    }
+    .onb-guide-box {
+      background: rgba(13, 21, 39, 0.7);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-top: 12px;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+    .onb-footer {
+      padding: 16px 24px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(13, 21, 39, 0.95);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      position: sticky;
+      bottom: 0;
+      z-index: 20;
+    }
+

@@ -2927,6 +2927,247 @@ def api_user_update_env(req: CustomEnvUpdate, request: Request):
         return {"ok": True, "message": f"Custom env vars updated ({len(req.env_vars)} variables)."}
 
 
+# ---------------------------------------------------------------------------
+# First-Time User Setup & Onboarding Wizard APIs
+# ---------------------------------------------------------------------------
+
+class QuickOnboardRequest(BaseModel):
+    name: Optional[str] = None
+    headline: Optional[str] = None
+    target_titles: Optional[list[str]] = None
+    core_stack: Optional[list[str]] = None
+    target_locations: Optional[list[str]] = None
+    experience_years: Optional[int] = None
+    resume_text: Optional[str] = None
+    sender_name: Optional[str] = None
+    sender_email: Optional[str] = None
+    smtp_host: Optional[str] = None
+    smtp_port: Optional[int] = None
+    smtp_password: Optional[str] = None
+    alert_email: Optional[str] = None
+    min_match_score: Optional[int] = None
+    auto_apply_mode: Optional[str] = None
+
+
+class CvQuickParseRequest(BaseModel):
+    file_base64: Optional[str] = None
+    filename: Optional[str] = None
+    raw_text: Optional[str] = None
+
+
+@app.get("/api/user/setup_status")
+def api_user_get_setup_status(request: Request):
+    """Calculate the user's readiness score, missing environments, and onboarding checklist."""
+    from src.auth.service import get_current_user
+    user = get_current_user(request)
+    from src.storage.models import UserSetting, CandidateProfile, UserJobApplication
+
+    with get_session() as session:
+        # Check active or user profile
+        prof = session.scalar(
+            select(CandidateProfile)
+            .where(CandidateProfile.user_id == user.id)
+            .order_by(desc(CandidateProfile.is_active), desc(CandidateProfile.id))
+        )
+        if not prof and user.role == "admin":
+            prof = session.scalar(select(CandidateProfile).order_by(desc(CandidateProfile.is_active), desc(CandidateProfile.id)))
+
+        # Check user settings
+        us = session.scalar(select(UserSetting).where(UserSetting.user_id == user.id))
+
+        # Check application history for first-time status
+        apps_count = session.scalar(
+            select(func.count(UserJobApplication.id)).where(UserJobApplication.user_id == user.id)
+        ) or 0
+
+        def _get_list(raw):
+            if not raw: return []
+            if isinstance(raw, list): return raw
+            try: return json.loads(raw)
+            except Exception: return []
+
+        titles = _get_list(prof.target_titles) if prof else []
+        stack = _get_list(prof.core_stack) if prof else []
+        locations = _get_list(prof.target_locations) if prof else []
+        has_titles = bool(titles and len(titles) > 0)
+        has_stack = bool(stack and len(stack) > 0)
+        has_resume = bool(prof and ((prof.resume_text and len(prof.resume_text.strip()) > 30) or bool(prof.resume_path)))
+        has_smtp_email = bool(us and us.sender_email)
+        has_smtp_pass = bool(us and us.smtp_password)
+        has_locations = bool(locations and len(locations) > 0)
+
+        # 4 Core Pillars for Automation:
+        # 1. Target Titles (25%)
+        # 2. Tech Stack (25%)
+        # 3. Resume / CV text (25%)
+        # 4. Outbound Email / SMTP (25%)
+        score = 0
+        if has_titles: score += 25
+        if has_stack: score += 25
+        if has_resume: score += 25
+        if has_smtp_email and has_smtp_pass: score += 25
+        elif has_smtp_email: score += 15
+
+        missing = []
+        if not has_titles:
+            missing.append({
+                "id": "titles",
+                "title": "Target Job Titles",
+                "desc": "Specify roles you want to target (e.g. Fullstack Developer, Backend Engineer)"
+            })
+        if not has_stack:
+            missing.append({
+                "id": "stack",
+                "title": "Core Tech Stack",
+                "desc": "Add your primary skills & frameworks (e.g. React, Python, Docker)"
+            })
+        if not has_resume:
+            missing.append({
+                "id": "resume",
+                "title": "CV & Resume Studio",
+                "desc": "Upload your CV PDF/DOCX or paste resume text for AI matching"
+            })
+        if not (has_smtp_email and has_smtp_pass):
+            missing.append({
+                "id": "smtp",
+                "title": "Outbound Email Credentials",
+                "desc": "Configure your sender email & SMTP App Password to dispatch applications"
+            })
+
+        is_first_time = (apps_count == 0 and score < 100)
+
+        return {
+            "ok": True,
+            "completion_percent": score,
+            "is_complete": score >= 100,
+            "is_first_time": is_first_time,
+            "is_ready_for_automation": has_titles and has_stack and (has_resume or bool(prof and prof.resume_text)),
+            "checklist": {
+                "titles": has_titles,
+                "stack": has_stack,
+                "resume": has_resume,
+                "smtp": has_smtp_email and has_smtp_pass,
+                "locations": has_locations,
+            },
+            "missing_items": missing,
+            "profile": {
+                "name": prof.name if prof else (user.full_name or "Candidate"),
+                "headline": prof.headline if prof else "Software Engineer",
+                "target_titles": titles if titles else ["Fullstack Developer", "Backend Engineer"],
+                "core_stack": stack if stack else ["Python", "JavaScript", "React"],
+                "target_locations": locations if locations else ["Remote"],
+                "experience_years": prof.experience_years if prof else 3,
+                "resume_text": prof.resume_text if prof else "",
+            },
+            "settings": {
+                "sender_name": us.sender_name if us else (user.full_name or ""),
+                "sender_email": us.sender_email if us else (user.email or ""),
+                "smtp_host": us.smtp_host if us else "smtp.gmail.com",
+                "smtp_port": us.smtp_port if us else 587,
+                "has_smtp_password": bool(us and us.smtp_password),
+                "alert_email": us.alert_email if us else (user.email or ""),
+                "min_match_score": us.min_match_score if us else 65,
+                "auto_apply_mode": us.auto_apply_mode if us else "draft",
+            }
+        }
+
+
+@app.post("/api/user/quick_onboard")
+def api_user_quick_onboard(req: QuickOnboardRequest, request: Request):
+    """Atomic multi-step setup saver from the onboarding wizard."""
+    from src.auth.service import get_current_user
+    user = get_current_user(request)
+    from src.storage.models import UserSetting, CandidateProfile
+
+    with get_session() as session:
+        # CandidateProfile upsert
+        prof = session.scalar(
+            select(CandidateProfile)
+            .where(CandidateProfile.user_id == user.id)
+            .order_by(desc(CandidateProfile.is_active), desc(CandidateProfile.id))
+        )
+        if not prof:
+            prof = CandidateProfile(
+                user_id=user.id,
+                name=req.name or user.full_name or "My Profile",
+                is_active=True,
+                headline=req.headline or "Software Engineer",
+                target_titles=json.dumps(req.target_titles or ["Fullstack Developer"]),
+                core_stack=json.dumps(req.core_stack or ["Python", "JavaScript"]),
+                target_locations=json.dumps(req.target_locations or ["Remote"]),
+                experience_years=req.experience_years or 3,
+                resume_text=req.resume_text or "",
+            )
+            session.add(prof)
+        else:
+            if req.name: prof.name = req.name
+            if req.headline: prof.headline = req.headline
+            if req.target_titles is not None: prof.target_titles = json.dumps(req.target_titles)
+            if req.core_stack is not None: prof.core_stack = json.dumps(req.core_stack)
+            if req.target_locations is not None: prof.target_locations = json.dumps(req.target_locations)
+            if req.experience_years is not None: prof.experience_years = req.experience_years
+            if req.resume_text is not None: prof.resume_text = req.resume_text
+            prof.is_active = True
+            prof.updated_at = datetime.now(timezone.utc)
+
+        # UserSetting upsert
+        us = session.scalar(select(UserSetting).where(UserSetting.user_id == user.id))
+        if not us:
+            us = UserSetting(user_id=user.id)
+            session.add(us)
+
+        if req.sender_name is not None: us.sender_name = req.sender_name
+        if req.sender_email is not None: us.sender_email = req.sender_email
+        if req.smtp_host is not None: us.smtp_host = req.smtp_host
+        if req.smtp_port is not None: us.smtp_port = req.smtp_port
+        if req.smtp_password is not None and req.smtp_password.strip(): us.smtp_password = req.smtp_password.strip()
+        if req.alert_email is not None: us.alert_email = req.alert_email
+        if req.min_match_score is not None: us.min_match_score = req.min_match_score
+        if req.auto_apply_mode is not None: us.auto_apply_mode = req.auto_apply_mode
+        us.updated_at = datetime.now(timezone.utc)
+
+        session.commit()
+        return {"ok": True, "message": "Onboarding information saved successfully! 🚀"}
+
+
+@app.post("/api/candidate/cv/quick_parse")
+def api_candidate_quick_parse(req: CvQuickParseRequest, request: Request):
+    """Extract and analyze CV from uploaded base64 PDF or pasted text in real time."""
+    from src.candidate.cv_ml_engine import analyze_cv_content, extract_text_from_pdf
+    import base64
+    from pathlib import Path
+
+    extracted_text = ""
+    if req.raw_text and len(req.raw_text.strip()) > 10:
+        extracted_text = req.raw_text.strip()
+    elif req.file_base64:
+        try:
+            raw_b64 = req.file_base64.split(",")[-1]
+            content = base64.b64decode(raw_b64)
+            filename = (req.filename or "cv.pdf").lower()
+            if filename.endswith(".pdf"):
+                temp_dir = Path("candidate_data/temp_uploads")
+                temp_dir.mkdir(parents=True, exist_ok=True)
+                temp_path = temp_dir / f"temp_{int(datetime.now().timestamp())}.pdf"
+                temp_path.write_bytes(content)
+                extracted_text = extract_text_from_pdf(temp_path)
+                try:
+                    temp_path.unlink()
+                except Exception:
+                    pass
+            else:
+                extracted_text = content.decode("utf-8", errors="ignore")
+        except Exception as e:
+            logger.warning("Error parsing CV base64 upload: %s", e)
+
+    analysis = analyze_cv_content(extracted_text) if extracted_text else {}
+    return {
+        "ok": True,
+        "extracted_text": extracted_text,
+        "analysis": analysis,
+    }
+
+
 @app.get("/api/admin/logs")
 def api_admin_get_logs(request: Request, level: str = "ALL", q: str = "", limit: int = 150):
     from src.auth.service import require_admin

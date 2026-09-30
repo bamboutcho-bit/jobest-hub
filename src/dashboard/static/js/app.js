@@ -3195,6 +3195,9 @@
             </button>
           `;
         }
+
+        // Check Setup & Onboarding Status for first-time / incomplete users
+        checkUserOnboardingStatus();
       } catch (err) {
         console.error('Failed to initialize user session:', err);
       }
@@ -6121,5 +6124,470 @@
     window.openAdminChatConversation = openAdminChatConversation;
     window.insertAdminCanned = insertAdminCanned;
     window.sendAdminChatReply = sendAdminChatReply;
+
+    // ===================================================================
+    // FIRST-TIME USER SETUP & ONBOARDING ASSISTANT
+    // ===================================================================
+    let currentOnbStep = 1;
+    let onbState = {
+      titles: [],
+      stack: [],
+      locations: ['Remote'],
+      resume_text: '',
+      completion_percent: 0,
+    };
+
+    async function checkUserOnboardingStatus() {
+      try {
+        const res = await apiGet('/api/user/setup_status');
+        if (!res || !res.ok) return;
+
+        onbState.completion_percent = res.completion_percent || 0;
+
+        // Topbar Setup Button
+        const topBtn = document.getElementById('topbarSetupBtn');
+        const topPct = document.getElementById('topbarSetupPercent');
+        if (topBtn && topPct) {
+          topPct.textContent = `${res.completion_percent}%`;
+          if (res.completion_percent < 100) {
+            topBtn.style.display = 'inline-flex';
+          } else {
+            topBtn.style.display = 'none';
+          }
+        }
+
+        // Setup Alert Banner
+        const banner = document.getElementById('setupAlertBanner');
+        const bannerPct = document.getElementById('bannerSetupPercent');
+        const isBannerDismissed = sessionStorage.getItem('setup_banner_dismissed') === 'true';
+        if (banner && bannerPct) {
+          bannerPct.textContent = `${res.completion_percent}%`;
+          if (res.completion_percent < 100 && !isBannerDismissed) {
+            banner.style.display = 'flex';
+          } else {
+            banner.style.display = 'none';
+          }
+        }
+
+        // Auto-Trigger Onboarding Modal if incomplete and not dismissed for this session
+        const modalDismissed = sessionStorage.getItem('onboarding_modal_shown') === 'true';
+        if ((res.is_first_time || res.completion_percent < 80) && !modalDismissed) {
+          openOnboardingModal(res);
+        }
+      } catch (err) {
+        console.debug('Setup status check error:', err);
+      }
+    }
+
+    async function openOnboardingModal(setupData = null) {
+      const modal = document.getElementById('onboardingModal');
+      if (!modal) return;
+
+      try {
+        if (!setupData) {
+          setupData = await apiGet('/api/user/setup_status');
+        }
+      } catch (e) {
+        console.error('Failed to fetch setup status:', e);
+      }
+
+      const prof = (setupData && setupData.profile) ? setupData.profile : {};
+      const sett = (setupData && setupData.settings) ? setupData.settings : {};
+      const score = (setupData && setupData.completion_percent !== undefined) ? setupData.completion_percent : 25;
+      const chk = (setupData && setupData.checklist) ? setupData.checklist : {};
+
+      // Populate State
+      onbState.titles = Array.isArray(prof.target_titles) && prof.target_titles.length ? [...prof.target_titles] : ['Fullstack Developer'];
+      onbState.stack = Array.isArray(prof.core_stack) && prof.core_stack.length ? [...prof.core_stack] : ['Python', 'JavaScript', 'React'];
+      onbState.locations = Array.isArray(prof.target_locations) && prof.target_locations.length ? [...prof.target_locations] : ['Remote'];
+      onbState.resume_text = prof.resume_text || '';
+      onbState.completion_percent = score;
+
+      // Populate Inputs
+      const setVal = (id, val) => {
+        const el = document.getElementById(id);
+        if (el && val !== undefined && val !== null) el.value = val;
+      };
+
+      setVal('onbFullName', prof.name || (currentUser && currentUser.full_name) || '');
+      setVal('onbHeadline', prof.headline || 'Software Engineer');
+      setVal('onbExpYears', prof.experience_years ?? 3);
+      setVal('onbResumeText', onbState.resume_text);
+
+      setVal('onbSenderName', sett.sender_name || (currentUser && currentUser.full_name) || '');
+      setVal('onbSenderEmail', sett.sender_email || (currentUser && currentUser.email) || '');
+      setVal('onbSmtpHost', sett.smtp_host || 'smtp.gmail.com');
+      setVal('onbSmtpPort', sett.smtp_port || 587);
+      setVal('onbAlertEmail', sett.alert_email || (currentUser && currentUser.email) || '');
+      setVal('onbMinScoreSlider', sett.min_match_score || 65);
+      if (document.getElementById('onbScoreValueDisplay')) {
+        document.getElementById('onbScoreValueDisplay').textContent = `${sett.min_match_score || 65}%`;
+      }
+      setVal('onbAutoApplyMode', sett.auto_apply_mode || 'draft');
+
+      // Update Readiness Meter
+      updateOnbReadinessDisplay(score, chk);
+
+      // Render Tags
+      renderOnbTitles();
+      renderOnbStack();
+      renderOnbLocations();
+
+      // Reset to Step 1
+      switchOnbStep(1);
+
+      // Open Modal
+      modal.style.display = 'flex';
+      setTimeout(() => modal.classList.add('open'), 10);
+    }
+
+    function closeOnboardingModal(isManualDismiss = false) {
+      const modal = document.getElementById('onboardingModal');
+      if (!modal) return;
+      modal.classList.remove('open');
+      setTimeout(() => { modal.style.display = 'none'; }, 220);
+      if (isManualDismiss) {
+        sessionStorage.setItem('onboarding_modal_shown', 'true');
+      }
+    }
+
+    function dismissSetupBanner() {
+      const banner = document.getElementById('setupAlertBanner');
+      if (banner) banner.style.display = 'none';
+      sessionStorage.setItem('setup_banner_dismissed', 'true');
+    }
+
+    function updateOnbReadinessDisplay(score, chk = {}) {
+      const badge = document.getElementById('onbScoreBadge');
+      const bar = document.getElementById('onbProgressBarFill');
+      const summary = document.getElementById('onbMissingSummary');
+
+      if (bar) bar.style.width = `${Math.max(10, Math.min(100, score))}%`;
+      if (badge) {
+        badge.textContent = `${score}% (${score >= 100 ? 'Ready! ✓' : 'Incomplete'})`;
+        badge.style.background = score >= 100 ? 'rgba(16,185,129,0.2)' : (score >= 75 ? 'rgba(6,182,212,0.2)' : 'rgba(245,158,11,0.2)');
+        badge.style.color = score >= 100 ? '#34d399' : (score >= 75 ? '#22d3ee' : '#facc15');
+      }
+
+      // Tab icons
+      const c1 = document.getElementById('onbCheck1');
+      const c2 = document.getElementById('onbCheck2');
+      const c3 = document.getElementById('onbCheck3');
+      const c4 = document.getElementById('onbCheck4');
+      if (c1) c1.textContent = (onbState.titles && onbState.titles.length) ? '✓' : '⚠️';
+      if (c2) c2.textContent = (onbState.stack && onbState.stack.length) ? '✓' : '⚠️';
+      const resumeText = document.getElementById('onbResumeText')?.value || onbState.resume_text || '';
+      if (c3) c3.textContent = (resumeText.length > 25) ? '✓' : '⚠️';
+      const smtpPass = document.getElementById('onbSmtpPass')?.value;
+      if (c4) c4.textContent = (chk.smtp || (smtpPass && smtpPass.length > 3)) ? '✓' : '⚠️';
+
+      if (summary) {
+        let missingCount = 0;
+        if (!onbState.titles.length) missingCount++;
+        if (!onbState.stack.length) missingCount++;
+        if (resumeText.length <= 25) missingCount++;
+        if (!chk.smtp && (!smtpPass || smtpPass.length <= 3)) missingCount++;
+        summary.textContent = missingCount === 0 ? 'All essential setup complete!' : `${missingCount} required items remaining`;
+      }
+    }
+
+    function switchOnbStep(stepNumber) {
+      currentOnbStep = stepNumber;
+      for (let i = 1; i <= 5; i++) {
+        const panel = document.getElementById(`onbStep${i}`);
+        const tabBtn = document.getElementById(`onbTabBtn${i}`);
+        if (panel) panel.classList.toggle('active', i === stepNumber);
+        if (tabBtn) tabBtn.classList.toggle('active', i === stepNumber);
+      }
+
+      const btnPrev = document.getElementById('onbBtnPrev');
+      const btnNext = document.getElementById('onbBtnNext');
+      const btnFinish = document.getElementById('onbBtnFinish');
+
+      if (btnPrev) btnPrev.style.display = (stepNumber > 1) ? 'inline-block' : 'none';
+      if (btnNext) btnNext.style.display = (stepNumber < 5) ? 'inline-block' : 'none';
+      if (btnFinish) btnFinish.style.display = (stepNumber === 5) ? 'inline-block' : 'none';
+
+      // Re-evaluate check marks
+      updateOnbReadinessDisplay(onbState.completion_percent);
+    }
+
+    function navigateOnbStep(delta) {
+      const next = Math.max(1, Math.min(5, currentOnbStep + delta));
+      switchOnbStep(next);
+    }
+
+    function toggleOnbTitle(title, btn) {
+      const idx = onbState.titles.indexOf(title);
+      if (idx > -1) {
+        onbState.titles.splice(idx, 1);
+        if (btn) btn.classList.remove('selected');
+      } else {
+        onbState.titles.push(title);
+        if (btn) btn.classList.add('selected');
+      }
+      renderOnbTitles();
+    }
+
+    function addOnbCustomTitle() {
+      const input = document.getElementById('onbCustomTitleInput');
+      const val = (input?.value || '').trim();
+      if (!val) return;
+      if (!onbState.titles.includes(val)) {
+        onbState.titles.push(val);
+        renderOnbTitles();
+      }
+      input.value = '';
+    }
+
+    function removeOnbTitle(idx) {
+      onbState.titles.splice(idx, 1);
+      renderOnbTitles();
+    }
+
+    function renderOnbTitles() {
+      const list = document.getElementById('onbSelectedTitlesList');
+      if (!list) return;
+      list.innerHTML = onbState.titles.map((t, idx) => `
+        <span class="pill" style="background:rgba(6,182,212,0.15);border:1px solid rgba(6,182,212,0.4);color:#22d3ee;display:inline-flex;align-items:center;gap:6px;font-size:11px;padding:3px 8px">
+          ${esc(t)}
+          <span onclick="removeOnbTitle(${idx})" style="cursor:pointer;font-weight:800;color:#f87171" title="Remove">✕</span>
+        </span>
+      `).join('');
+
+      // Sync pill buttons
+      document.querySelectorAll('#onbStep1 .onb-pill-btn').forEach(btn => {
+        const text = btn.textContent.replace(/^\+\s*/, '').trim();
+        btn.classList.toggle('selected', onbState.titles.includes(text));
+      });
+    }
+
+    function toggleOnbStack(skill, btn) {
+      const idx = onbState.stack.indexOf(skill);
+      if (idx > -1) {
+        onbState.stack.splice(idx, 1);
+        if (btn) btn.classList.remove('selected');
+      } else {
+        onbState.stack.push(skill);
+        if (btn) btn.classList.add('selected');
+      }
+      renderOnbStack();
+    }
+
+    function addOnbCustomStack() {
+      const input = document.getElementById('onbCustomStackInput');
+      const val = (input?.value || '').trim();
+      if (!val) return;
+      if (!onbState.stack.includes(val)) {
+        onbState.stack.push(val);
+        renderOnbStack();
+      }
+      input.value = '';
+    }
+
+    function removeOnbStack(idx) {
+      onbState.stack.splice(idx, 1);
+      renderOnbStack();
+    }
+
+    function renderOnbStack() {
+      const list = document.getElementById('onbSelectedStackList');
+      if (!list) return;
+      list.innerHTML = onbState.stack.map((s, idx) => `
+        <span class="pill" style="background:rgba(168,85,247,0.15);border:1px solid rgba(168,85,247,0.4);color:#c084fc;display:inline-flex;align-items:center;gap:6px;font-size:11px;padding:3px 8px">
+          ${esc(s)}
+          <span onclick="removeOnbStack(${idx})" style="cursor:pointer;font-weight:800;color:#f87171" title="Remove">✕</span>
+        </span>
+      `).join('');
+
+      // Sync skill pill buttons
+      document.querySelectorAll('#onbStep2 .onb-pill-btn').forEach(btn => {
+        const text = btn.textContent.trim();
+        btn.classList.toggle('selected', onbState.stack.includes(text));
+      });
+    }
+
+    function toggleOnbLocation(loc, btn) {
+      const idx = onbState.locations.indexOf(loc);
+      if (idx > -1) {
+        if (onbState.locations.length > 1) {
+          onbState.locations.splice(idx, 1);
+          if (btn) btn.classList.remove('selected');
+        }
+      } else {
+        onbState.locations.push(loc);
+        if (btn) btn.classList.add('selected');
+      }
+      renderOnbLocations();
+    }
+
+    function renderOnbLocations() {
+      const list = document.getElementById('onbSelectedLocationsList');
+      if (!list) return;
+      list.innerHTML = onbState.locations.map(l => `
+        <span class="pill" style="font-size:10px;background:rgba(255,255,255,0.06);border:1px solid var(--border)">${esc(l)}</span>
+      `).join('');
+
+      document.querySelectorAll('#onbStep1 .onb-pill-btn').forEach(btn => {
+        const text = btn.textContent.replace(/^[^\w]+/, '').trim();
+        btn.classList.toggle('selected', onbState.locations.some(l => l.includes(text)));
+      });
+    }
+
+    async function handleOnbCvFileSelect(event) {
+      const file = event.target.files?.[0];
+      if (!file) return;
+
+      const titleEl = document.getElementById('onbDropzoneTitle');
+      if (titleEl) titleEl.textContent = `Analyzing ${file.name}... ⏳`;
+
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const base64Data = e.target.result;
+          const res = await apiSend('/api/candidate/cv/quick_parse', 'POST', {
+            file_base64: base64Data,
+            filename: file.name
+          });
+
+          if (titleEl) titleEl.textContent = `Uploaded: ${file.name} ✓`;
+
+          if (res && res.extracted_text) {
+            document.getElementById('onbResumeText').value = res.extracted_text;
+            onbState.resume_text = res.extracted_text;
+          }
+
+          if (res && res.analysis) {
+            const an = res.analysis;
+            if (an.name && !document.getElementById('onbFullName')?.value) {
+              document.getElementById('onbFullName').value = an.name;
+            }
+            if (Array.isArray(an.top_skills) && an.top_skills.length) {
+              an.top_skills.slice(0, 8).forEach(sk => {
+                const norm = sk.charAt(0).toUpperCase() + sk.slice(1);
+                if (!onbState.stack.includes(norm)) onbState.stack.push(norm);
+              });
+              renderOnbStack();
+            }
+            if (Array.isArray(an.target_roles) && an.target_roles.length) {
+              an.target_roles.slice(0, 3).forEach(ro => {
+                if (!onbState.titles.includes(ro)) onbState.titles.push(ro);
+              });
+              renderOnbTitles();
+            }
+          }
+
+          showToast(`CV analysis completed! Extracted accomplishments & skills ✓`, 'success');
+          updateOnbReadinessDisplay(Math.min(100, onbState.completion_percent + 25));
+        } catch (err) {
+          if (titleEl) titleEl.textContent = `Error analyzing CV: ${err.message}`;
+          showToast(`Failed to parse CV: ${err.message}`, 'error');
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+
+    async function triggerOnbMlAnalysis() {
+      const text = document.getElementById('onbResumeText')?.value || '';
+      if (!text || text.length < 20) {
+        showToast('Please paste your CV text or upload a document first', 'warning');
+        return;
+      }
+
+      const btn = document.getElementById('btnOnbMlExtract');
+      if (btn) btn.textContent = 'Analyzing... ⏳';
+
+      try {
+        const res = await apiSend('/api/candidate/cv/quick_parse', 'POST', { raw_text: text });
+        if (res && res.analysis) {
+          const an = res.analysis;
+          if (Array.isArray(an.top_skills) && an.top_skills.length) {
+            an.top_skills.slice(0, 8).forEach(sk => {
+              const norm = sk.charAt(0).toUpperCase() + sk.slice(1);
+              if (!onbState.stack.includes(norm)) onbState.stack.push(norm);
+            });
+            renderOnbStack();
+          }
+          showToast(`Auto-detected ${an.top_skills?.length || 0} skills from CV text ✓`, 'success');
+        }
+      } catch (err) {
+        showToast('ML analysis error: ' + err.message, 'error');
+      } finally {
+        if (btn) btn.textContent = '⚡ Auto-Detect Skills from CV';
+      }
+    }
+
+    async function submitOnboardingAndLaunch() {
+      const btnFinish = document.getElementById('onbBtnFinish');
+      if (btnFinish) {
+        btnFinish.disabled = true;
+        btnFinish.textContent = 'Saving setup... ⏳';
+      }
+
+      const getVal = id => document.getElementById(id)?.value?.trim() || '';
+
+      const payload = {
+        name: getVal('onbFullName') || (currentUser && currentUser.full_name) || 'My Candidate Profile',
+        headline: getVal('onbHeadline') || 'Software Engineer',
+        target_titles: onbState.titles.length ? onbState.titles : ['Fullstack Developer'],
+        core_stack: onbState.stack.length ? onbState.stack : ['Python', 'JavaScript'],
+        target_locations: onbState.locations.length ? onbState.locations : ['Remote'],
+        experience_years: parseInt(getVal('onbExpYears') || '3', 10),
+        resume_text: getVal('onbResumeText') || onbState.resume_text,
+        sender_name: getVal('onbSenderName') || getVal('onbFullName'),
+        sender_email: getVal('onbSenderEmail'),
+        smtp_host: getVal('onbSmtpHost') || 'smtp.gmail.com',
+        smtp_port: parseInt(getVal('onbSmtpPort') || '587', 10),
+        smtp_password: getVal('onbSmtpPass'),
+        alert_email: getVal('onbAlertEmail') || getVal('onbSenderEmail'),
+        min_match_score: parseInt(getVal('onbMinScoreSlider') || '65', 10),
+        auto_apply_mode: document.getElementById('onbAutoApplyMode')?.value || 'draft',
+      };
+
+      try {
+        const res = await apiSend('/api/user/quick_onboard', 'POST', payload);
+        showToast(res.message || 'Onboarding setup complete! 🚀', 'success');
+
+        // Dismiss modal and banner
+        sessionStorage.setItem('onboarding_modal_shown', 'true');
+        sessionStorage.setItem('setup_banner_dismissed', 'true');
+        closeOnboardingModal(false);
+
+        // Refresh user session & profile
+        await initAuth();
+        await loadProfiles();
+        await loadUserSettings();
+
+        // Trigger immediate discovery pipeline to WOW the user!
+        showToast('Initiating first automated job discovery run... ⚡', 'info');
+        switchAppMode('jobs');
+        switchJobsTab('postings');
+        triggerJobPipeline();
+      } catch (err) {
+        showToast('Failed to save setup: ' + err.message, 'error');
+        if (btnFinish) {
+          btnFinish.disabled = false;
+          btnFinish.textContent = '⚡ Save & Launch My First Discovery!';
+        }
+      }
+    }
+
+    // Expose Onboarding Functions Globally
+    window.checkUserOnboardingStatus = checkUserOnboardingStatus;
+    window.openOnboardingModal = openOnboardingModal;
+    window.closeOnboardingModal = closeOnboardingModal;
+    window.dismissSetupBanner = dismissSetupBanner;
+    window.switchOnbStep = switchOnbStep;
+    window.navigateOnbStep = navigateOnbStep;
+    window.toggleOnbTitle = toggleOnbTitle;
+    window.addOnbCustomTitle = addOnbCustomTitle;
+    window.removeOnbTitle = removeOnbTitle;
+    window.toggleOnbStack = toggleOnbStack;
+    window.addOnbCustomStack = addOnbCustomStack;
+    window.removeOnbStack = removeOnbStack;
+    window.toggleOnbLocation = toggleOnbLocation;
+    window.handleOnbCvFileSelect = handleOnbCvFileSelect;
+    window.triggerOnbMlAnalysis = triggerOnbMlAnalysis;
+    window.submitOnboardingAndLaunch = submitOnboardingAndLaunch;
 
 
