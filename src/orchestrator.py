@@ -245,15 +245,22 @@ def _evaluate_and_act(job_id: int, *, run_id: int | None = None, index: int = 0,
             sent_today = 0
             if user:
                 today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-                sent_today = session.scalar(
+                user_apps_today = session.scalar(
                     select(func.count(UserJobApplication.id)).where(
                         UserJobApplication.user_id == user.id,
                         UserJobApplication.applied_at >= today_start,
                     )
                 ) or 0
-                if sent_today >= user.daily_apply_limit:
+                total_platform_today = session.scalar(
+                    select(func.count(JobPosting.id)).where(
+                        JobPosting.applied_at >= today_start,
+                    )
+                ) or 0
+                sent_today = max(user_apps_today, total_platform_today) if user.role == "admin" else user_apps_today
+                effective_limit = user.daily_apply_limit or (200 if user.role == "admin" else 50)
+                if sent_today >= effective_limit:
                     can_auto_apply = False
-                    logger.info("Daily auto-apply limit of %s reached for user %s (%s sent today). Skipping auto-apply for job %s.", user.daily_apply_limit, user.email, sent_today, job.id)
+                    logger.info("Daily auto-apply limit of %s reached for user %s (%s sent today). Skipping auto-apply for job %s.", effective_limit, user.email, sent_today, job.id)
 
             # Apply first so the alert email can tell the user whether an application
             # was actually sent or must be handled manually.
@@ -496,29 +503,39 @@ def auto_apply_pending_matches(user_id: int | None = None, run_id: int | None = 
             daily_limit = get_effective_daily_limit(s, target_user.current_plan, fallback_limit=(200 if target_user.role == "admin" else 50))
 
         today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-        sent_today = s.scalar(
+        user_apps_today = s.scalar(
             select(func.count(UserJobApplication.id)).where(
                 UserJobApplication.user_id == effective_uid,
                 UserJobApplication.applied_at >= today_start,
             )
         ) or 0
+        total_platform_today = s.scalar(
+            select(func.count(JobPosting.id)).where(
+                JobPosting.applied_at >= today_start,
+            )
+        ) or 0
+        sent_today = max(user_apps_today, total_platform_today) if target_user.role == "admin" else user_apps_today
 
         remaining_quota = max(0, daily_limit - sent_today)
         if remaining_quota <= 0:
             logger.info("Daily auto-apply quota (%s/%s) already met today for user %s.", sent_today, daily_limit, target_user.email)
             return {"ok": True, "applied": 0, "sent_today": sent_today, "daily_limit": daily_limit, "message": f"Daily limit reached ({sent_today}/{daily_limit})"}
 
+        # Exclude job types that cannot be automatically dispatched without email contact
+        blocked_statuses = [
+            "manual_linkedin",
+            "manual_job_board",
+            "manual_security_challenge",
+            "blocked",
+            "invalid_recipient",
+        ]
         apply_q = select(JobPosting).where(
             JobPosting.match_score >= settings.auto_apply_min_score,
             JobPosting.applied_at.is_(None),
             JobPosting.pipeline_stage != PipelineStage.APPLIED,
             or_(
-                JobPosting.application_status.in_([
-                    "not_attempted", "manual_non_ats", "manual_review_threshold",
-                    "manual_portal", "content_missing", "manual_security_challenge",
-                    "manual_linkedin", "manual_job_board", "manual_submit_button_not_found",
-                    "blocked", "browser_unavailable", "daily_quota_reached", None
-                ]),
+                JobPosting.application_status.is_(None),
+                ~JobPosting.application_status.in_(blocked_statuses),
                 (JobPosting.application_emails.isnot(None) & (JobPosting.application_emails != ""))
             )
         )
@@ -530,9 +547,12 @@ def auto_apply_pending_matches(user_id: int | None = None, run_id: int | None = 
             case((JobPosting.application_emails.isnot(None) & (JobPosting.application_emails != ""), 0), else_=1),
             desc(JobPosting.match_score)
         )
-        pending_matches = s.scalars(apply_q).all()
+        # Bounded query limit to prevent long-running hanging loops
+        batch_candidate_limit = min(max(remaining_quota * 3, 15), 60)
+        pending_matches = s.scalars(apply_q.limit(batch_candidate_limit)).all()
 
         applied_count = 0
+        consecutive_unactionable = 0
         for job in pending_matches:
             if sent_today >= daily_limit:
                 logger.info("Daily auto-apply limit of %s reached for user %s. Stopping batch.", daily_limit, target_user.email)
@@ -549,6 +569,10 @@ def auto_apply_pending_matches(user_id: int | None = None, run_id: int | None = 
             has_email = bool(job.application_emails)
             has_web = bool(job.application_url or job.job_url) and settings.auto_apply_web_enabled
             if not has_email and not has_web:
+                consecutive_unactionable += 1
+                if consecutive_unactionable >= 15:
+                    logger.warning("Breaking batch early: %s consecutive jobs without actionable application channels.", consecutive_unactionable)
+                    break
                 continue
 
             job_dict = {
@@ -573,6 +597,7 @@ def auto_apply_pending_matches(user_id: int | None = None, run_id: int | None = 
 
             try:
                 res = apply_to_job(job_dict, session=s, profile=active_profile)
+                job.user_id = effective_uid
                 job.application_method = res.get("application_method")
                 job.application_email = res.get("application_email")
                 job.application_url = res.get("application_url") or job.application_url
@@ -584,6 +609,7 @@ def auto_apply_pending_matches(user_id: int | None = None, run_id: int | None = 
                 job.thread_subject = res.get("thread_subject")
 
                 if res.get("applied"):
+                    consecutive_unactionable = 0
                     job.pipeline_stage = PipelineStage.APPLIED
                     job.applied_at = res.get("applied_at") or datetime.now(timezone.utc)
                     s.add(

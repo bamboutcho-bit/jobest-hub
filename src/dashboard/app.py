@@ -3741,14 +3741,22 @@ def api_action_apply_pending_matches(request: Request, _: bool = Depends(_auth))
                 today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
                 sent_today = 0
                 if user:
-                    sent_today = session.scalar(
+                    user_apps_today = session.scalar(
                         select(func.count(UserJobApplication.id)).where(
                             UserJobApplication.user_id == user.id,
                             UserJobApplication.applied_at >= today_start,
                         )
                     ) or 0
+                    if user.role == "admin":
+                        total_platform_today = session.scalar(
+                            select(func.count(JobPosting.id)).where(JobPosting.applied_at >= today_start)
+                        ) or 0
+                        sent_today = max(user_apps_today, total_platform_today)
+                    else:
+                        sent_today = user_apps_today
 
-                if user and sent_today >= daily_limit:
+                remaining_quota = max(0, daily_limit - sent_today)
+                if user and remaining_quota <= 0:
                     _apply_status["running"] = False
                     _apply_status["message"] = f"Daily limit reached ({sent_today}/{daily_limit} applications sent today). Quota resets at midnight UTC."
                     try:
@@ -3765,30 +3773,35 @@ def api_action_apply_pending_matches(request: Request, _: bool = Depends(_auth))
                         logger.debug("Failed to dispatch limit reached notification: %s", nerr)
                     return
 
+                # Exclude known un-appliable dead ends from wasting time in batch apply
+                blocked_statuses = [
+                    "manual_linkedin", "manual_job_board", "manual_security_challenge",
+                    "blocked", "invalid_recipient", "recruiter_email_blocked"
+                ]
                 apply_q = select(JobPosting).where(
                     JobPosting.match_score >= settings.auto_apply_min_score,
                     JobPosting.applied_at.is_(None),
                     JobPosting.pipeline_stage != PipelineStage.APPLIED,
                     or_(
-                        JobPosting.application_status.in_([
-                            "not_attempted", "manual_non_ats", "manual_review_threshold",
-                            "manual_portal", "content_missing", "manual_security_challenge",
-                            "manual_linkedin", "manual_job_board", "manual_submit_button_not_found",
-                            "blocked", "browser_unavailable", "daily_quota_reached", None
-                        ]),
+                        JobPosting.application_status.in_(["not_attempted", "daily_quota_reached", None]),
                         (JobPosting.application_emails.isnot(None) & (JobPosting.application_emails != ""))
-                    )
+                    ),
+                    ~JobPosting.application_status.in_(blocked_statuses)
                 )
                 if target_user_id is not None and user and user.role != "admin":
                     apply_q = apply_q.where(or_(JobPosting.user_id == target_user_id, JobPosting.user_id.is_(None)))
+
+                # Bounded query: inspect top candidates up to remaining quota (avoids churning through 100s of jobs)
+                max_to_inspect = min(max(remaining_quota * 3, 15), 60)
                 pending_matches = session.scalars(
                     apply_q.order_by(
                         case((JobPosting.application_emails.isnot(None) & (JobPosting.application_emails != ""), 0), else_=1),
                         desc(JobPosting.match_score)
-                    )
+                    ).limit(max_to_inspect)
                 ).all()
 
                 _apply_status["total"] = len(pending_matches)
+                consecutive_unactionable = 0
                 for i, job in enumerate(pending_matches, 1):
                     if user and sent_today >= daily_limit:
                         logger.info("Daily application limit (%s) reached for user %s. Stopping batch apply.", daily_limit, user.email)
@@ -3805,6 +3818,11 @@ def api_action_apply_pending_matches(request: Request, _: bool = Depends(_auth))
                             )
                         except Exception as nerr:
                             logger.debug("Failed to dispatch applications_done notification: %s", nerr)
+                        break
+
+                    # Circuit breaker: if many consecutive jobs lack automated channels, don't stall the dashboard
+                    if consecutive_unactionable >= 12 and _apply_status["applied"] == 0:
+                        _apply_status["message"] = f"Checked {i-1} matches with no automated apply channel available. Remaining jobs require manual application."
                         break
 
                     # Verify that this job aligns with the currently active candidate profile
@@ -3831,10 +3849,12 @@ def api_action_apply_pending_matches(request: Request, _: bool = Depends(_auth))
                     _apply_status["processed"] = i
                     _apply_status["message"] = f"Applying to {i}/{len(pending_matches)}: {job.title} @ {job.company}"
 
-                    # Enrich HR contacts if missing
+                    # Enrich HR contacts if missing (only once)
+                    hr_attempted = False
                     if settings.enable_hr_enrichment and not job.application_emails:
                         try:
                             enrich_job_hr_contacts(job)
+                            hr_attempted = True
                         except Exception as enrich_err:
                             logger.debug("HR enrichment skipped for job %s: %s", job.id, enrich_err)
 
@@ -3856,6 +3876,7 @@ def api_action_apply_pending_matches(request: Request, _: bool = Depends(_auth))
                         "recruiter_pitch_fr": job.recruiter_pitch_fr,
                         "application_subject": job.application_subject,
                         "application_email_body": job.application_email_body,
+                        "_hr_enrichment_attempted": hr_attempted,
                     }
                     try:
                         res = apply_to_job(job_dict, session=session, profile=active_profile)
@@ -3870,11 +3891,13 @@ def api_action_apply_pending_matches(request: Request, _: bool = Depends(_auth))
                         job.application_screenshot_path = res.get("application_screenshot_path")
                         job.thread_subject = res.get("thread_subject")
                         if res.get("applied"):
+                            consecutive_unactionable = 0
                             job.pipeline_stage = PipelineStage.APPLIED
                             job.applied_at = res.get("applied_at") or datetime.now(timezone.utc)
                             _apply_status["applied"] += 1
                             target_u = user or session.scalar(select(User).order_by(User.id))
                             if target_u:
+                                job.user_id = target_u.id
                                 session.add(
                                     UserJobApplication(
                                         user_id=target_u.id,
@@ -3898,7 +3921,10 @@ def api_action_apply_pending_matches(request: Request, _: bool = Depends(_auth))
                                         email_type="application",
                                     )
                                 )
+                        else:
+                            consecutive_unactionable += 1
                     except Exception as err:
+                        consecutive_unactionable += 1
                         logger.error("Batch apply failed for job %s: %s", job.id, err)
                     session.commit()
                 applied_count = _apply_status.get("applied", 0)

@@ -3315,16 +3315,18 @@
           ? `<span class="pill pill-stage-deal_won" title="Synchronized with ${esc(u.plan_name || u.current_plan)} default quota">${u.daily_apply_limit} / d ✓</span>`
           : `<span class="pill" style="border-color:#f59e0b;color:#facc15" title="Custom limit (Plan default: ${u.plan_daily_limit || '—'}/d)">${u.daily_apply_limit} / d (custom)</span>`;
 
-        // Generate dynamic plan options for Actions dropdown
-        const planOptionsHtml = plansList.map(p => {
-          const pSlug = p.slug.toLowerCase();
-          const isSelected = (pSlug === planSlug) || (resolvePlanSlug(pSlug) === normSlug);
+        // Generate dynamic plan options for Actions dropdown (exact match first, then resolved alias)
+        const exactMatchIndex = plansList.findIndex(p => p.slug.toLowerCase() === planSlug);
+        const resolvedMatchIndex = exactMatchIndex !== -1 ? exactMatchIndex : plansList.findIndex(p => resolvePlanSlug(p.slug) === normSlug);
+
+        const planOptionsHtml = plansList.map((p, idx) => {
+          const isSelected = (idx === resolvedMatchIndex);
           const quotaStr = p.daily_apply_limit >= 9999 ? '∞' : `${p.daily_apply_limit}/d`;
           return `<option value="${esc(p.slug)}" ${isSelected ? 'selected' : ''}>${esc(p.name)} (${quotaStr})</option>`;
         }).join('');
 
-        const hasExactMatch = plansList.some(p => p.slug.toLowerCase() === planSlug || resolvePlanSlug(p.slug) === normSlug);
-        const customOpt = (!hasExactMatch && u.current_plan)
+        const hasAnyMatch = resolvedMatchIndex !== -1;
+        const customOpt = (!hasAnyMatch && u.current_plan)
           ? `<option value="${esc(u.current_plan)}" selected>${esc(u.current_plan)} (custom)</option>`
           : '';
 

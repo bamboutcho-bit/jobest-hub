@@ -181,9 +181,10 @@ def _seed_default_admin() -> None:
                 admin_user.role = UserRole.ADMIN.value
                 admin_user.is_active = True
                 admin_user.is_verified = True
-                if admin_user.current_plan != "pro_499":
-                    admin_user.current_plan = "pro_499"
-                    admin_user.daily_apply_limit = 200
+                if not admin_user.current_plan:
+                    admin_user.current_plan = "pro"
+                if not admin_user.daily_apply_limit or admin_user.daily_apply_limit <= 0:
+                    admin_user.daily_apply_limit = 150
                 session.commit()
             else:
                 # Also check for any existing admin (legacy)
@@ -197,8 +198,8 @@ def _seed_default_admin() -> None:
                         is_active=True,
                         is_verified=True,
                         auth_provider="local",
-                        current_plan="pro_499",
-                        daily_apply_limit=200,
+                        current_plan="pro",
+                        daily_apply_limit=150,
                     )
                     session.add(admin_user)
                     session.commit()

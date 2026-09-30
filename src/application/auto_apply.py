@@ -325,12 +325,12 @@ def _discover_public_contact_emails(job: dict) -> list[str]:
         if host and not is_board_url(seed):
             allowed_hosts.add(host)
 
-    for url in queue[:8]:
+    for url in queue[:3]:
         try:
-            response = requests.get(url, headers={"User-Agent": "Mozilla/5.0 JobSearchAutomation/2.0"}, timeout=6, allow_redirects=True)
+            response = requests.get(url, headers={"User-Agent": "Mozilla/5.0 JobSearchAutomation/2.0"}, timeout=3, allow_redirects=True)
             if response.status_code >= 400 or "text/html" not in response.headers.get("content-type", "text/html").lower():
                 continue
-            content = response.text[:1_000_000]
+            content = response.text[:500_000]
             parsed = urlparse(response.url)
             response_host = (parsed.hostname or "").lower().removeprefix("www.")
             if allowed_hosts and not any(response_host == h or response_host.endswith("." + h) or h.endswith("." + response_host) for h in allowed_hosts):
@@ -347,7 +347,7 @@ def _discover_public_contact_emails(job: dict) -> list[str]:
         except Exception:
             continue
 
-    if not found and getattr(settings, "enable_hr_enrichment", True) and (job.get("company") or job.get("company_url")):
+    if not found and not job.get("_hr_enrichment_attempted") and getattr(settings, "enable_hr_enrichment", True) and (job.get("company") or job.get("company_url")):
         try:
             from src.ingestion.hr_enrichment import discover_hr_contacts_for_company
             hr_contacts = discover_hr_contacts_for_company(
