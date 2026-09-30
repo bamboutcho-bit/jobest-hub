@@ -47,6 +47,12 @@ def get_user_effective_settings(user_id: Optional[int] = None) -> dict[str, Any]
         "telegram_chat_id": settings.telegram_chat_id,
         "alert_email": settings.alert_email_to,
 
+        # Portals & Cookies
+        "auto_apply_linkedin_enabled": settings.auto_apply_linkedin_enabled,
+        "auto_apply_indeed_enabled": settings.auto_apply_indeed_enabled,
+        "linkedin_cookie": settings.linkedin_cookie,
+        "indeed_cookie": settings.indeed_cookie,
+
         # Custom env overrides
         "custom_env": {},
     }

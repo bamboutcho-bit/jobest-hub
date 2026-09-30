@@ -2795,6 +2795,10 @@ class UserSettingsUpdate(BaseModel):
     telegram_bot_token: str | None = None
     telegram_chat_id: str | None = None
     alert_email: str | None = None
+    linkedin_cookie: str | None = None
+    indeed_cookie: str | None = None
+    auto_apply_linkedin_enabled: bool | None = None
+    auto_apply_indeed_enabled: bool | None = None
     custom_env_json: str | None = None
 
 
@@ -2842,6 +2846,10 @@ def api_user_get_settings(request: Request):
                 "telegram_bot_token": "••••••••" if us.telegram_bot_token else None,
                 "telegram_chat_id": us.telegram_chat_id,
                 "alert_email": us.alert_email,
+                "linkedin_cookie": "••••••••" if custom_env.get("LINKEDIN_COOKIE") else None,
+                "indeed_cookie": "••••••••" if custom_env.get("INDEED_COOKIE") else None,
+                "auto_apply_linkedin_enabled": custom_env.get("AUTO_APPLY_LINKEDIN_ENABLED", True),
+                "auto_apply_indeed_enabled": custom_env.get("AUTO_APPLY_INDEED_ENABLED", True),
                 "custom_env": custom_env,
             }
         }
@@ -2866,12 +2874,33 @@ def api_user_update_settings(req: UserSettingsUpdate, request: Request):
             "imap_host", "imap_port", "imap_password",
             "phone_number", "linkedin_url", "github_url", "portfolio_url",
             "min_match_score", "auto_apply_mode", "auto_apply_min_score",
-            "telegram_bot_token", "telegram_chat_id", "alert_email", "custom_env_json",
+            "telegram_bot_token", "telegram_chat_id", "alert_email",
         ]
         for field in updatable:
             val = getattr(req, field, None)
             if val is not None:
                 setattr(us, field, val)
+
+        custom_env = {}
+        if us.custom_env_json:
+            try:
+                custom_env = json.loads(us.custom_env_json)
+            except Exception:
+                custom_env = {}
+        if req.custom_env_json:
+            try:
+                custom_env.update(json.loads(req.custom_env_json))
+            except Exception:
+                pass
+        if req.linkedin_cookie is not None:
+            custom_env["LINKEDIN_COOKIE"] = req.linkedin_cookie
+        if req.indeed_cookie is not None:
+            custom_env["INDEED_COOKIE"] = req.indeed_cookie
+        if req.auto_apply_linkedin_enabled is not None:
+            custom_env["AUTO_APPLY_LINKEDIN_ENABLED"] = req.auto_apply_linkedin_enabled
+        if req.auto_apply_indeed_enabled is not None:
+            custom_env["AUTO_APPLY_INDEED_ENABLED"] = req.auto_apply_indeed_enabled
+        us.custom_env_json = json.dumps(custom_env)
 
         us.updated_at = datetime.now(timezone.utc)
         session.commit()

@@ -1295,6 +1295,32 @@
           </div>
         </div>
 
+        <!-- Job Portals Automation: LinkedIn & Indeed -->
+        <div style="background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:10px;padding:16px">
+          <div style="font-size:14px;font-weight:700;color:var(--cyan-light);margin-bottom:8px">🌐 Job Portals Automation (LinkedIn & Indeed)</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Enable browser automation directly on LinkedIn and Indeed job postings. Set session cookies to bypass login walls and automate Easy Apply / Indeed Apply.</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+            <div>
+              <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px">LinkedIn Session Cookie (li_at)</label>
+              <input type="password" id="usLinkedinCookie" class="form-control" placeholder="Paste li_at cookie value to enable LinkedIn Easy Apply">
+            </div>
+            <div>
+              <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px">Indeed Session Cookie</label>
+              <input type="password" id="usIndeedCookie" class="form-control" placeholder="Paste Indeed session cookie or token">
+            </div>
+          </div>
+          <div style="display:flex;gap:20px;flex-wrap:wrap">
+            <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:#fff;cursor:pointer">
+              <input type="checkbox" id="usAutoApplyLinkedin" checked style="accent-color:var(--cyan)">
+              <span>Auto-apply via LinkedIn (Easy Apply & company portals)</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:#fff;cursor:pointer">
+              <input type="checkbox" id="usAutoApplyIndeed" checked style="accent-color:var(--cyan)">
+              <span>Auto-apply via Indeed (Indeed Apply & company portals)</span>
+            </label>
+          </div>
+        </div>
+
         <!-- Custom Environment Variables (Per-User .env) -->
         <div style="background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:10px;padding:16px">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">

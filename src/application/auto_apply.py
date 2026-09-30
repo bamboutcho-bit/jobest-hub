@@ -470,12 +470,20 @@ def _candidate_application_url(raw_description: str, direct_url: str | None, sou
         if isinstance(value, str) and value.startswith(("http://", "https://")):
             urls.append(value.rstrip(".,);]>'\""))
     urls.extend(x.rstrip(".,);]>'\"") for x in re.findall(r"https?://[^\s<>\"']+", str(raw_description or "")))
+    # 1. Prefer direct non-board application URLs (direct employer / ATS)
     for url in urls:
-        if is_board_url(url):
-            continue
-        # Any public non-job-board URL can be a valid employer application link.
-        # Known ATS/careers hosts are preferred, but we don't discard custom employer portals.
-        return url
+        if not is_board_url(url):
+            return url
+
+    # 2. If web automation is enabled, allow LinkedIn and Indeed portals
+    if getattr(settings, "auto_apply_web_enabled", True):
+        for url in urls:
+            host = (urlparse(url).hostname or "").lower().removeprefix("www.")
+            if "linkedin.com" in host and getattr(settings, "auto_apply_linkedin_enabled", True):
+                return url
+            if "indeed.com" in host and getattr(settings, "auto_apply_indeed_enabled", True):
+                return url
+
     return None
 
 

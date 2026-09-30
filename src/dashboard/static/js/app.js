@@ -4416,6 +4416,15 @@
         setVal('usMinMatchScore', s.min_match_score || 65);
         if (s.auto_apply_mode) setVal('usAutoApplyMode', s.auto_apply_mode);
 
+        setVal('usLinkedinCookie', s.linkedin_cookie || (s.custom_env && s.custom_env.LINKEDIN_COOKIE) || '');
+        setVal('usIndeedCookie', s.indeed_cookie || (s.custom_env && s.custom_env.INDEED_COOKIE) || '');
+        if (document.getElementById('usAutoApplyLinkedin')) {
+          document.getElementById('usAutoApplyLinkedin').checked = s.auto_apply_linkedin_enabled !== false;
+        }
+        if (document.getElementById('usAutoApplyIndeed')) {
+          document.getElementById('usAutoApplyIndeed').checked = s.auto_apply_indeed_enabled !== false;
+        }
+
         // Render custom environment variables table
         renderEnvVars(s.custom_env || {});
       } catch (err) {
@@ -4537,6 +4546,18 @@
 
       const autoMode = document.getElementById('usAutoApplyMode')?.value;
       if (autoMode) payload.auto_apply_mode = autoMode;
+
+      const liCookie = getVal('usLinkedinCookie');
+      if (liCookie && liCookie !== '••••••••') payload.linkedin_cookie = liCookie;
+
+      const indCookie = getVal('usIndeedCookie');
+      if (indCookie && indCookie !== '••••••••') payload.indeed_cookie = indCookie;
+
+      const liEnabled = document.getElementById('usAutoApplyLinkedin')?.checked;
+      if (liEnabled !== undefined) payload.auto_apply_linkedin_enabled = liEnabled;
+
+      const indEnabled = document.getElementById('usAutoApplyIndeed')?.checked;
+      if (indEnabled !== undefined) payload.auto_apply_indeed_enabled = indEnabled;
 
       // Also gather custom env vars into JSON
       const rows = document.querySelectorAll('#userEnvTableBody tr.env-var-row');

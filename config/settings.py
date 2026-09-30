@@ -106,6 +106,10 @@ class Settings(BaseSettings):
     auto_apply_mode: str = "send"
     auto_apply_web_enabled: bool = True
     auto_apply_known_ats_only: bool = True
+    auto_apply_linkedin_enabled: bool = True
+    auto_apply_indeed_enabled: bool = True
+    linkedin_cookie: str = ""
+    indeed_cookie: str = ""
     auto_apply_min_score: int = 75
     # Do not require an explicit visa phrase before considering a strong role.
     # Ollama must still avoid misrepresenting work authorization.

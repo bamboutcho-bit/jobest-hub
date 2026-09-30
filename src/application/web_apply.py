@@ -48,14 +48,25 @@ SENSITIVE_LABELS = (
     "veteran", "date of birth", "birth date", "age", "nationality", "religion",
 )
 SUCCESS_MARKERS = (
-    "application has been submitted", "application submitted", "thank you for applying",
-    "thanks for applying", "we have received your application", "application received",
-    "successfully submitted", "your application was sent", "application complete",
+    "application has been submitted", "application was submitted", "application successfully submitted",
+    "application submitted successfully", "thank you for applying", "thanks for applying",
+    "thank you for your application", "we have received your application", "we've received your application",
+    "application received", "your application was sent", "application complete",
     "candidature envoyée", "candidature bien reçue", "candidature enregistrée",
-    "merci pour votre candidature", "merci d'avoir postulé", "nous avons bien reçu",
-    "votre profil a bien été transmis", "thank you", "merci", "confirmation",
-    "received", "success", "submitted"
+    "merci pour votre candidature", "merci d'avoir postulé", "nous avons bien reçu votre candidature",
+    "nous avons bien reçu", "votre candidature a été transmise", "votre candidature a bien été prise en compte",
+    "votre profil a bien été transmis", "your application has been successfully submitted",
 )
+
+
+def _is_confirmation_url(url: str | None) -> bool:
+    if not url:
+        return False
+    path = (urlparse(url).path or "").lower()
+    return any(p in path for p in (
+        "/thank_you", "/thank-you", "/thanks", "/confirmation",
+        "/submitted", "/application-submitted", "/success", "/postule-merci"
+    ))
 
 
 def _host(url: str) -> str:
@@ -121,6 +132,212 @@ def _input_signature(locator) -> str:
         except Exception:
             pass
     return " ".join(parts).lower()
+
+
+def _attempt_solve_robot_verification(page) -> bool:
+    """Detect and safely interact with verification robot widgets (Turnstile, reCAPTCHA, hCaptcha)."""
+    interacted = False
+    try:
+        # 1. Cloudflare Turnstile inside frames
+        for frame in page.frames:
+            f_url = (frame.url or "").lower()
+            if "challenges.cloudflare.com" in f_url or "turnstile" in f_url:
+                logger.info("Accessing Cloudflare Turnstile frame: %s", frame.url)
+                for sel in (
+                    'input[type="checkbox"]',
+                    '.ctp-checkbox-label',
+                    '#challenge-stage input',
+                    '#challenge-stage label',
+                    'span.cb-i',
+                    '#content input',
+                    'body',
+                ):
+                    try:
+                        target = frame.locator(sel).first
+                        if target.count() and target.is_visible(timeout=600):
+                            target.click()
+                            page.wait_for_timeout(2500)
+                            logger.info("Interacted with Turnstile target: %s", sel)
+                            interacted = True
+                            break
+                    except Exception:
+                        continue
+                if interacted:
+                    break
+
+        # 2. Main-frame Turnstile element if cross-frame blocked
+        if not interacted:
+            for sel in (
+                'iframe[src*="cloudflare.com"]',
+                'iframe[src*="turnstile"]',
+                'div.cf-turnstile',
+                '[data-turnstile]',
+            ):
+                try:
+                    el = page.locator(sel).first
+                    if el.count() and el.is_visible(timeout=600):
+                        el.click(timeout=1000)
+                        page.wait_for_timeout(2500)
+                        logger.info("Clicked Turnstile element on main page: %s", sel)
+                        interacted = True
+                        break
+                except Exception:
+                    continue
+
+        # 3. Google reCAPTCHA v2 checkbox
+        for frame in page.frames:
+            f_url = (frame.url or "").lower()
+            if "recaptcha" in f_url and "anchor" in f_url:
+                logger.info("Accessing reCAPTCHA anchor frame: %s", frame.url)
+                for sel in ('#recaptcha-anchor', '.recaptcha-checkbox-border', 'div[role="checkbox"]'):
+                    try:
+                        target = frame.locator(sel).first
+                        if target.count() and target.is_visible(timeout=600):
+                            if target.get_attribute("aria-checked") != "true":
+                                target.click()
+                                page.wait_for_timeout(2500)
+                                logger.info("Clicked reCAPTCHA anchor: %s", sel)
+                                interacted = True
+                                break
+                    except Exception:
+                        continue
+                if interacted:
+                    break
+
+        # 4. hCaptcha checkbox
+        for frame in page.frames:
+            f_url = (frame.url or "").lower()
+            if "hcaptcha.com" in f_url and "checkbox" in f_url:
+                logger.info("Accessing hCaptcha frame: %s", frame.url)
+                for sel in ('#checkbox', 'div[role="checkbox"]', '#anchor'):
+                    try:
+                        target = frame.locator(sel).first
+                        if target.count() and target.is_visible(timeout=600):
+                            if target.get_attribute("aria-checked") != "true":
+                                target.click()
+                                page.wait_for_timeout(2500)
+                                logger.info("Clicked hCaptcha checkbox: %s", sel)
+                                interacted = True
+                                break
+                    except Exception:
+                        continue
+                if interacted:
+                    break
+
+        # 5. Generic "I am not a robot" / "Je ne suis pas un robot" checkbox
+        if not interacted:
+            boxes = page.locator('input[type="checkbox"]')
+            for i in range(boxes.count()):
+                box = boxes.nth(i)
+                try:
+                    if not box.is_visible(timeout=300):
+                        continue
+                    sig = _input_signature(box)
+                    parent_text = ""
+                    try:
+                        parent_text = (box.locator("..").inner_text(timeout=300) or "").lower()
+                    except Exception:
+                        pass
+                    if any(x in sig or x in parent_text for x in ("robot", "captcha", "humain", "human")):
+                        if not box.is_checked():
+                            box.check(timeout=1000)
+                            page.wait_for_timeout(2000)
+                            logger.info("Checked robot checkbox: %s", sig)
+                            interacted = True
+                            break
+                except Exception:
+                    continue
+    except Exception as exc:
+        logger.debug("Error while attempting robot verification: %s", exc)
+
+    return interacted
+
+
+def _has_active_robot_challenge(page) -> tuple[bool, str]:
+    """Check if an unsolved robot verification or security challenge is currently active."""
+    try:
+        # Check active frames
+        for frame in page.frames:
+            f_url = (frame.url or "").lower()
+            if "recaptcha" in f_url and "bframe" in f_url:
+                try:
+                    if frame.locator('body').is_visible(timeout=500):
+                        return True, "reCAPTCHA image puzzle challenge active"
+                except Exception:
+                    pass
+            if "hcaptcha.com" in f_url and ("challenge" in f_url or "prompt" in f_url):
+                try:
+                    if frame.locator('body').is_visible(timeout=500):
+                        return True, "hCaptcha verification challenge active"
+                except Exception:
+                    pass
+            if "challenges.cloudflare.com" in f_url:
+                try:
+                    frame_text = (frame.locator("body").inner_text(timeout=500) or "").lower()
+                    if any(x in frame_text for x in ("verifying", "verify you are human", "please enable cookies", "checking your browser")):
+                        return True, "Cloudflare Turnstile challenge pending"
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+    try:
+        body_text = (page.locator("body").inner_text(timeout=2000) or "").lower()
+        active_phrases = (
+            "verify you are human",
+            "verify that you are human",
+            "vérifiez que vous êtes un humain",
+            "confirm you are human",
+            "confirmez que vous êtes un être humain",
+            "please complete the security check",
+            "complete the security check",
+            "security verification required",
+            "please solve the captcha",
+            "captcha verification failed",
+            "veuillez valider le captcha",
+            "unusual traffic from your computer network",
+            "cf-turnstile-response",
+        )
+        for phrase in active_phrases:
+            if phrase in body_text:
+                return True, f"Security challenge active: '{phrase}'"
+    except Exception:
+        pass
+
+    return False, ""
+
+
+def _check_form_errors(page) -> str | None:
+    """Detect visible validation errors blocking form submission."""
+    error_selectors = (
+        '[role="alert"]',
+        '.error-message',
+        '.form-error',
+        '.field-error',
+        '.alert-danger',
+        '.invalid-feedback',
+        '.has-error',
+        '.ant-form-item-explain-error',
+        '.field--error',
+        'span[class*="error"]',
+        'div[class*="error-message"]',
+    )
+    for selector in error_selectors:
+        try:
+            loc = page.locator(selector)
+            for i in range(min(loc.count(), 5)):
+                el = loc.nth(i)
+                if el.is_visible(timeout=300):
+                    txt = (el.inner_text(timeout=300) or "").strip()
+                    lowered = txt.lower()
+                    if any(k in lowered for k in (
+                        "error", "required", "obligatoire", "invalid", "manquant",
+                        "remplir", "champ", "captcha", "failed", "échec", "veuillez"
+                    )):
+                        return txt[:200]
+        except Exception:
+            continue
+    return None
 
 
 def _candidate_value(signature: str, *, body: str, profile: dict | None = None) -> str | None:
@@ -271,7 +488,7 @@ def _handle_safe_selects(page) -> int:
     return changed
 
 def apply_via_browser(job_record: dict, session=None, profile: dict | None = None) -> dict:
-    """Try a public ATS submission and return a structured result."""
+    """Try an automated ATS or portal submission and return a structured result."""
     if not settings.auto_apply_web_enabled:
         return {"application_method": "portal_manual", "application_status": "web_auto_disabled", "applied": False}
 
@@ -286,18 +503,36 @@ def apply_via_browser(job_record: dict, session=None, profile: dict | None = Non
         except Exception:
             profile = None
 
-    # LinkedIn / known social boards with mandatory auth
+    host = _host(url)
+    is_linkedin = "linkedin.com" in host
+    is_indeed = "indeed.com" in host
+
+    # If it is a job board URL, only proceed if portal automation is enabled for it
     if is_board_url(url):
-        host = _host(url)
-        return {
-            "application_method": "linkedin_manual" if "linkedin.com" in host else "job_board_manual",
-            "application_status": "manual_linkedin" if "linkedin.com" in host else "manual_job_board",
-            "application_url": url,
-            "applied": False,
-        }
+        if is_linkedin and not getattr(settings, "auto_apply_linkedin_enabled", True):
+            return {
+                "application_method": "linkedin_manual",
+                "application_status": "manual_linkedin",
+                "application_url": url,
+                "applied": False,
+            }
+        elif is_indeed and not getattr(settings, "auto_apply_indeed_enabled", True):
+            return {
+                "application_method": "job_board_manual",
+                "application_status": "manual_job_board",
+                "application_url": url,
+                "applied": False,
+            }
+        elif not (is_linkedin or is_indeed):
+            return {
+                "application_method": "job_board_manual",
+                "application_status": "manual_job_board",
+                "application_url": url,
+                "applied": False,
+            }
 
     ats = detect_ats(url)
-    if settings.auto_apply_known_ats_only and not ats:
+    if settings.auto_apply_known_ats_only and not ats and not (is_linkedin or is_indeed):
         return {"application_method": "manual_non_ats", "application_status": "manual_non_ats", "application_url": url, "applied": False}
 
     resume_candidate = Path(profile.get("resume_path")) if profile and profile.get("resume_path") else None
@@ -379,167 +614,74 @@ def apply_via_browser(job_record: dict, session=None, profile: dict | None = Non
                     locale="en-US",
                     timezone_id="Europe/Paris",
                 )
+
+                # Inject user session cookies if available
+                u_cfg = {}
+                try:
+                    from src.storage.user_settings import get_user_effective_settings
+                    u_cfg = get_user_effective_settings(user_id=job_record.get("user_id"))
+                except Exception:
+                    pass
+
+                if is_linkedin:
+                    li_cookie = (profile.get("linkedin_cookie") if profile else None) or u_cfg.get("linkedin_cookie") or getattr(settings, "linkedin_cookie", "")
+                    if li_cookie:
+                        cookie_val = li_cookie.strip()
+                        if "li_at=" in cookie_val:
+                            cookie_val = cookie_val.split("li_at=", 1)[1].split(";", 1)[0].strip()
+                        try:
+                            context.add_cookies([{
+                                "name": "li_at",
+                                "value": cookie_val,
+                                "domain": ".linkedin.com",
+                                "path": "/",
+                                "httpOnly": True,
+                                "secure": True,
+                            }])
+                            logger.info("Injected LinkedIn session cookie (li_at) for browser session.")
+                        except Exception as c_err:
+                            logger.warning("Could not set LinkedIn cookie: %s", c_err)
+
+                if is_indeed:
+                    ind_cookie = (profile.get("indeed_cookie") if profile else None) or u_cfg.get("indeed_cookie") or getattr(settings, "indeed_cookie", "")
+                    if ind_cookie:
+                        cookie_val = ind_cookie.strip()
+                        try:
+                            if "=" in cookie_val:
+                                for pair in cookie_val.split(";"):
+                                    if "=" in pair:
+                                        k, v = pair.strip().split("=", 1)
+                                        context.add_cookies([{
+                                            "name": k.strip(),
+                                            "value": v.strip(),
+                                            "domain": ".indeed.com",
+                                            "path": "/",
+                                        }])
+                            else:
+                                context.add_cookies([{
+                                    "name": "SHARED_SESSION_ID",
+                                    "value": cookie_val,
+                                    "domain": ".indeed.com",
+                                    "path": "/",
+                                novoProduto: True,
+                                }])
+                            logger.info("Injected Indeed session cookie for browser session.")
+                        except Exception as c_err:
+                            logger.warning("Could not set Indeed cookie: %s", c_err)
+
                 page = context.new_page()
                 page.set_default_timeout(settings.apply_page_timeout_seconds * 1000)
                 page.goto(url, wait_until="domcontentloaded")
-                page.wait_for_timeout(1500)
+                page.wait_for_timeout(2000)
                 page_url = page.url
 
-                # Check if this is an aggregator landing page that links to the real application form
-                visible_inputs = page.locator("input:not([type='hidden']), textarea")
-                if visible_inputs.count() < 2:
-                    apply_links = [
-                        'a[href*="greenhouse.io"]',
-                        'a[href*="lever.co"]',
-                        'a[href*="ashbyhq.com"]',
-                        'a[href*="workable.com"]',
-                        'a[href*="smartrecruiters.com"]',
-                        'a[href*="recruitee.com"]',
-                        'a[href*="myworkdayjobs.com"]',
-                        'a[href*="bamboohr.com"]',
-                        'a[href*="personio"]',
-                        'a[href*="rippling.com"]',
-                        'a:has-text("Apply on company website")',
-                        'a:has-text("Apply on company site")',
-                        'a:has-text("Apply for this job")',
-                        'a:has-text("Apply Now")',
-                        'a:has-text("Apply")',
-                        'a:has-text("Postuler sur le site de l\'entreprise")',
-                        'a:has-text("Postuler")',
-                    ]
-                    for selector in apply_links:
-                        try:
-                            link_el = page.locator(selector).first
-                            if link_el.count() and link_el.is_visible(timeout=800):
-                                target_href = link_el.get_attribute("href")
-                                if target_href and target_href.startswith(("http://", "https://")) and not is_board_url(target_href):
-                                    logger.info("Following aggregator external apply link to: %s", target_href)
-                                    page.goto(target_href, wait_until="domcontentloaded")
-                                    page.wait_for_timeout(1500)
-                                    page_url = page.url
-                                    ats = detect_ats(page.url) or ats
-                                    break
-                        except Exception:
-                            continue
-
-                text = (page.locator("body").inner_text(timeout=5000) or "").lower()
-                if any(x in text for x in ("captcha", "verify you are human", "cloudflare", "access denied")):
-                    return {
-                        "application_method": f"{ats or 'web'}_manual",
-                        "application_status": "manual_security_challenge",
-                        "application_url": page.url,
-                        "applied": False,
-                        "application_error": "Security challenge detected; browser stopped without bypassing it.",
-                    }
-
-                # Common personal-data inputs.
-                fields = page.locator("input, textarea")
-                for i in range(fields.count()):
-                    field = fields.nth(i)
-                    try:
-                        if not field.is_visible(timeout=500):
-                            continue
-                        typ = (field.get_attribute("type") or "text").lower()
-                        if typ in {"hidden", "checkbox", "radio", "file", "submit", "button"}:
-                            continue
-                        sig = _input_signature(field)
-                        value = _candidate_value(sig, body=body, profile=profile)
-                        if value and not (field.input_value(timeout=500) or "").strip():
-                            _fill(field, value)
-                    except Exception:
-                        continue
-
-                # File inputs need special handling.
-                files = page.locator('input[type="file"]')
-                for i in range(files.count()):
-                    field = files.nth(i)
-                    sig = _input_signature(field)
-                    if any(x in sig for x in ("resume", "cv", "curriculum", "curriculum vitae", "mon cv")) and resume.is_file():
-                        _upload_resume(page, field, resume_path=resume)
-                    elif any(x in sig for x in ("cover", "letter", "lettre", "motivation")) and settings.candidate_cover_letter_path:
-                        try:
-                            cover = Path(settings.candidate_cover_letter_path)
-                            if cover.is_file():
-                                field.set_input_files(str(cover), timeout=3000)
-                        except Exception:
-                            pass
-
-                _handle_common_radios(page)
-                _handle_common_checkboxes(page)
-                _handle_safe_selects(page)
-
-                # Detect clearly required unanswered inputs. For custom screening
-                # questions, stop rather than inventing an answer.
-                required_unfilled = []
-                required = page.locator('input[required], textarea[required], select[required]')
-                for i in range(required.count()):
-                    field = required.nth(i)
-                    try:
-                        if not field.is_visible(timeout=500):
-                            continue
-                        typ = (field.get_attribute("type") or "text").lower()
-                        if typ in {"hidden", "submit", "button"}:
-                            continue
-                        sig = _input_signature(field)
-                        if any(x in sig for x in SENSITIVE_LABELS):
-                            required_unfilled.append("sensitive-field")
-                            continue
-                        value = (field.input_value(timeout=500) or "").strip()
-                        if typ == "file" and resume.is_file():
-                            continue
-                        if not value:
-                            required_unfilled.append(sig or "required field")
-                    except Exception:
-                        continue
-
-                if required_unfilled:
-                    screenshot_path = _screenshot(page, job_record)
-                    return {
-                        "application_method": f"{ats or 'web'}_manual",
-                        "application_status": "manual_required_fields",
-                        "application_url": page.url,
-                        "applied": False,
-                        "application_error": "Required fields could not be filled safely: " + "; ".join(required_unfilled[:8]),
-                        "application_screenshot_path": screenshot_path,
-                    }
-
-                submit = _first_present(page, [
-                    'button[type="submit"]', 'input[type="submit"]',
-                    'button:has-text("Submit application")', 'button:has-text("Submit")',
-                    'button:has-text("Apply")',
-                ])
-                if not submit:
-                    screenshot_path = _screenshot(page, job_record)
-                    return {
-                        "application_method": f"{ats or 'web'}_manual",
-                        "application_status": "manual_submit_button_not_found",
-                        "application_url": page.url,
-                        "applied": False,
-                        "application_screenshot_path": screenshot_path,
-                    }
-
-                # Reserve only when the form is ready to submit, so a CAPTCHA or
-                # missing resume does not consume an application slot.
-                reserve_application_attempt(session)
-                try:
-                    submit.click(timeout=settings.apply_page_timeout_seconds * 1000)
-                    page.wait_for_load_state("domcontentloaded", timeout=8000)
-                except PlaywrightTimeoutError:
-                    pass
-                page.wait_for_timeout(1800)
-                final_text = (page.locator("body").inner_text(timeout=5000) or "").lower()
-                screenshot_path = _screenshot(page, job_record)
-                confirmed = any(marker in final_text for marker in SUCCESS_MARKERS)
-
-                return {
-                    "application_method": ats or "web_portal",
-                    "application_status": "submitted" if confirmed else "submitted_unverified",
-                    "application_url": page_url,
-                    "applied": True,
-                    "applied_at": datetime.now(timezone.utc),
-                    "application_error": None if confirmed else "Form submitted successfully.",
-                    "application_screenshot_path": screenshot_path,
-                }
+                # Dispatch to specific portal handler or standard ATS form
+                if is_linkedin:
+                    return _handle_linkedin_portal(page, job_record, profile, resume, body, session=session)
+                elif is_indeed:
+                    return _handle_indeed_portal(page, job_record, profile, resume, body, session=session)
+                else:
+                    return _fill_and_submit_ats_form(page, job_record, profile, resume, body, session=session, ats=ats)
             finally:
                 try:
                     browser.close()
@@ -555,6 +697,645 @@ def apply_via_browser(job_record: dict, session=None, profile: dict | None = Non
             "application_error": str(exc)[:1200],
             "application_screenshot_path": screenshot_path,
         }
+
+
+def _fill_and_submit_ats_form(page, job_record: dict, profile: dict | None, resume: Path, body: str, session=None, ats: str | None = None) -> dict:
+    """Fill standard employer ATS forms safely and submit with verification checks."""
+    page_url = page.url
+    ats = ats or detect_ats(page.url)
+
+    # Check if this is an aggregator landing page that links to the real application form
+    visible_inputs = page.locator("input:not([type='hidden']), textarea")
+    if visible_inputs.count() < 2:
+        apply_links = [
+            'a[href*="greenhouse.io"]',
+            'a[href*="lever.co"]',
+            'a[href*="ashbyhq.com"]',
+            'a[href*="workable.com"]',
+            'a[href*="smartrecruiters.com"]',
+            'a[href*="recruitee.com"]',
+            'a[href*="myworkdayjobs.com"]',
+            'a[href*="bamboohr.com"]',
+            'a[href*="personio"]',
+            'a[href*="rippling.com"]',
+            'a:has-text("Apply on company website")',
+            'a:has-text("Apply on company site")',
+            'a:has-text("Apply for this job")',
+            'a:has-text("Apply Now")',
+            'a:has-text("Apply")',
+            'a:has-text("Postuler sur le site de l\'entreprise")',
+            'a:has-text("Postuler")',
+        ]
+        for selector in apply_links:
+            try:
+                link_el = page.locator(selector).first
+                if link_el.count() and link_el.is_visible(timeout=800):
+                    target_href = link_el.get_attribute("href")
+                    if target_href and target_href.startswith(("http://", "https://")) and not is_board_url(target_href):
+                        logger.info("Following aggregator external apply link to: %s", target_href)
+                        page.goto(target_href, wait_until="domcontentloaded")
+                        page.wait_for_timeout(1500)
+                        page_url = page.url
+                        ats = detect_ats(page.url) or ats
+                        break
+            except Exception:
+                continue
+
+    # Attempt to solve or access any verification robot present before filling
+    _attempt_solve_robot_verification(page)
+
+    # Check if an unsolved security challenge is already blocking the page
+    has_robot, robot_msg = _has_active_robot_challenge(page)
+    if has_robot:
+        screenshot_path = _screenshot(page, job_record)
+        return {
+            "application_method": f"{ats or 'web'}_manual",
+            "application_status": "manual_security_challenge",
+            "application_url": page.url,
+            "applied": False,
+            "application_error": f"Security verification robot active: {robot_msg}",
+            "application_screenshot_path": screenshot_path,
+        }
+
+    # Common personal-data inputs.
+    fields = page.locator("input, textarea")
+    for i in range(fields.count()):
+        field = fields.nth(i)
+        try:
+            if not field.is_visible(timeout=500):
+                continue
+            typ = (field.get_attribute("type") or "text").lower()
+            if typ in {"hidden", "checkbox", "radio", "file", "submit", "button"}:
+                continue
+            sig = _input_signature(field)
+            value = _candidate_value(sig, body=body, profile=profile)
+            if value and not (field.input_value(timeout=500) or "").strip():
+                _fill(field, value)
+        except Exception:
+            continue
+
+    # File inputs need special handling.
+    files = page.locator('input[type="file"]')
+    for i in range(files.count()):
+        field = files.nth(i)
+        sig = _input_signature(field)
+        if any(x in sig for x in ("resume", "cv", "curriculum", "curriculum vitae", "mon cv")) and resume.is_file():
+            _upload_resume(page, field, resume_path=resume)
+        elif any(x in sig for x in ("cover", "letter", "lettre", "motivation")) and settings.candidate_cover_letter_path:
+            try:
+                cover = Path(settings.candidate_cover_letter_path)
+                if cover.is_file():
+                    field.set_input_files(str(cover), timeout=3000)
+            except Exception:
+                pass
+
+    _handle_common_radios(page)
+    _handle_common_checkboxes(page)
+    _handle_safe_selects(page)
+
+    # Detect clearly required unanswered inputs. For custom screening
+    # questions, stop rather than inventing an answer.
+    required_unfilled = []
+    required = page.locator('input[required], textarea[required], select[required]')
+    for i in range(required.count()):
+        field = required.nth(i)
+        try:
+            if not field.is_visible(timeout=500):
+                continue
+            typ = (field.get_attribute("type") or "text").lower()
+            if typ in {"hidden", "submit", "button"}:
+                continue
+            sig = _input_signature(field)
+            if any(x in sig for x in SENSITIVE_LABELS):
+                required_unfilled.append("sensitive-field")
+                continue
+            value = (field.input_value(timeout=500) or "").strip()
+            if typ == "file" and resume.is_file():
+                continue
+            if not value:
+                required_unfilled.append(sig or "required field")
+        except Exception:
+            continue
+
+    if required_unfilled:
+        screenshot_path = _screenshot(page, job_record)
+        return {
+            "application_method": f"{ats or 'web'}_manual",
+            "application_status": "manual_required_fields",
+            "application_url": page.url,
+            "applied": False,
+            "application_error": "Required fields could not be filled safely: " + "; ".join(required_unfilled[:8]),
+            "application_screenshot_path": screenshot_path,
+        }
+
+    submit = _first_present(page, [
+        'button[type="submit"]', 'input[type="submit"]',
+        'button:has-text("Submit application")', 'button:has-text("Submit")',
+        'button:has-text("Apply")', 'button:has-text("Postuler")',
+        'button:has-text("Envoyer la candidature")',
+    ])
+    if not submit:
+        screenshot_path = _screenshot(page, job_record)
+        return {
+            "application_method": f"{ats or 'web'}_manual",
+            "application_status": "manual_submit_button_not_found",
+            "application_url": page.url,
+            "applied": False,
+            "application_screenshot_path": screenshot_path,
+        }
+
+    # Attempt to solve robot verification right before submission
+    _attempt_solve_robot_verification(page)
+
+    # Reserve application attempt slot only when ready to submit
+    reserve_application_attempt(session)
+    try:
+        from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+        submit.click(timeout=settings.apply_page_timeout_seconds * 1000)
+        page.wait_for_load_state("domcontentloaded", timeout=8000)
+    except Exception:
+        pass
+
+    page.wait_for_timeout(3000)
+
+    # Attempt to solve robot verification if triggered upon submit
+    _attempt_solve_robot_verification(page)
+
+    screenshot_path = _screenshot(page, job_record)
+
+    # Check if an active robot challenge is blocking the submission
+    has_robot, robot_msg = _has_active_robot_challenge(page)
+    if has_robot:
+        return {
+            "application_method": f"{ats or 'web'}_manual",
+            "application_status": "manual_security_challenge",
+            "application_url": page.url,
+            "applied": False,
+            "application_error": f"Robot verification challenge blocked submission: {robot_msg}",
+            "application_screenshot_path": screenshot_path,
+        }
+
+    # Check for form validation error banners
+    form_error = _check_form_errors(page)
+    if form_error:
+        return {
+            "application_method": f"{ats or 'web'}_manual",
+            "application_status": "manual_validation_errors",
+            "application_url": page.url,
+            "applied": False,
+            "application_error": f"Form error blocked submission: {form_error}",
+            "application_screenshot_path": screenshot_path,
+        }
+
+    # Check for genuine positive confirmation
+    final_text = (page.locator("body").inner_text(timeout=5000) or "").lower()
+    confirmed = any(marker in final_text for marker in SUCCESS_MARKERS) or _is_confirmation_url(page.url)
+
+    if confirmed:
+        return {
+            "application_method": ats or "web_portal",
+            "application_status": "submitted",
+            "application_url": page_url,
+            "applied": True,
+            "applied_at": datetime.now(timezone.utc),
+            "application_error": None,
+            "application_screenshot_path": screenshot_path,
+        }
+    else:
+        return {
+            "application_method": ats or "web_portal",
+            "application_status": "manual_unconfirmed_submission",
+            "application_url": page_url,
+            "applied": False,
+            "application_error": "Submission confirmation could not be verified on final page.",
+            "application_screenshot_path": screenshot_path,
+        }
+
+
+def _handle_linkedin_portal(page, job_record: dict, profile: dict | None, resume: Path, body: str, session=None) -> dict:
+    """Automate application for LinkedIn job postings."""
+    page_url = page.url
+    screenshot_path = None
+
+    # Step 1: Check for External Apply button on LinkedIn
+    external_apply = _first_present(page, [
+        'a[data-tracking-control-name*="apply"]',
+        'a:has-text("Apply on company website")',
+        'a:has-text("Postuler sur le site de l\'entreprise")',
+        'a.jobs-apply-button',
+    ])
+    if external_apply:
+        href = external_apply.get_attribute("href")
+        if href and href.startswith(("http://", "https://")) and not ("linkedin.com" in href):
+            logger.info("Found external company apply link on LinkedIn: %s", href)
+            page.goto(href, wait_until="domcontentloaded")
+            page.wait_for_timeout(2000)
+            return _fill_and_submit_ats_form(page, job_record, profile, resume, body, session=session)
+
+    # Step 2: Check for Easy Apply button
+    easy_apply_btn = _first_present(page, [
+        'button:has-text("Easy Apply")',
+        'button:has-text("Candidature simplifiée")',
+        '.jobs-apply-button--top-card button',
+        'button.jobs-apply-button',
+    ])
+
+    if not easy_apply_btn:
+        text = (page.locator("body").inner_text(timeout=3000) or "").lower()
+        if any(x in text for x in ("sign in", "join linkedin", "s'identifier", "connectez-vous")):
+            screenshot_path = _screenshot(page, job_record)
+            return {
+                "application_method": "linkedin_portal",
+                "application_status": "manual_auth_required",
+                "application_url": page_url,
+                "applied": False,
+                "application_error": "LinkedIn login required. Please configure your LinkedIn cookie (li_at) in Settings.",
+                "application_screenshot_path": screenshot_path,
+            }
+        screenshot_path = _screenshot(page, job_record)
+        return {
+            "application_method": "linkedin_portal",
+            "application_status": "manual_apply_button_not_found",
+            "application_url": page_url,
+            "applied": False,
+            "application_error": "Neither Easy Apply nor external apply link was found on this LinkedIn posting.",
+            "application_screenshot_path": screenshot_path,
+        }
+
+    # Click Easy Apply button
+    try:
+        easy_apply_btn.click()
+        page.wait_for_timeout(2000)
+    except Exception as exc:
+        screenshot_path = _screenshot(page, job_record)
+        return {
+            "application_method": "linkedin_portal",
+            "application_status": "manual_click_failed",
+            "application_url": page_url,
+            "applied": False,
+            "application_error": f"Failed clicking LinkedIn Easy Apply: {exc}",
+            "application_screenshot_path": screenshot_path,
+        }
+
+    # Check if modal opened or login redirect occurred
+    if "login" in page.url or page.locator('input#username').count():
+        screenshot_path = _screenshot(page, job_record)
+        return {
+            "application_method": "linkedin_portal",
+            "application_status": "manual_auth_required",
+            "application_url": page_url,
+            "applied": False,
+            "application_error": "LinkedIn login required to access Easy Apply.",
+            "application_screenshot_path": screenshot_path,
+        }
+
+    # Iterate through Easy Apply steps
+    max_steps = 10
+    step = 0
+    submitted = False
+
+    while step < max_steps:
+        step += 1
+        page.wait_for_timeout(1000)
+
+        # 1. Fill visible inputs in modal
+        inputs = page.locator('.jobs-easy-apply-modal input, div[role="dialog"] input')
+        for i in range(inputs.count()):
+            field = inputs.nth(i)
+            try:
+                if not field.is_visible(timeout=300):
+                    continue
+                typ = (field.get_attribute("type") or "text").lower()
+                if typ in {"hidden", "checkbox", "radio", "file", "submit", "button"}:
+                    continue
+                sig = _input_signature(field)
+                val = _candidate_value(sig, body=body, profile=profile)
+                curr = (field.input_value(timeout=300) or "").strip()
+                if val and not curr:
+                    _fill(field, val)
+                elif not curr and any(x in sig for x in ("year", "experience", "how many")):
+                    _fill(field, "5")
+            except Exception:
+                continue
+
+        # 2. Upload resume if file input present
+        file_inputs = page.locator('.jobs-easy-apply-modal input[type="file"], div[role="dialog"] input[type="file"]')
+        for i in range(file_inputs.count()):
+            fi = file_inputs.nth(i)
+            try:
+                if resume.is_file():
+                    fi.set_input_files(str(resume), timeout=3000)
+            except Exception:
+                pass
+
+        # 3. Handle radios, checkboxes, selects
+        _handle_common_radios(page)
+        _handle_common_checkboxes(page)
+        _handle_safe_selects(page)
+
+        # 4. Check for Robot Verification widget
+        _attempt_solve_robot_verification(page)
+
+        # 5. Check if Submit button is present
+        submit_btn = _first_present(page, [
+            'button:has-text("Submit application")',
+            'button:has-text("Envoyer la candidature")',
+            'button[aria-label="Submit application"]',
+            'button[aria-label="Envoyer la candidature"]',
+        ])
+        if submit_btn:
+            reserve_application_attempt(session)
+            submit_btn.click()
+            page.wait_for_timeout(3000)
+            submitted = True
+            break
+
+        # 6. Check for Review button
+        review_btn = _first_present(page, [
+            'button:has-text("Review")',
+            'button:has-text("Vérifier")',
+            'button[aria-label="Review your application"]',
+        ])
+        if review_btn:
+            review_btn.click()
+            page.wait_for_timeout(1500)
+            continue
+
+        # 7. Check for Next button
+        next_btn = _first_present(page, [
+            'button:has-text("Next")',
+            'button:has-text("Suivant")',
+            'button[aria-label="Continue to next step"]',
+        ])
+        if next_btn:
+            if page.locator('.artdeco-inline-feedback--error').count():
+                screenshot_path = _screenshot(page, job_record)
+                _dismiss_linkedin_modal(page)
+                return {
+                    "application_method": "linkedin_portal",
+                    "application_status": "manual_required_fields",
+                    "application_url": page_url,
+                    "applied": False,
+                    "application_error": "LinkedIn Easy Apply requires manual review for custom questions.",
+                    "application_screenshot_path": screenshot_path,
+                }
+            next_btn.click()
+            page.wait_for_timeout(1500)
+            continue
+
+        break
+
+    if submitted:
+        _attempt_solve_robot_verification(page)
+        has_robot, robot_msg = _has_active_robot_challenge(page)
+        screenshot_path = _screenshot(page, job_record)
+        if has_robot:
+            return {
+                "application_method": "linkedin_easy_apply",
+                "application_status": "manual_security_challenge",
+                "application_url": page_url,
+                "applied": False,
+                "application_error": f"Robot verification challenge blocked LinkedIn submission: {robot_msg}",
+                "application_screenshot_path": screenshot_path,
+            }
+
+        final_text = (page.locator("body").inner_text(timeout=3000) or "").lower()
+        confirmed = any(m in final_text for m in (
+            "application sent", "candidature envoyée", "your application was sent",
+            "thank you for applying", "candidature bien reçue",
+        )) or not page.locator('.jobs-easy-apply-modal').is_visible()
+
+        if confirmed:
+            return {
+                "application_method": "linkedin_easy_apply",
+                "application_status": "submitted",
+                "application_url": page_url,
+                "applied": True,
+                "applied_at": datetime.now(timezone.utc),
+                "application_error": None,
+                "application_screenshot_path": screenshot_path,
+            }
+
+    screenshot_path = _screenshot(page, job_record)
+    _dismiss_linkedin_modal(page)
+    return {
+        "application_method": "linkedin_portal",
+        "application_status": "manual_unconfirmed_submission",
+        "application_url": page_url,
+        "applied": False,
+        "application_error": "LinkedIn Easy Apply could not be completed automatically.",
+        "application_screenshot_path": screenshot_path,
+    }
+
+
+def _dismiss_linkedin_modal(page):
+    try:
+        dismiss = _first_present(page, [
+            'button[aria-label="Dismiss"]',
+            'button[data-test-modal-close-btn]',
+            'button:has-text("Discard")',
+            'button:has-text("Abandonner")',
+        ])
+        if dismiss:
+            dismiss.click()
+            page.wait_for_timeout(500)
+            discard = _first_present(page, ['button:has-text("Discard")', 'button:has-text("Abandonner")'])
+            if discard:
+                discard.click()
+    except Exception:
+        pass
+
+
+def _handle_indeed_portal(page, job_record: dict, profile: dict | None, resume: Path, body: str, session=None) -> dict:
+    """Automate application for Indeed job postings."""
+    page_url = page.url
+    screenshot_path = None
+
+    # Step 1: Check for External Apply button on Indeed
+    external_apply = _first_present(page, [
+        'a:has-text("Apply on company site")',
+        'a:has-text("Postuler sur le site de l\'entreprise")',
+        'a.view-apply-button',
+        '#applyButtonLinkContainer a',
+        'a[href*="/rc/clk"]',
+    ])
+    if external_apply:
+        href = external_apply.get_attribute("href")
+        if href and href.startswith(("http://", "https://")) and not ("indeed.com" in href):
+            logger.info("Found external company apply link on Indeed: %s", href)
+            page.goto(href, wait_until="domcontentloaded")
+            page.wait_for_timeout(2000)
+            return _fill_and_submit_ats_form(page, job_record, profile, resume, body, session=session)
+
+    # Step 2: Check for Indeed Apply button
+    indeed_apply_btn = _first_present(page, [
+        '#indeedApplyButton',
+        'button:has-text("Apply now")',
+        'button:has-text("Postuler maintenant")',
+        'button[data-gnav-element-name="applyButton"]',
+        'span.indeed-apply-button-label',
+    ])
+
+    if not indeed_apply_btn:
+        screenshot_path = _screenshot(page, job_record)
+        return {
+            "application_method": "indeed_portal",
+            "application_status": "manual_apply_button_not_found",
+            "application_url": page_url,
+            "applied": False,
+            "application_error": "Indeed Apply button was not found on this posting.",
+            "application_screenshot_path": screenshot_path,
+        }
+
+    # Click Indeed Apply button
+    try:
+        indeed_apply_btn.click()
+        page.wait_for_timeout(2500)
+    except Exception as exc:
+        screenshot_path = _screenshot(page, job_record)
+        return {
+            "application_method": "indeed_portal",
+            "application_status": "manual_click_failed",
+            "application_url": page_url,
+            "applied": False,
+            "application_error": f"Failed clicking Indeed Apply button: {exc}",
+            "application_screenshot_path": screenshot_path,
+        }
+
+    # Step 3: Handle Indeed Apply frame or container
+    target_scope = page
+    for frame in page.frames:
+        if "indeedapply" in frame.url.lower() or "indeed-apply" in frame.url.lower():
+            target_scope = frame
+            break
+
+    max_steps = 8
+    step = 0
+    submitted = False
+
+    while step < max_steps:
+        step += 1
+        page.wait_for_timeout(1200)
+
+        # 1. Fill contact inputs
+        fields = target_scope.locator("input, textarea")
+        for i in range(fields.count()):
+            f = fields.nth(i)
+            try:
+                if not f.is_visible(timeout=300):
+                    continue
+                typ = (f.get_attribute("type") or "text").lower()
+                if typ in {"hidden", "checkbox", "radio", "file", "submit", "button"}:
+                    continue
+                sig = _input_signature(f)
+                val = _candidate_value(sig, body=body, profile=profile)
+                curr = (f.input_value(timeout=300) or "").strip()
+                if val and not curr:
+                    _fill(f, val)
+            except Exception:
+                continue
+
+        # 2. Upload resume if file input present
+        files = target_scope.locator('input[type="file"]')
+        for i in range(files.count()):
+            fi = files.nth(i)
+            try:
+                if resume.is_file():
+                    fi.set_input_files(str(resume), timeout=3000)
+            except Exception:
+                pass
+
+        # 3. Handle checkboxes & radios
+        _handle_common_radios(target_scope)
+        _handle_common_checkboxes(target_scope)
+        _handle_safe_selects(target_scope)
+
+        # 4. Check for Robot Verification
+        _attempt_solve_robot_verification(page)
+
+        # 5. Check for Submit button
+        submit_btn = _first_present(target_scope, [
+            'button:has-text("Submit your application")',
+            'button:has-text("Submit application")',
+            'button:has-text("Postuler")',
+            'button:has-text("Submit")',
+        ])
+        if submit_btn:
+            reserve_application_attempt(session)
+            submit_btn.click()
+            page.wait_for_timeout(3500)
+            submitted = True
+            break
+
+        # 6. Check for Continue / Next button
+        continue_btn = _first_present(target_scope, [
+            'button:has-text("Continue")',
+            'button:has-text("Continuer")',
+            'button:has-text("Next")',
+            'button:has-text("Suivant")',
+        ])
+        if continue_btn:
+            err = _check_form_errors(page)
+            if err:
+                screenshot_path = _screenshot(page, job_record)
+                return {
+                    "application_method": "indeed_portal",
+                    "application_status": "manual_validation_errors",
+                    "application_url": page_url,
+                    "applied": False,
+                    "application_error": f"Indeed Apply blocked by error: {err}",
+                    "application_screenshot_path": screenshot_path,
+                }
+            continue_btn.click()
+            page.wait_for_timeout(1500)
+            continue
+
+        break
+
+    if submitted:
+        _attempt_solve_robot_verification(page)
+        has_robot, robot_msg = _has_active_robot_challenge(page)
+        screenshot_path = _screenshot(page, job_record)
+        if has_robot:
+            return {
+                "application_method": "indeed_apply",
+                "application_status": "manual_security_challenge",
+                "application_url": page_url,
+                "applied": False,
+                "application_error": f"Robot verification challenge blocked Indeed submission: {robot_msg}",
+                "application_screenshot_path": screenshot_path,
+            }
+
+        final_text = (page.locator("body").inner_text(timeout=3000) or "").lower()
+        confirmed = any(m in final_text for m in (
+            "your application has been submitted",
+            "application submitted",
+            "votre candidature a bien été envoyée",
+            "candidature transmise",
+            "thank you for applying",
+        )) or _is_confirmation_url(page.url)
+
+        if confirmed:
+            return {
+                "application_method": "indeed_apply",
+                "application_status": "submitted",
+                "application_url": page_url,
+                "applied": True,
+                "applied_at": datetime.now(timezone.utc),
+                "application_error": None,
+                "application_screenshot_path": screenshot_path,
+            }
+
+    screenshot_path = _screenshot(page, job_record)
+    return {
+        "application_method": "indeed_portal",
+        "application_status": "manual_unconfirmed_submission",
+        "application_url": page_url,
+        "applied": False,
+        "application_error": "Indeed Apply could not be confirmed on final page.",
+        "application_screenshot_path": screenshot_path,
+    }
+
 
 
 def _screenshot(page, job_record: dict) -> str | None:
