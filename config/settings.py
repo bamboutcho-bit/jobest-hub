@@ -1,10 +1,23 @@
 """Centralized, environment-driven runtime configuration for the job-search system."""
 # pyrefly: ignore [missing-import]
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore", case_sensitive=False)
+
+    @model_validator(mode="after")
+    def sync_smtp_sender_defaults(self):
+        if not self.sender_email and self.smtp_user:
+            self.sender_email = self.smtp_user
+        if not self.sender_smtp_password and self.smtp_password:
+            self.sender_smtp_password = self.smtp_password
+        if not self.sender_smtp_host and self.smtp_host:
+            self.sender_smtp_host = self.smtp_host
+        if not self.sender_smtp_port and self.smtp_port:
+            self.sender_smtp_port = self.smtp_port
+        return self
 
     # Admin account (synced on startup from .env)
     admin_email: str = "admin@autohunt.internal"

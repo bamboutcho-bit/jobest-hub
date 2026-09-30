@@ -6223,6 +6223,8 @@
       onbState.locations = Array.isArray(prof.target_locations) && prof.target_locations.length ? [...prof.target_locations] : ['Remote'];
       onbState.resume_text = prof.resume_text || '';
       onbState.completion_percent = score;
+      onbState.checklist = chk;
+      onbState.has_smtp_password = Boolean(sett.has_smtp_password || chk.smtp);
 
       // Populate Inputs
       const setVal = (id, val) => {
@@ -6239,6 +6241,9 @@
       setVal('onbSenderEmail', sett.sender_email || (currentUser && currentUser.email) || '');
       setVal('onbSmtpHost', sett.smtp_host || 'smtp.gmail.com');
       setVal('onbSmtpPort', sett.smtp_port || 587);
+      if (sett.has_smtp_password && document.getElementById('onbSmtpPass')) {
+        document.getElementById('onbSmtpPass').placeholder = '•••••••• (Configured via system env)';
+      }
       setVal('onbAlertEmail', sett.alert_email || (currentUser && currentUser.email) || '');
       setVal('onbMinScoreSlider', sett.min_match_score || 65);
       if (document.getElementById('onbScoreValueDisplay')) {
@@ -6278,10 +6283,16 @@
       sessionStorage.setItem('setup_banner_dismissed', 'true');
     }
 
-    function updateOnbReadinessDisplay(score, chk = {}) {
+    function updateOnbReadinessDisplay(score, chk = null) {
       const badge = document.getElementById('onbScoreBadge');
       const bar = document.getElementById('onbProgressBarFill');
       const summary = document.getElementById('onbMissingSummary');
+
+      if (!chk || Object.keys(chk).length === 0) {
+        chk = onbState.checklist || {};
+      } else {
+        onbState.checklist = chk;
+      }
 
       if (bar) bar.style.width = `${Math.max(10, Math.min(100, score))}%`;
       if (badge) {
@@ -6300,14 +6311,15 @@
       const resumeText = document.getElementById('onbResumeText')?.value || onbState.resume_text || '';
       if (c3) c3.textContent = (resumeText.length > 25) ? '✓' : '⚠️';
       const smtpPass = document.getElementById('onbSmtpPass')?.value;
-      if (c4) c4.textContent = (chk.smtp || (smtpPass && smtpPass.length > 3)) ? '✓' : '⚠️';
+      const isSmtpReady = Boolean(chk.smtp || onbState.has_smtp_password || (smtpPass && smtpPass.length > 3));
+      if (c4) c4.textContent = isSmtpReady ? '✓' : '⚠️';
 
       if (summary) {
         let missingCount = 0;
         if (!onbState.titles.length) missingCount++;
         if (!onbState.stack.length) missingCount++;
         if (resumeText.length <= 25) missingCount++;
-        if (!chk.smtp && (!smtpPass || smtpPass.length <= 3)) missingCount++;
+        if (!isSmtpReady) missingCount++;
         summary.textContent = missingCount === 0 ? 'All essential setup complete!' : `${missingCount} required items remaining`;
       }
     }
@@ -6330,7 +6342,7 @@
       if (btnFinish) btnFinish.style.display = (stepNumber === 5) ? 'inline-block' : 'none';
 
       // Re-evaluate check marks
-      updateOnbReadinessDisplay(onbState.completion_percent);
+      updateOnbReadinessDisplay(onbState.completion_percent, onbState.checklist);
     }
 
     function navigateOnbStep(delta) {

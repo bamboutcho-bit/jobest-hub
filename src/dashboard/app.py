@@ -2825,31 +2825,39 @@ def api_user_get_settings(request: Request):
             except Exception:
                 custom_env = {}
 
+        from src.storage.user_settings import get_user_effective_settings
+        eff = get_user_effective_settings(user.id)
+        effective_smtp_pass = (
+            (us.smtp_password.strip() if us and us.smtp_password else None)
+            or eff.get("smtp_password")
+            or getattr(settings, "sender_smtp_password", "")
+            or getattr(settings, "smtp_password", "")
+        )
         return {
             "ok": True,
             "settings": {
-                "sender_email": us.sender_email,
-                "sender_name": us.sender_name,
-                "smtp_host": us.smtp_host,
-                "smtp_port": us.smtp_port,
-                "smtp_password": "••••••••" if us.smtp_password else None,
-                "imap_host": us.imap_host,
-                "imap_port": us.imap_port,
-                "imap_password": "••••••••" if us.imap_password else None,
-                "phone_number": us.phone_number,
-                "linkedin_url": us.linkedin_url,
-                "github_url": us.github_url,
-                "portfolio_url": us.portfolio_url,
-                "min_match_score": us.min_match_score,
-                "auto_apply_mode": us.auto_apply_mode,
-                "auto_apply_min_score": us.auto_apply_min_score,
-                "telegram_bot_token": "••••••••" if us.telegram_bot_token else None,
-                "telegram_chat_id": us.telegram_chat_id,
-                "alert_email": us.alert_email,
-                "linkedin_cookie": "••••••••" if custom_env.get("LINKEDIN_COOKIE") else None,
-                "indeed_cookie": "••••••••" if custom_env.get("INDEED_COOKIE") else None,
-                "auto_apply_linkedin_enabled": custom_env.get("AUTO_APPLY_LINKEDIN_ENABLED", True),
-                "auto_apply_indeed_enabled": custom_env.get("AUTO_APPLY_INDEED_ENABLED", True),
+                "sender_email": (us.sender_email if us and us.sender_email else None) or eff.get("sender_email") or user.email,
+                "sender_name": (us.sender_name if us and us.sender_name else None) or eff.get("sender_name") or (user.full_name or ""),
+                "smtp_host": (us.smtp_host if us and us.smtp_host else None) or eff.get("smtp_host") or "smtp.gmail.com",
+                "smtp_port": (us.smtp_port if us and us.smtp_port else None) or eff.get("smtp_port") or 587,
+                "smtp_password": "••••••••" if bool(effective_smtp_pass) else None,
+                "imap_host": (us.imap_host if us and us.imap_host else None) or eff.get("imap_host"),
+                "imap_port": (us.imap_port if us and us.imap_port else None) or eff.get("imap_port") or 993,
+                "imap_password": "••••••••" if bool(us.imap_password if us else None) or bool(eff.get("imap_password")) else None,
+                "phone_number": (us.phone_number if us else None) or eff.get("phone_number"),
+                "linkedin_url": (us.linkedin_url if us else None) or eff.get("linkedin_url"),
+                "github_url": (us.github_url if us else None) or eff.get("github_url"),
+                "portfolio_url": (us.portfolio_url if us else None) or eff.get("portfolio_url"),
+                "min_match_score": us.min_match_score if (us and us.min_match_score is not None) else eff.get("min_match_score", 65),
+                "auto_apply_mode": (us.auto_apply_mode if us and us.auto_apply_mode else None) or eff.get("auto_apply_mode", "draft"),
+                "auto_apply_min_score": us.auto_apply_min_score if (us and us.auto_apply_min_score is not None) else eff.get("auto_apply_min_score", 70),
+                "telegram_bot_token": "••••••••" if bool(us.telegram_bot_token if us else None) or bool(eff.get("telegram_bot_token")) else None,
+                "telegram_chat_id": (us.telegram_chat_id if us else None) or eff.get("telegram_chat_id"),
+                "alert_email": (us.alert_email if us and us.alert_email else None) or eff.get("alert_email") or user.email,
+                "linkedin_cookie": "••••••••" if custom_env.get("LINKEDIN_COOKIE") or eff.get("linkedin_cookie") else None,
+                "indeed_cookie": "••••••••" if custom_env.get("INDEED_COOKIE") or eff.get("indeed_cookie") else None,
+                "auto_apply_linkedin_enabled": custom_env.get("AUTO_APPLY_LINKEDIN_ENABLED", eff.get("auto_apply_linkedin_enabled", True)),
+                "auto_apply_indeed_enabled": custom_env.get("AUTO_APPLY_INDEED_ENABLED", eff.get("auto_apply_indeed_enabled", True)),
                 "custom_env": custom_env,
             }
         }
@@ -3021,21 +3029,59 @@ def api_user_get_setup_status(request: Request):
         has_titles = bool(titles and len(titles) > 0)
         has_stack = bool(stack and len(stack) > 0)
         has_resume = bool(prof and ((prof.resume_text and len(prof.resume_text.strip()) > 30) or bool(prof.resume_path)))
-        has_smtp_email = bool(us and us.sender_email)
-        has_smtp_pass = bool(us and us.smtp_password)
+
+        from src.storage.user_settings import get_user_effective_settings
+        eff = get_user_effective_settings(user.id)
+
+        effective_smtp_email = (
+            (us.sender_email.strip() if us and us.sender_email else None)
+            or eff.get("sender_email")
+            or (user.email.strip() if user and user.email else None)
+            or getattr(settings, "sender_email", "")
+            or getattr(settings, "smtp_user", "")
+        )
+        effective_smtp_pass = (
+            (us.smtp_password.strip() if us and us.smtp_password else None)
+            or eff.get("smtp_password")
+            or getattr(settings, "sender_smtp_password", "")
+            or getattr(settings, "smtp_password", "")
+        )
+
+        has_smtp_email = bool(effective_smtp_email)
+        has_smtp_pass = bool(effective_smtp_pass)
         has_locations = bool(locations and len(locations) > 0)
+
+        # Web portal application channel readiness (LinkedIn, Indeed, Web / ATS portals)
+        has_portal_apply = bool(
+            eff.get("auto_apply_linkedin_enabled")
+            or eff.get("auto_apply_indeed_enabled")
+            or getattr(settings, "auto_apply_web_enabled", True)
+            or getattr(settings, "auto_apply_linkedin_enabled", True)
+            or getattr(settings, "auto_apply_indeed_enabled", True)
+            or (us and us.auto_apply_mode and us.auto_apply_mode != "off")
+        )
+
+        # Outbound readiness:
+        # Full outbound capability (25%) is met if:
+        # 1. User/system has valid SMTP credentials (email + password), OR
+        # 2. User has configured an outbound email + active portal auto-apply capabilities, OR
+        # 3. User configured their sender email address in settings.
+        outbound_ready = bool(
+            (has_smtp_email and has_smtp_pass)
+            or (has_smtp_email and has_portal_apply)
+            or (us and us.sender_email)
+        )
 
         # 4 Core Pillars for Automation:
         # 1. Target Titles (25%)
         # 2. Tech Stack (25%)
         # 3. Resume / CV text (25%)
-        # 4. Outbound Email / SMTP (25%)
+        # 4. Outbound Channel & Application Capabilities (25%)
         score = 0
         if has_titles: score += 25
         if has_stack: score += 25
         if has_resume: score += 25
-        if has_smtp_email and has_smtp_pass: score += 25
-        elif has_smtp_email: score += 15
+        if outbound_ready or has_smtp_email: score += 25
 
         missing = []
         if not has_titles:
@@ -3056,7 +3102,7 @@ def api_user_get_setup_status(request: Request):
                 "title": "CV & Resume Studio",
                 "desc": "Upload your CV PDF/DOCX or paste resume text for AI matching"
             })
-        if not (has_smtp_email and has_smtp_pass):
+        if not (outbound_ready or has_smtp_email):
             missing.append({
                 "id": "smtp",
                 "title": "Outbound Email Credentials",
@@ -3075,7 +3121,7 @@ def api_user_get_setup_status(request: Request):
                 "titles": has_titles,
                 "stack": has_stack,
                 "resume": has_resume,
-                "smtp": has_smtp_email and has_smtp_pass,
+                "smtp": bool(outbound_ready or has_smtp_email),
                 "locations": has_locations,
             },
             "missing_items": missing,
@@ -3089,14 +3135,14 @@ def api_user_get_setup_status(request: Request):
                 "resume_text": prof.resume_text if prof else "",
             },
             "settings": {
-                "sender_name": us.sender_name if us else (user.full_name or ""),
-                "sender_email": us.sender_email if us else (user.email or ""),
-                "smtp_host": us.smtp_host if us else "smtp.gmail.com",
-                "smtp_port": us.smtp_port if us else 587,
-                "has_smtp_password": bool(us and us.smtp_password),
-                "alert_email": us.alert_email if us else (user.email or ""),
-                "min_match_score": us.min_match_score if us else 65,
-                "auto_apply_mode": us.auto_apply_mode if us else "draft",
+                "sender_name": (us.sender_name if us and us.sender_name else None) or eff.get("sender_name") or (user.full_name or ""),
+                "sender_email": (us.sender_email if us and us.sender_email else None) or effective_smtp_email or "",
+                "smtp_host": (us.smtp_host if us and us.smtp_host else None) or eff.get("smtp_host") or "smtp.gmail.com",
+                "smtp_port": (us.smtp_port if us and us.smtp_port else None) or eff.get("smtp_port") or 587,
+                "has_smtp_password": bool(effective_smtp_pass),
+                "alert_email": (us.alert_email if us and us.alert_email else None) or eff.get("alert_email") or (user.email or ""),
+                "min_match_score": (us.min_match_score if us and us.min_match_score is not None else None) or eff.get("min_match_score", 65),
+                "auto_apply_mode": (us.auto_apply_mode if us and us.auto_apply_mode else None) or eff.get("auto_apply_mode", "draft"),
             }
         }
 
