@@ -1,0 +1,2568 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AutoHunt Pro — AI Job Search & Freelance Client Acquisition</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/style.css?v=6.0.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <style>
+    @keyframes spinRefresh {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    /* Universal Form Control & Input Styling (Dark Cyber Aesthetic) */
+    input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="range"]):not([type="file"]):not([type="hidden"]),
+    select,
+    textarea,
+    .form-control {
+      background: rgba(10, 16, 31, 0.85) !important;
+      color: var(--text, #f1f5f9) !important;
+      border: 1px solid var(--border, rgba(255, 255, 255, 0.12)) !important;
+      border-radius: var(--radius-md, 12px) !important;
+      padding: 10px 14px !important;
+      font-size: 13px !important;
+      font-family: inherit !important;
+      outline: none !important;
+      box-sizing: border-box !important;
+      box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.4) !important;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease !important;
+      line-height: 1.4 !important;
+    }
+    input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="range"]):not([type="file"]):not([type="hidden"]):hover,
+    select:hover,
+    textarea:hover,
+    .form-control:hover {
+      border-color: var(--border-hover, rgba(139, 92, 246, 0.5)) !important;
+      background: rgba(15, 23, 42, 0.95) !important;
+    }
+    input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="range"]):not([type="file"]):not([type="hidden"]):focus,
+    select:focus,
+    textarea:focus,
+    .form-control:focus {
+      border-color: var(--border-focus, #8b5cf6) !important;
+      background: #0f1a30 !important;
+      box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.28), inset 0 1px 2px rgba(0, 0, 0, 0.5) !important;
+      color: #ffffff !important;
+    }
+    ::placeholder,
+    input::placeholder,
+    textarea::placeholder {
+      color: #64748b !important;
+      opacity: 0.75 !important;
+      font-size: 12.5px !important;
+      font-family: inherit !important;
+    }
+    input:-webkit-autofill,
+    input:-webkit-autofill:hover, 
+    input:-webkit-autofill:focus, 
+    input:-webkit-autofill:active {
+      -webkit-box-shadow: 0 0 0 1000px #090f1d inset !important;
+      -webkit-text-fill-color: #f1f5f9 !important;
+      transition: background-color 5000s ease-in-out 0s !important;
+      border: 1px solid rgba(139, 92, 246, 0.5) !important;
+    }
+  </style>
+</head>
+<body data-default-tab="{{DEFAULT_TAB}}">
+  <div class="app-shell">
+    
+    <!-- Top Nav Header -->
+    <header class="top-bar">
+      <div class="brand">
+        <div class="brand-logo">⚡</div>
+        <div>
+          <div style="display:flex;align-items:center;">
+            <h1 class="brand-title">AutoHunt Pro</h1>
+            <span class="brand-badge">v3.2 Hybrid</span>
+          </div>
+          <div style="font-size:12px;color:var(--text-muted);">AI Job Search & Freelance Client Acquisition Suite</div>
+        </div>
+      </div>
+
+      <!-- Mode Switcher -->
+      <div class="mode-switcher">
+        <button id="modeFreelance" class="mode-btn active" onclick="switchAppMode('freelance')">
+          <span>🚀 Freelance & Deals</span>
+        </button>
+        <button id="modeJobs" class="mode-btn" onclick="switchAppMode('jobs')">
+          <span>💼 Job Search Auto</span>
+        </button>
+      </div>
+
+      <!-- Header Controls -->
+      <div class="header-controls">
+        <div class="status-pulse">
+          <div class="pulse-dot"></div>
+          <span id="liveStatusText">Live Sync</span>
+          <select id="syncIntervalSelect" onchange="changeSyncInterval(this.value)" style="background:transparent;border:none;color:var(--text-faint);font-size:11px;padding:0 2px;cursor:pointer">
+            <option value="5000">5s</option>
+            <option value="10000" selected>10s</option>
+            <option value="30000">30s</option>
+            <option value="0">Pause</option>
+          </select>
+        </div>
+        <button id="globalRefreshBtn" class="btn btn-sm" onclick="manualRefresh()" title="Refresh data now" style="display:flex;align-items:center;gap:6px">
+          <span id="globalRefreshIcon" style="display:inline-block">↻</span>
+          <span id="globalRefreshText">Refresh</span>
+        </button>
+
+        <!-- Real-Time Broker Notification Bell -->
+        <div id="notifBellWrapper" style="position:relative;">
+          <button id="notifBellBtn" class="btn btn-sm" onclick="toggleNotificationDropdown()" title="Notifications (Real-Time)" style="position:relative;display:flex;align-items:center;justify-content:center;width:34px;height:32px;padding:0;border-radius:8px;font-size:15px;background:rgba(255,255,255,0.04);border:1px solid var(--border);cursor:pointer">
+            <span>🔔</span>
+            <span id="notifUnreadBadge" style="display:none;position:absolute;top:-4px;right:-4px;background:#ef4444;color:#fff;font-size:10px;font-weight:800;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;box-shadow:0 0 8px rgba(239,68,68,0.7);line-height:14px">0</span>
+          </button>
+
+          <!-- Dropdown Panel -->
+          <div id="notifDropdown" style="display:none;position:absolute;right:0;top:40px;width:360px;max-height:480px;background:#0f172a;border:1px solid rgba(255,255,255,0.14);border-radius:12px;box-shadow:0 20px 40px rgba(0,0,0,0.7);z-index:9999;flex-direction:column;overflow:hidden">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.02)">
+              <div style="font-weight:700;font-size:13px;display:flex;align-items:center;gap:6px">
+                <span>🔔 Notifications</span>
+                <span id="notifStatusDot" style="width:7px;height:7px;border-radius:50%;background:#10b981;display:inline-block" title="Real-Time Broker Connected"></span>
+              </div>
+              <div style="display:flex;gap:8px">
+                <button onclick="triggerTestNotification()" style="background:none;border:none;color:var(--cyan-light);font-size:11px;cursor:pointer;padding:0" title="Send Broker Test Event">Test</button>
+                <button onclick="markAllNotificationsRead()" style="background:none;border:none;color:var(--text-muted);font-size:11px;cursor:pointer;padding:0">Mark all read</button>
+              </div>
+            </div>
+            <!-- Notification list container (STRICT NEWEST-FIRST) -->
+            <div id="notifListContainer" style="overflow-y:auto;max-height:380px;display:flex;flex-direction:column;gap:1px">
+              <div style="padding:24px;text-align:center;color:var(--text-muted);font-size:12px">No notifications yet</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- User Badge & RBAC Logout -->
+        <div id="navUserBadge" style="display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.03);border:1px solid var(--border);padding:3px 10px;border-radius:10px">
+          <div style="font-size:12px;font-weight:700" id="navUserName">Loading...</div>
+          <span id="navRoleBadge" class="pill" style="font-size:10px;background:rgba(56,189,248,0.15);color:var(--cyan-light)">USER</span>
+          <span id="navPlanNameBadge" class="pill" style="font-size:10px;font-weight:800;cursor:pointer;display:inline-flex;align-items:center;gap:4px;letter-spacing:0.04em" onclick="switchAppMode('jobs');switchJobsTab('pricing')" title="Click to view or change your active plan">FREE TIER</span>
+          <span id="navPlanBadge" class="pill pill-stage-deal_won" style="font-size:10px;cursor:pointer" onclick="switchAppMode('jobs');switchJobsTab('pricing')" title="Click to view subscription plans & billing">0/200 apps today</span>
+          <button class="btn btn-sm" onclick="handleLogout()" style="padding:2px 8px;font-size:11px;background:rgba(239,68,68,0.15);color:#f87171;border:none;cursor:pointer">Logout</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- ================================================================= -->
+    <!-- VIEW 1: FREELANCE & CLIENT ACQUISITION HUB -->
+    <!-- ================================================================= -->
+    <main id="freelanceView" class="view-section active">
+      
+      <!-- Freelance Header Actions -->
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;flex-wrap:wrap;gap:12px">
+        <div>
+          <h2 style="font-size:22px;font-weight:800;letter-spacing:-0.02em">Client Acquisition & Deal Engine</h2>
+          <div style="color:var(--text-muted);font-size:13px">Discover high-paying projects, generate AI pitches, track follow-ups and close contracts</div>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button id="btnDiscoverClients" class="btn btn-primary" onclick="triggerClientDiscovery()">
+            <span id="discoverIcon">🔍</span> Scan for Clients Now
+          </button>
+          <button id="btnBatchEvaluateLeads" class="btn btn-cyan" onclick="triggerBatchEvaluateLeads()">
+            <span id="evalLeadsIcon">⚡</span> Evaluate Leads
+          </button>
+          <button id="btnBatchDraftPitches" class="btn" onclick="triggerBatchDraftPitches()">
+            <span id="draftPitchesIcon">✨</span> Batch Draft Pitches
+          </button>
+          <button id="btnBatchFollowUps" class="btn" onclick="triggerBatchFollowUps()" style="border-color:rgba(245,158,11,0.4);background:rgba(245,158,11,0.1);color:var(--warn)">
+            <span id="followUpIcon">⏰</span> Run Follow-Up Cadence <span id="batchFollowUpBadge" class="brand-badge" style="background:rgba(245,158,11,0.25);color:var(--warn);margin-left:4px">0</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Freelance KPI Cards -->
+      <div id="freelanceKpis" class="kpi-grid">
+        <div class="kpi-card"><div class="kpi-label">Total Leads</div><div class="kpi-value" id="fKpiTotal">0</div><div class="kpi-sub">Across all sources</div></div>
+        <div class="kpi-card"><div class="kpi-label">Average Fit Score</div><div class="kpi-value" id="fKpiAvgScore" style="color:var(--cyan-light)">0%</div><div class="kpi-sub">Skill match evaluation</div></div>
+        <div class="kpi-card"><div class="kpi-label">Active Pitches</div><div class="kpi-value" id="fKpiPitched" style="color:var(--purple-light)">0</div><div class="kpi-sub">Proposals delivered</div></div>
+        <div class="kpi-card" style="border-color:rgba(245,158,11,0.3)"><div class="kpi-label">Due Follow-Ups</div><div class="kpi-value" id="fKpiFollowUps" style="color:var(--warn)">0</div><div class="kpi-sub">Cadence active ⏰</div></div>
+        <div class="kpi-card"><div class="kpi-label">In Discussion</div><div class="kpi-value" id="fKpiDiscussion" style="color:var(--cyan)">0</div><div class="kpi-sub">Active client dialogues</div></div>
+        <div class="kpi-card"><div class="kpi-label">Offers Received</div><div class="kpi-value" id="fKpiOffers" style="color:var(--warn)">0</div><div class="kpi-sub">Negotiation stage</div></div>
+        <div class="kpi-card"><div class="kpi-label">Deals Won</div><div class="kpi-value" id="fKpiWon" style="color:var(--good)">0</div><div class="kpi-sub">Contracts secured 🏆</div></div>
+      </div>
+
+      <!-- Sub Navigation -->
+      <div class="sub-nav">
+        <button id="fTabKanban" class="tab-btn active" onclick="switchFreelanceTab('kanban')">📋 Drag-and-Drop Deal Board</button>
+        <button id="fTabTable" class="tab-btn" onclick="switchFreelanceTab('table')">📑 All Leads Explorer</button>
+        <button id="fTabAnalytics" class="tab-btn" onclick="switchFreelanceTab('analytics')">📊 Funnel & Deal Value</button>
+        <button id="fTabFollowUps" class="tab-btn" onclick="toggleFreelanceFollowUpFilter()" style="border-color:rgba(245,158,11,0.4);color:var(--warn)">
+          ⏰ Due Follow-Ups <span id="fKpiFollowUpsBadge" class="brand-badge" style="background:rgba(245,158,11,0.2);color:var(--warn);margin-left:4px">0</span>
+        </button>
+        <button id="fTabPricing" class="tab-btn" onclick="switchAppMode('jobs');switchJobsTab('pricing')" style="border-color:rgba(16,185,129,0.4);color:var(--good);font-weight:700">💎 Plans & Billing</button>
+      </div>
+
+      <!-- TAB 1: KANBAN BOARD -->
+      <div id="fKanbanSection" class="panel" style="padding:16px;">
+        <div class="filter-bar">
+          <input type="text" id="kanbanSearch" class="grow" placeholder="Quick search title, client, or tech..." oninput="debounce(filterFreelanceCards, 200)()">
+          <select id="kanbanPlatformFilter" onchange="filterFreelanceCards()">
+            <option value="">All Platforms</option>
+            <option value="hackernews">Hacker News</option>
+            <option value="reddit">Reddit</option>
+            <option value="remoteok">RemoteOK</option>
+            <option value="jobicy">Jobicy</option>
+          </select>
+          <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-muted)">
+            <span>Min Score:</span>
+            <input type="range" id="kanbanScoreSlider" min="0" max="90" step="10" value="0" oninput="document.getElementById('kanbanScoreVal').textContent=this.value;filterFreelanceCards()">
+            <span id="kanbanScoreVal" style="font-family:'JetBrains Mono';font-weight:700;color:#fff">0</span>
+          </div>
+        </div>
+
+        <div id="kanbanBoard" class="kanban-board">
+          <!-- Columns generated dynamically -->
+        </div>
+      </div>
+
+      <!-- TAB 2: LEADS TABLE EXPLORER -->
+      <div id="fTableSection" class="panel" style="display:none">
+        <div class="filter-bar">
+          <input type="text" id="tableSearch" class="grow" placeholder="Search by keyword, client name, or description..." oninput="debounce(loadFreelanceLeads, 250)()">
+          <select id="tableStageFilter" onchange="loadFreelanceLeads()">
+            <option value="">All Stages</option>
+            <option value="discovered">🔍 Discovered</option>
+            <option value="evaluated">⚡ Evaluated</option>
+            <option value="pitched">✉️ Pitched</option>
+            <option value="in_discussion">💬 In Discussion</option>
+            <option value="offer_received">🎯 Offer Received</option>
+            <option value="deal_won">🏆 Deal Won</option>
+            <option value="lost">❌ Lost</option>
+          </select>
+        </div>
+        <div class="data-table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th onclick="sortLeads('id')">ID</th>
+                <th onclick="sortLeads('title')">Project / Role</th>
+                <th onclick="sortLeads('client_name')">Client</th>
+                <th onclick="sortLeads('source_platform')">Platform</th>
+                <th onclick="sortLeads('match_score')">Score</th>
+                <th onclick="sortLeads('budget_estimate')">Budget</th>
+                <th onclick="sortLeads('stage')">Stage</th>
+                <th>Pitch Status</th>
+                <th>Contact</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="freelanceTableBody">
+              <!-- Rendered dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- TAB 3: FUNNEL & ANALYTICS -->
+      <div id="fAnalyticsSection" class="panel" style="display:none">
+        <h3 style="margin-bottom:14px;font-size:16px;">Acquisition Pipeline Funnel</h3>
+        <div id="funnelContainer" style="display:flex;flex-direction:column;gap:12px;margin-bottom:24px"></div>
+        <div class="panel" style="background:rgba(10,16,31,0.6);margin-top:20px;">
+          <h4 style="margin-bottom:8px">Estimated Total Pipeline Value</h4>
+          <div id="pipelineValueDisplay" style="font-family:'JetBrains Mono';font-size:32px;font-weight:800;color:var(--good)">$0</div>
+          <div style="font-size:12px;color:var(--text-muted)">Calculated from high-confidence budget estimates across active pitches and offers.</div>
+        </div>
+      </div>
+
+    </main>
+
+    <!-- ================================================================= -->
+    <!-- VIEW 2: JOB SEARCH AUTOMATION HUB -->
+    <!-- ================================================================= -->
+    <main id="jobsView" class="view-section">
+      
+      <!-- Jobs Header Actions -->
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;flex-wrap:wrap;gap:12px">
+        <div>
+          <h2 style="font-size:22px;font-weight:800;letter-spacing:-0.02em">Full-Time Job Search Automation</h2>
+          <div style="color:var(--text-muted);font-size:13px">Multi-board ingestion, AI relevance matching, visa filtering, and safe automated applications</div>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button id="btnRunJobPipeline" class="btn btn-cyan" onclick="triggerJobPipeline()">
+            <span id="jobPipelineIcon">⚡</span> Run Discovery
+          </button>
+          <button id="btnEvaluateBacklog" class="btn" onclick="triggerBacklogEvaluation()">
+            <span id="evalBacklogIcon">🧠</span> Evaluate Backlog
+          </button>
+          <button id="btnBatchEnrichHr" class="btn" onclick="triggerBatchHrEnrichment()" style="border-color:rgba(168,85,247,0.4);background:rgba(168,85,247,0.12);color:var(--purple-light)">
+            <span id="enrichHrIcon">🎯</span> Enrich HR Emails
+          </button>
+          <button id="btnApplyMatches" class="btn btn-primary" onclick="triggerApplyPendingMatches()">
+            <span id="applyMatchesIcon">🚀</span> Auto-Apply to Matches
+          </button>
+          <button id="btnCheckInbox" class="btn" onclick="triggerCheckInbox()">
+            <span>📬</span> Check Inbox
+          </button>
+          <div style="position:relative;display:inline-block">
+            <button class="btn" onclick="toggleExportMenu()">
+              <span>📥</span> Export CSV ▾
+            </button>
+            <div id="exportDropdown" style="display:none;position:absolute;right:0;top:110%;background:#0d1527;border:1px solid var(--border);border-radius:var(--radius-md);box-shadow:var(--shadow-lg);z-index:60;min-width:160px;padding:6px 0">
+              <a href="/api/export/jobs.csv" style="display:block;padding:8px 16px;color:var(--text);text-decoration:none;font-size:13px;font-weight:600" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='transparent'">💼 Jobs (CSV)</a>
+              <a href="/api/export/freelance.csv" style="display:block;padding:8px 16px;color:var(--text);text-decoration:none;font-size:13px;font-weight:600" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='transparent'">🚀 Freelance Leads (CSV)</a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Jobs KPI Cards -->
+      <div id="jobsKpis" class="kpi-grid">
+        <div class="kpi-card"><div class="kpi-label">Total Postings</div><div class="kpi-value" id="jKpiTotal">0</div><div class="kpi-sub">Scraped from 4+ sites</div></div>
+        <div class="kpi-card"><div class="kpi-label">Evaluated</div><div class="kpi-value" id="jKpiEval">0</div><div class="kpi-sub">AI Relevance & Visa checked</div></div>
+        <div class="kpi-card"><div class="kpi-label">Good Matches</div><div class="kpi-value" id="jKpiMatches" style="color:var(--good)">0</div><div class="kpi-sub">Passed threshold & visa</div></div>
+        <div class="kpi-card"><div class="kpi-label">Applications Today</div><div class="kpi-value" id="jKpiApps" style="color:var(--cyan-light)">0</div><div class="kpi-sub">Out of daily safety limit</div></div>
+        <div class="kpi-card"><div class="kpi-label" id="jKpiAiCallsLabel">AI Calls Today</div><div class="kpi-value" id="jKpiAiCalls" style="color:var(--purple-light)">0</div><div class="kpi-sub" id="jKpiAiCallsSub">Quota usage</div></div>
+        <div class="kpi-card"><div class="kpi-label">Replies Received</div><div class="kpi-value" id="jKpiReplies" style="color:var(--warn)">0</div><div class="kpi-sub">Inbound responses</div></div>
+      </div>
+
+      <!-- Sub Navigation for Jobs -->
+      <div class="sub-nav">
+        <button id="jTabPostings" class="tab-btn active jobs-tab" onclick="switchJobsTab('postings')">💼 Postings Explorer</button>
+        <button id="jTabHrFinder" class="tab-btn jobs-tab" onclick="switchJobsTab('hr_finder')">🎯 HR & Recruiter Finder <span class="pill" style="font-size:9px;background:rgba(168,85,247,0.2);color:var(--purple-light);margin-left:4px;vertical-align:middle">PRO</span></button>
+        <button id="jTabProfiles" class="tab-btn" onclick="switchJobsTab('profiles')">👤 Candidate Profiles & Keywords</button>
+        <button id="jTabLiveProgress" class="tab-btn" onclick="switchJobsTab('live')">📡 Live Pipeline Monitor</button>
+        <button id="jTabInbox" class="tab-btn" onclick="switchJobsTab('inbox')">📬 Inbox & Replies</button>
+        <button id="jTabOutbound" class="tab-btn" onclick="switchJobsTab('outbound')">📤 Outreach Ledger</button>
+        <button id="jTabPricing" class="tab-btn" onclick="switchJobsTab('pricing')" style="border-color:rgba(16,185,129,0.4);color:var(--good);font-weight:700">💎 Plans & Billing</button>
+        <button id="jTabUserSettings" class="tab-btn" onclick="switchJobsTab('user_settings')">⚙️ User Settings & Env</button>
+        <button id="jTabSystem" class="tab-btn" onclick="switchJobsTab('system')" style="display:none">🔧 System & Config</button>
+        <button id="jTabAdmin" class="tab-btn" onclick="switchJobsTab('admin')" style="display:none;border-color:rgba(168,85,247,0.5);color:var(--purple-light);font-weight:700">🛡️ Admin Center</button>
+      </div>
+
+      <!-- TAB 1: POSTINGS EXPLORER -->
+      <div id="jPostingsSection" class="panel">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.06);flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">Quick View:</span>
+            <button id="qfAll" class="btn btn-sm btn-cyan" onclick="setJobQuickFilter('all')">All Postings</button>
+            <button id="qfApplied" class="btn btn-sm" onclick="setJobQuickFilter('applied')" title="Show jobs that have been applied to">✓ Applied (Email & Portal)</button>
+            <button id="qfEmail" class="btn btn-sm" onclick="setJobQuickFilter('email')" title="Show jobs targeted with recruiter email outreach">✉️ Email Channel</button>
+            <button id="qfPortal" class="btn btn-sm" onclick="setJobQuickFilter('portal')" title="Show jobs targeted via online ATS portals">🌐 Web Portal Channel</button>
+          </div>
+          <div id="jobsQuickStats" style="font-size:12px;color:var(--text-muted);font-family:'JetBrains Mono'"></div>
+        </div>
+
+        <div class="filter-bar">
+          <input type="text" id="jobsSearch" class="grow" placeholder="Search role, company, skills, or country (e.g. Switzerland)..." oninput="debounce(loadJobs, 250)()">
+          <select id="jobsContinentFilter" onchange="loadJobs()">
+            <option value="">🌍 All Continents</option>
+            <option value="Europe">🇪🇺 Europe</option>
+            <option value="Global Remote">🌐 Global Remote</option>
+            <option value="MENA">🇲🇦 MENA (Morocco/ME)</option>
+            <option value="North America">🇺🇸 North America</option>
+            <option value="Asia-Pacific">🌏 Asia-Pacific</option>
+          </select>
+          <select id="jobsExperienceFilter" onchange="loadJobs()">
+            <option value="">💼 All Experience</option>
+            <option value="entry">🟢 Entry / Junior (0-2y)</option>
+            <option value="mid">🔵 Mid-Level (3-5y)</option>
+            <option value="senior">🟠 Senior (5+y)</option>
+            <option value="lead">🟣 Lead / Principal (8+y)</option>
+          </select>
+          <select id="jobsDegreeFilter" onchange="loadJobs()">
+            <option value="">🎓 All Degrees</option>
+            <option value="none">🎓 Flexible / None</option>
+            <option value="bachelor">🎓 Bachelor / Licence</option>
+            <option value="master">🎓 Master / Ingénieur</option>
+            <option value="phd">🎓 PhD / Doctorate</option>
+          </select>
+          <select id="jobsVisaFilter" onchange="loadJobs()">
+            <option value="">✈️ All Visa / Reloc</option>
+            <option value="sponsored">✈️ Visa Sponsored</option>
+            <option value="relocation">📦 Relocation Offered</option>
+            <option value="remote_global">🌐 Global Remote</option>
+            <option value="restricted">⚠️ Local Auth Required</option>
+            <option value="unspecified">❓ Unspecified</option>
+          </select>
+          <select id="jobsHrFilter" onchange="loadJobs()">
+            <option value="">📧 All Apply Types</option>
+            <option value="has_hr">✉️ Recruiter Email Target</option>
+            <option value="web_form">🌐 Web ATS Form Only</option>
+          </select>
+          <select id="jobsMinScoreFilter" onchange="loadJobs()">
+            <option value="">🎯 Min Score: Any</option>
+            <option value="50">50%+ Match</option>
+            <option value="70">70%+ Good Match</option>
+            <option value="80">80%+ Top Match</option>
+          </select>
+          <select id="jobsStageFilter" onchange="loadJobs()">
+            <option value="">All Stages</option>
+            <option value="discovered">Discovered</option>
+            <option value="evaluated_match">Evaluated Match</option>
+            <option value="evaluated_low">Evaluated Low</option>
+            <option value="applied">Applied (All In-Progress)</option>
+            <option value="applied_only">Applied (Awaiting Response)</option>
+            <option value="response_received">Response Received</option>
+            <option value="interview_requested">Interview Requested</option>
+            <option value="rejected">Rejected</option>
+            <option value="offer_received">Offer Received</option>
+          </select>
+          <select id="jobsSortFilter" onchange="loadJobs()" style="border-color:rgba(56,189,248,0.4)">
+            <option value="latest" selected>🕒 Latest First (Default)</option>
+            <option value="score">🎯 Best Match Score</option>
+            <option value="applied">📅 Recently Applied</option>
+          </select>
+          <div style="display:flex;gap:6px">
+            <button id="jobsViewTableBtn" class="btn btn-sm btn-cyan" onclick="toggleJobsView('table')">Table</button>
+            <button id="jobsViewCardsBtn" class="btn btn-sm" onclick="toggleJobsView('cards')">Cards</button>
+            <button id="btnReEvalJobs" class="btn btn-sm btn-primary" onclick="triggerBatchReEvaluateJobs()" title="Re-evaluate all jobs against candidate profile with precision filters">⚡ Re-evaluate All</button>
+          </div>
+        </div>
+
+        <div id="jobsTableContainer" class="data-table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Role Title</th>
+                <th>Company</th>
+                <th>Continent / Location</th>
+                <th>Experience</th>
+                <th>Degree</th>
+                <th>Visa & Relocation</th>
+                <th>Score</th>
+                <th style="min-width:180px">Application Method & Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="jobsTableBody">
+              <!-- Rendered dynamically -->
+            </tbody>
+          </table>
+        </div>
+
+        <div id="jobsCardsContainer" class="cards-grid" style="display:none;margin-top:14px;">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+
+      <!-- TAB: HR & TALENT ACQUISITION FINDER -->
+      <div id="jHrFinderSection" class="panel" style="display:none">
+        
+        <!-- Pro Plan Exclusive Feature Banner -->
+        <div id="hrProLockedBanner" style="display:none;background:linear-gradient(135deg,rgba(168,85,247,0.15),rgba(59,130,246,0.12));border:1px solid rgba(168,85,247,0.4);border-radius:var(--radius-md);padding:18px 24px;margin-bottom:20px;box-shadow:0 8px 24px rgba(0,0,0,0.3)">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px">
+            <div style="display:flex;align-items:center;gap:14px">
+              <div style="font-size:32px">⭐</div>
+              <div>
+                <div style="font-size:15px;font-weight:800;color:#fff;letter-spacing:-0.01em">Pro Plan Exclusive Feature</div>
+                <div style="font-size:12px;color:var(--text-muted);margin-top:2px;max-width:560px">
+                  Talent Acquisition & HR Email Discovery is exclusively available for <strong>Pro Hunter (499 MAD)</strong> subscribers and Platform Admins. Upgrade to scrape verified recruiter mailboxes with DNS MX validation.
+                </div>
+              </div>
+            </div>
+            <button class="btn btn-primary" onclick="openPaymentModal('pro')" style="font-weight:700;padding:8px 18px;font-size:12px">🚀 Upgrade to Pro</button>
+          </div>
+        </div>
+
+        <!-- Header Banner -->
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:12px">
+          <div>
+            <h3 style="font-size:18px;font-weight:800;color:var(--purple-light);margin:0 0 4px">🎯 HR & Talent Acquisition Email Discovery Engine</h3>
+            <div style="font-size:13px;color:var(--text-muted)">
+              Bypass generic ATS portals by scraping verified recruiter, hiring manager, and talent mailboxes with DNS MX validation
+            </div>
+          </div>
+          <button class="btn btn-sm btn-cyan" onclick="loadHrStats()">↻ Refresh HR Metrics</button>
+        </div>
+
+        <!-- HR Metrics Overview -->
+        <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px">
+          <div class="kpi-card">
+            <div class="kpi-label">Total Job Postings</div>
+            <div class="kpi-value" id="hrKpiTotal">0</div>
+            <div class="kpi-sub">Across all platforms</div>
+          </div>
+          <div class="kpi-card" style="border-color:rgba(168,85,247,0.3)">
+            <div class="kpi-label">Jobs with Direct Email</div>
+            <div class="kpi-value" id="hrKpiWithEmail" style="color:var(--purple-light)">0</div>
+            <div class="kpi-sub">Ready for SMTP outreach</div>
+          </div>
+          <div class="kpi-card" style="border-color:rgba(16,185,129,0.3)">
+            <div class="kpi-label">Matched with HR Email</div>
+            <div class="kpi-value" id="hrKpiMatchesWithEmail" style="color:var(--good)">0</div>
+            <div class="kpi-sub">High-conversion targets</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Database Coverage</div>
+            <div class="kpi-value" id="hrKpiPercent" style="color:var(--cyan-light)">0%</div>
+            <div class="kpi-sub">Direct recruiter access</div>
+          </div>
+        </div>
+
+        <!-- Two Column Layout: Interactive Finder & Batch Engine -->
+        <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:20px">
+          
+          <!-- Column 1: Live Interactive Recruiter Search -->
+          <div style="background:rgba(15,23,42,0.85);border:1px solid var(--border);border-radius:var(--radius-md);padding:18px">
+            <h4 style="font-size:14px;font-weight:800;color:#fff;margin:0 0 12px;display:flex;align-items:center;gap:8px">
+              <span>🔍</span> Live Company Recruiter Lookup
+            </h4>
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">
+              Input any company or domain to crawl career portals, search recruiter dorks, and verify active mail exchangers in real time.
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+              <div>
+                <label style="display:block;font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:4px;text-transform:uppercase">Company Name</label>
+                <input type="text" id="hrLookupCompany" style="width:100%" placeholder="e.g. Datadog, Axon, Spotify" onkeydown="if(event.key==='Enter')lookupCompanyHrEmails()">
+              </div>
+              <div>
+                <label style="display:block;font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:4px;text-transform:uppercase">Website / Domain (Optional)</label>
+                <input type="text" id="hrLookupDomain" style="width:100%" placeholder="e.g. datadoghq.com" onkeydown="if(event.key==='Enter')lookupCompanyHrEmails()">
+              </div>
+            </div>
+
+            <div style="display:flex;justify-content:flex-end;margin-bottom:16px">
+              <button id="btnHrLookup" class="btn btn-primary" onclick="lookupCompanyHrEmails()" style="font-weight:700">
+                <span id="hrLookupIcon">🎯</span> Find Recruiter & HR Emails
+              </button>
+            </div>
+
+            <!-- Lookup Results Container -->
+            <div id="hrLookupResults" style="display:none">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;padding:8px 12px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:var(--radius-sm)">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span style="font-size:12px;color:var(--text-muted)">Resolved Domain:</span>
+                  <strong id="hrResDomain" style="font-family:'JetBrains Mono';color:var(--cyan-light)">—</strong>
+                </div>
+                <span id="hrResMxBadge" class="pill pill-stage-deal_won">MX Validated ✓</span>
+              </div>
+
+              <div id="hrContactsList" style="display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto;padding-right:4px">
+                <!-- Rendered dynamically -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Column 2: Database Lead Enrichment Engine -->
+          <div style="background:rgba(15,23,42,0.85);border:1px solid var(--border);border-radius:var(--radius-md);padding:18px">
+            <h4 style="font-size:14px;font-weight:800;color:#fff;margin:0 0 12px;display:flex;align-items:center;gap:8px">
+              <span>⚡</span> Batch Lead Enrichment Engine
+            </h4>
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px">
+              Automatically scans your evaluated job matches and discovers verified HR recruiter emails for every company in your database.
+            </div>
+
+            <div style="padding:14px;background:rgba(168,85,247,0.06);border:1px solid rgba(168,85,247,0.25);border-radius:var(--radius-md);margin-bottom:16px">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                <span style="font-size:12px;font-weight:700;color:var(--purple-light)">Auto-Enrich Batch Size</span>
+                <select id="hrBatchLimit" style="font-size:12px;padding:3px 8px;background:#0d1527">
+                  <option value="10">10 High-Match Leads</option>
+                  <option value="25" selected>25 High-Match Leads</option>
+                  <option value="50">50 High-Match Leads</option>
+                  <option value="100">100 Leads</option>
+                </select>
+              </div>
+              <button id="btnRunBatchHr" class="btn btn-primary" onclick="triggerBatchHrEnrichment()" style="width:100%;font-weight:700;margin-top:6px">
+                <span id="batchHrIcon">🚀</span> Run Batch HR Discovery Now
+              </button>
+            </div>
+
+            <!-- Batch Progress / Status Box -->
+            <div id="hrBatchStatusBox" style="padding:12px;background:rgba(0,0,0,0.3);border:1px solid var(--border);border-radius:var(--radius-sm)">
+              <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-bottom:6px">
+                <span style="font-weight:700;color:var(--text-muted)">Enrichment Status:</span>
+                <span id="hrBatchStatusBadge" class="pill pill-stage-discovered">Idle</span>
+              </div>
+              <div id="hrBatchMsg" style="font-size:12px;color:var(--text);font-family:'JetBrains Mono'">Waiting for batch trigger...</div>
+              <div id="hrProgressBarWrap" style="display:none;width:100%;background:rgba(255,255,255,0.1);height:6px;border-radius:3px;margin-top:10px;overflow:hidden">
+                <div id="hrProgressBar" style="width:0%;height:100%;background:var(--purple);transition:width 0.3s ease"></div>
+              </div>
+            </div>
+
+            <div style="margin-top:16px;font-size:11px;color:var(--text-muted);line-height:1.5">
+              💡 <strong>Pro Tip:</strong> Once a lead is enriched with a verified HR email, the pipeline automatically switches that job to <strong>Direct SMTP Application</strong>, placing your CV straight into the recruiter's inbox.
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- TAB: CANDIDATE PROFILES & KEYWORDS -->
+      <div id="jProfilesSection" class="panel" style="display:none">
+        
+        <!-- Comprehensive Datalists for Autocomplete / Selection -->
+        <datalist id="dlCountries">
+          <option value="Afghanistan"><option value="Albania"><option value="Algeria"><option value="Andorra"><option value="Angola"><option value="Antigua and Barbuda"><option value="Argentina"><option value="Armenia"><option value="Australia"><option value="Austria"><option value="Azerbaijan"><option value="Bahamas"><option value="Bahrain"><option value="Bangladesh"><option value="Barbados"><option value="Belarus"><option value="Belgium"><option value="Belize"><option value="Benin"><option value="Bhutan"><option value="Bolivia"><option value="Bosnia and Herzegovina"><option value="Botswana"><option value="Brazil"><option value="Brunei"><option value="Bulgaria"><option value="Burkina Faso"><option value="Burundi"><option value="Cabo Verde"><option value="Cambodia"><option value="Cameroon"><option value="Canada"><option value="Central African Republic"><option value="Chad"><option value="Chile"><option value="China"><option value="Colombia"><option value="Comoros"><option value="Congo"><option value="Costa Rica"><option value="Croatia"><option value="Cuba"><option value="Cyprus"><option value="Czech Republic"><option value="Denmark"><option value="Djibouti"><option value="Dominica"><option value="Dominican Republic"><option value="Ecuador"><option value="Egypt"><option value="El Salvador"><option value="Equatorial Guinea"><option value="Eritrea"><option value="Estonia"><option value="Eswatini"><option value="Ethiopia"><option value="Fiji"><option value="Finland"><option value="France"><option value="Gabon"><option value="Gambia"><option value="Georgia"><option value="Germany"><option value="Ghana"><option value="Greece"><option value="Grenada"><option value="Guatemala"><option value="Guinea"><option value="Guinea-Bissau"><option value="Guyana"><option value="Haiti"><option value="Honduras"><option value="Hungary"><option value="Iceland"><option value="India"><option value="Indonesia"><option value="Iran"><option value="Iraq"><option value="Ireland"><option value="Israel"><option value="Italy"><option value="Jamaica"><option value="Japan"><option value="Jordan"><option value="Kazakhstan"><option value="Kenya"><option value="Kiribati"><option value="Kuwait"><option value="Kyrgyzstan"><option value="Laos"><option value="Latvia"><option value="Lebanon"><option value="Lesotho"><option value="Liberia"><option value="Libya"><option value="Liechtenstein"><option value="Lithuania"><option value="Luxembourg"><option value="Madagascar"><option value="Malawi"><option value="Malaysia"><option value="Maldives"><option value="Mali"><option value="Malta"><option value="Marshall Islands"><option value="Mauritania"><option value="Mauritius"><option value="Mexico"><option value="Micronesia"><option value="Moldova"><option value="Monaco"><option value="Mongolia"><option value="Montenegro"><option value="Morocco"><option value="Mozambique"><option value="Myanmar"><option value="Namibia"><option value="Nauru"><option value="Nepal"><option value="Netherlands"><option value="New Zealand"><option value="Nicaragua"><option value="Niger"><option value="Nigeria"><option value="North Korea"><option value="North Macedonia"><option value="Norway"><option value="Oman"><option value="Pakistan"><option value="Palau"><option value="Palestine"><option value="Panama"><option value="Papua New Guinea"><option value="Paraguay"><option value="Peru"><option value="Philippines"><option value="Poland"><option value="Portugal"><option value="Qatar"><option value="Romania"><option value="Russia"><option value="Rwanda"><option value="Saint Kitts and Nevis"><option value="Saint Lucia"><option value="Saint Vincent and the Grenadines"><option value="Samoa"><option value="San Marino"><option value="Sao Tome and Principe"><option value="Saudi Arabia"><option value="Senegal"><option value="Serbia"><option value="Seychelles"><option value="Sierra Leone"><option value="Singapore"><option value="Slovakia"><option value="Slovenia"><option value="Solomon Islands"><option value="Somalia"><option value="South Africa"><option value="South Korea"><option value="South Sudan"><option value="Spain"><option value="Sri Lanka"><option value="Sudan"><option value="Suriname"><option value="Sweden"><option value="Switzerland"><option value="Syria"><option value="Taiwan"><option value="Tajikistan"><option value="Tanzania"><option value="Thailand"><option value="Timor-Leste"><option value="Togo"><option value="Tonga"><option value="Trinidad and Tobago"><option value="Tunisia"><option value="Turkey"><option value="Turkmenistan"><option value="Tuvalu"><option value="Uganda"><option value="Ukraine"><option value="United Arab Emirates"><option value="United Kingdom"><option value="United States"><option value="Uruguay"><option value="Uzbekistan"><option value="Vanuatu"><option value="Vatican City"><option value="Venezuela"><option value="Vietnam"><option value="Yemen"><option value="Zambia"><option value="Zimbabwe"><option value="Remote">
+        </datalist>
+
+        <datalist id="dlTitles">
+          <option value="Backend Engineer"><option value="Frontend Engineer"><option value="Fullstack Developer"><option value="Software Engineer"><option value="Data Scientist"><option value="Data Engineer"><option value="Machine Learning Engineer"><option value="DevOps Engineer"><option value="Cloud Architect"><option value="Site Reliability Engineer"><option value="Product Manager"><option value="Graphic Designer"><option value="UI/UX Designer"><option value="Creative Director"><option value="Marketing Manager"><option value="Digital Marketer"><option value="Content Creator"><option value="Copywriter"><option value="Financial Analyst"><option value="Accountant"><option value="Business Analyst"><option value="Sales Executive"><option value="Account Executive"><option value="Operations Manager"><option value="HR Manager"><option value="Talent Acquisition Specialist"><option value="Customer Success Manager"><option value="Project Manager"><option value="QA Engineer"><option value="Mobile Developer"><option value="iOS Developer"><option value="Android Developer"><option value="Security Engineer"><option value="Systems Administrator"><option value="Database Administrator">
+        </datalist>
+
+        <datalist id="dlStack">
+          <option value="Python"><option value="Java"><option value="JavaScript"><option value="TypeScript"><option value="C++"><option value="C#"><option value="Go"><option value="Rust"><option value="Ruby"><option value="PHP"><option value="Swift"><option value="Kotlin"><option value="React"><option value="Angular"><option value="Vue.js"><option value="Spring Boot"><option value="Django"><option value="Flask"><option value="FastAPI"><option value="Next.js"><option value="Express.js"><option value="Node.js"><option value="PostgreSQL"><option value="MySQL"><option value="MongoDB"><option value="Redis"><option value="AWS"><option value="GCP"><option value="Azure"><option value="Docker"><option value="Kubernetes"><option value="Terraform"><option value="GraphQL"><option value="REST API"><option value="Kafka"><option value="RabbitMQ">
+        </datalist>
+
+        <datalist id="dlKeywords">
+          <option value="Microservices"><option value="REST APIs"><option value="CI/CD"><option value="Agile"><option value="Scrum"><option value="Leadership"><option value="System Design"><option value="Cloud Native"><option value="TDD"><option value="Unit Testing"><option value="Scalability"><option value="Performance Optimization">
+        </datalist>
+
+        <datalist id="dlNegatives">
+          <option value="Legacy"><option value="Unpaid"><option value="Cobol"><option value="WordPress"><option value="PHP only"><option value="Salesforce"><option value="Support"><option value="Helpdesk">
+        </datalist>
+
+        <!-- Active Subscription & Daily Send Quota Card -->
+        <div class="panel" style="background:linear-gradient(180deg, rgba(30,27,75,0.4) 0%, rgba(15,23,42,0.8) 100%);border:1px solid rgba(168,85,247,0.3);margin-bottom:20px;padding:18px;border-radius:var(--radius-md)">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+            <div>
+              <div style="font-size:11px;font-weight:700;color:var(--purple-light);text-transform:uppercase;letter-spacing:0.5px">Active Subscription & Application Quota</div>
+              <div style="display:flex;align-items:center;gap:10px;margin-top:4px">
+                <span id="userPlanTitle" style="font-size:18px;font-weight:800;color:#fff">Free Tier</span>
+                <span id="userQuotaPill" class="pill pill-stage-deal_won" style="font-size:12px">5 Applications / Day</span>
+              </div>
+              <div id="userQuotaProgress" style="font-size:12px;color:var(--text-muted);margin-top:4px">0 of 5 applications sent today</div>
+            </div>
+            <div id="profilesPlanActionButtons" style="display:flex;gap:10px;flex-wrap:wrap">
+              <button class="btn btn-sm btn-cyan" onclick="openPaymentModal('starter')" style="font-weight:700">
+                ⚡ Upgrade to Starter
+              </button>
+              <button class="btn btn-sm btn-primary" onclick="openPaymentModal('pro')" style="font-weight:700">
+                🚀 Upgrade to Pro
+              </button>
+              <button class="btn btn-sm" onclick="switchJobsTab('pricing')" style="border-color:rgba(16,185,129,0.4);color:var(--good);font-weight:700">
+                💎 All Plans & Options
+              </button>
+            </div>
+          </div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:10px;background:rgba(0,0,0,0.25);padding:6px 12px;border-radius:6px">
+            ⚠️ <strong>Market Notice:</strong> Daily application volume depends on matching live job openings for your stack. AutoHunt applies only when confidence criteria are met.
+          </div>
+        </div>
+        
+        <!-- Profile Header Bar -->
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px;padding-bottom:16px;border-bottom:1px solid var(--border)">
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <label style="font-size:13px;font-weight:700;color:var(--text-muted)">Select Profile:</label>
+            <select id="profileSelect" onchange="selectProfile(this.value)" style="min-width:280px;font-weight:600;background:#0d1527;border-color:var(--purple);color:#fff">
+              <!-- Rendered dynamically -->
+            </select>
+            <span id="profileActiveBadge" class="pill pill-stage-deal_won" style="display:none">ACTIVE PROFILE</span>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <a href="/api/candidate/cv/download" target="_blank" download class="btn btn-sm btn-cyan" style="display:inline-flex;align-items:center;gap:6px;font-weight:700;background:rgba(6,182,212,0.18);border:1px solid #06b6d4" title="Download candidate CV / Resume PDF">
+              <span>📄</span> Download CV (PDF)
+            </a>
+            <button class="btn btn-sm" onclick="runMlCvAnalysis()" id="btnRunMlAnalysis" style="background:rgba(168,85,247,0.18);border:1px solid var(--purple-light);color:var(--purple-light);font-weight:700;display:inline-flex;align-items:center;gap:6px" title="Analyze CV using ML & NLP Algorithms">
+              <span id="mlCvAnalyzeIcon">⚡</span> Analyze CV with ML
+            </button>
+            <button class="btn btn-sm btn-cyan" onclick="activateCurrentProfile()" id="btnActivateProfile">⚡ Set as Active</button>
+            <button class="btn btn-sm btn-primary" onclick="saveCurrentProfile()">💾 Save Changes</button>
+            <button class="btn btn-sm" onclick="createNewProfile()">+ New Profile</button>
+            <button class="btn btn-sm" onclick="cloneCurrentProfile()">📋 Clone</button>
+            <button class="btn btn-sm" onclick="deleteCurrentProfile()" style="color:var(--bad);border-color:var(--bad-border)">🗑 Delete</button>
+          </div>
+        </div>
+
+        <!-- Machine Learning CV Analysis & Candidate Data Extraction Panel -->
+        <div id="mlCvAnalysisPanel" style="display:none;background:rgba(15,23,42,0.92);border:1px solid rgba(168,85,247,0.35);border-radius:var(--radius-md);padding:18px;margin-bottom:24px;box-shadow:0 0 20px rgba(168,85,247,0.15)">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="font-size:18px">🧠</span>
+              <h4 style="font-size:15px;font-weight:800;color:var(--purple-light);margin:0">ML CV Extraction & Feature Analysis</h4>
+              <span class="pill pill-stage-deal_won" style="font-size:10px">NLP + Vector Model</span>
+            </div>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-sm btn-primary" onclick="syncExtractedCvToProfile()" id="btnSyncCvToProfile" style="font-weight:700">
+                💾 Sync Extracted Data to Active Profile
+              </button>
+              <button class="btn btn-sm" onclick="document.getElementById('mlCvAnalysisPanel').style.display='none'">✕ Close</button>
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(260px, 1fr));gap:14px;margin-bottom:14px">
+            <!-- Candidate Contact & Identity -->
+            <div style="background:rgba(255,255,255,0.02);padding:12px;border-radius:6px;border:1px solid var(--border)">
+              <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;margin-bottom:6px">👤 Extracted Candidate Identity</div>
+              <div style="font-size:14px;font-weight:800;color:#fff;margin-bottom:4px" id="mlCvName">—</div>
+              <div style="font-size:12px;color:var(--cyan-light);font-family:'JetBrains Mono';margin-bottom:2px" id="mlCvEmail">—</div>
+              <div style="font-size:12px;color:var(--text-muted)" id="mlCvPhone">—</div>
+              <div style="font-size:12px;color:var(--text-muted);margin-top:2px" id="mlCvLocation">—</div>
+              <div style="display:flex;gap:8px;margin-top:8px" id="mlCvSocialLinks"></div>
+            </div>
+
+            <!-- Education & Seniority -->
+            <div style="background:rgba(255,255,255,0.02);padding:12px;border-radius:6px;border:1px solid var(--border)">
+              <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;margin-bottom:6px">🎓 Education & Career Span</div>
+              <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:4px" id="mlCvDegree">—</div>
+              <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px" id="mlCvInstitution">—</div>
+              <div style="font-size:12px;color:var(--good);font-weight:700" id="mlCvExperienceSpan">—</div>
+            </div>
+
+            <!-- Target Roles -->
+            <div style="background:rgba(255,255,255,0.02);padding:12px;border-radius:6px;border:1px solid var(--border)">
+              <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;margin-bottom:6px">🎯 ML-Predicted Target Roles</div>
+              <div id="mlCvTargetRoles" style="display:flex;flex-wrap:wrap;gap:4px"></div>
+            </div>
+          </div>
+
+          <!-- Top Weighted Skills (TF-IDF Vector Space) -->
+          <div>
+            <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;margin-bottom:6px">⚡ TF-IDF Vector Term Weights & Extracted Technical Stack</div>
+            <div id="mlCvSkillsWrap" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+          </div>
+        </div>
+
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+          
+          <!-- Column 1: Core Info & Roles -->
+          <div>
+            <div style="margin-bottom:14px">
+              <label style="display:block;font-size:12px;color:var(--text-muted);font-weight:600;margin-bottom:4px">Profile Name / Identifier *</label>
+              <input type="text" id="profName" style="width:100%" placeholder="e.g. Senior Graphic Designer, Marketing Lead, or Fullstack Dev">
+            </div>
+
+            <div style="margin-bottom:14px">
+              <label style="display:block;font-size:12px;color:var(--text-muted);font-weight:600;margin-bottom:4px">Professional Headline / Tagline</label>
+              <input type="text" id="profHeadline" style="width:100%" placeholder="e.g. Creative Brand & UI Designer — Visual Identity, Adobe CC & Figma">
+            </div>
+
+            <div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-bottom:14px">
+              <div>
+                <label style="display:block;font-size:12px;color:var(--text-muted);font-weight:600;margin-bottom:4px">Current Location / Base</label>
+                <input type="text" id="profLocation" list="dlCountries" style="width:100%" placeholder="Select or type country...">
+              </div>
+              <div>
+                <label style="display:block;font-size:12px;color:var(--text-muted);font-weight:600;margin-bottom:4px">Experience (Years)</label>
+                <select id="profExpYears" style="width:100%">
+                  <option value="0">0 years (Fresh Graduate)</option>
+                  <option value="1">1 year</option>
+                  <option value="2">2 years</option>
+                  <option value="3">3 years</option>
+                  <option value="4" selected>4 years</option>
+                  <option value="5">5 years</option>
+                  <option value="6">6 years</option>
+                  <option value="7">7 years</option>
+                  <option value="8">8 years</option>
+                  <option value="9">9 years</option>
+                  <option value="10">10+ years</option>
+                </select>
+              </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+              <div>
+                <label style="display:block;font-size:12px;color:var(--text-muted);font-weight:600;margin-bottom:4px">Highest Degree Level</label>
+                <select id="profDegreeLevel" style="width:100%">
+                  <option value="bachelor">Bachelor / Licence (Bac+3)</option>
+                  <option value="master">Master / Ingénieur (Bac+5)</option>
+                  <option value="phd">PhD / Doctorate</option>
+                  <option value="none">Self-Taught / Bootcamp / None</option>
+                </select>
+              </div>
+              <div>
+                <label style="display:block;font-size:12px;color:var(--text-muted);font-weight:600;margin-bottom:4px">Target Seniority Level</label>
+                <select id="profTargetExpLevel" style="width:100%">
+                  <option value="entry">Entry-Level / Junior (0-2y)</option>
+                  <option value="mid">Mid-Level (3-5y)</option>
+                  <option value="senior">Senior (5+y)</option>
+                  <option value="lead">Lead / Principal (8+y)</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Target Job Titles (Tags) -->
+            <div style="margin-bottom:16px">
+              <label style="display:block;font-size:12px;color:var(--text-muted);font-weight:600;margin-bottom:4px">Target Job Titles (used for scraping & matching)</label>
+              <div style="display:flex;gap:6px;margin-bottom:6px">
+                <input type="text" id="inputNewTitle" list="dlTitles" class="grow" placeholder="Select or type role..." onkeydown="if(event.key==='Enter'){event.preventDefault();addTag('target_titles','inputNewTitle','listTitles')}">
+                <button class="btn btn-sm btn-cyan" onclick="addTag('target_titles','inputNewTitle','listTitles')">+ Add</button>
+              </div>
+              <div id="listTitles" style="display:flex;flex-wrap:wrap;gap:6px;min-height:30px"></div>
+            </div>
+
+            <!-- Core Stack (Tags) -->
+            <div style="margin-bottom:16px">
+              <label style="display:block;font-size:12px;color:var(--text-muted);font-weight:600;margin-bottom:4px">Core Technologies & Stack</label>
+              <div style="display:flex;gap:6px;margin-bottom:6px">
+                <input type="text" id="inputNewStack" list="dlStack" class="grow" placeholder="Select or type tech..." onkeydown="if(event.key==='Enter'){event.preventDefault();addTag('core_stack','inputNewStack','listStack')}">
+                <button class="btn btn-sm btn-primary" onclick="addTag('core_stack','inputNewStack','listStack')">+ Add</button>
+              </div>
+              <div id="listStack" style="display:flex;flex-wrap:wrap;gap:6px;min-height:30px"></div>
+            </div>
+
+            <!-- Match Keywords (Tags) -->
+            <div style="margin-bottom:16px">
+              <label style="display:block;font-size:12px;color:var(--text-muted);font-weight:600;margin-bottom:4px">Custom Match Keywords (boosts AI & heuristic score)</label>
+              <div style="display:flex;gap:6px;margin-bottom:6px">
+                <input type="text" id="inputNewKeyword" list="dlKeywords" class="grow" placeholder="Select or type keyword..." onkeydown="if(event.key==='Enter'){event.preventDefault();addTag('keywords','inputNewKeyword','listKeywords')}">
+                <button class="btn btn-sm btn-cyan" onclick="addTag('keywords','inputNewKeyword','listKeywords')">+ Add</button>
+              </div>
+              <div id="listKeywords" style="display:flex;flex-wrap:wrap;gap:6px;min-height:30px"></div>
+            </div>
+
+            <!-- Exclusion Keywords (Tags) -->
+            <div style="margin-bottom:16px">
+              <label style="display:block;font-size:12px;color:var(--text-muted);font-weight:600;margin-bottom:4px">Negative / Avoid Keywords (penalizes irrelevant jobs)</label>
+              <div style="display:flex;gap:6px;margin-bottom:6px">
+                <input type="text" id="inputNewNegative" list="dlNegatives" class="grow" placeholder="Select or type negative..." onkeydown="if(event.key==='Enter'){event.preventDefault();addTag('negative_keywords','inputNewNegative','listNegatives')}">
+                <button class="btn btn-sm" onclick="addTag('negative_keywords','inputNewNegative','listNegatives')">+ Add</button>
+              </div>
+              <div id="listNegatives" style="display:flex;flex-wrap:wrap;gap:6px;min-height:30px"></div>
+            </div>
+          </div>
+
+          <!-- Column 2: Target Locations, Resume Studio & Freelance -->
+          <div>
+            
+            <!-- Target Locations -->
+            <div style="margin-bottom:16px">
+              <label style="display:block;font-size:12px;color:var(--text-muted);font-weight:600;margin-bottom:4px">Target Countries / Locations</label>
+              <div style="display:flex;gap:6px;margin-bottom:6px">
+                <input type="text" id="inputNewLoc" list="dlCountries" class="grow" placeholder="Select or type country..." onkeydown="if(event.key==='Enter'){event.preventDefault();addTag('target_locations','inputNewLoc','listLocations')}">
+                <button class="btn btn-sm btn-cyan" onclick="addTag('target_locations','inputNewLoc','listLocations')">+ Add</button>
+              </div>
+              <div id="listLocations" style="display:flex;flex-wrap:wrap;gap:6px;min-height:30px"></div>
+            </div>
+
+            <!-- Visa / Work Authorization Notes -->
+            <div style="margin-bottom:14px">
+              <label style="display:block;font-size:12px;color:var(--text-muted);font-weight:600;margin-bottom:4px">Visa Sponsorship / Work Authorization Notes</label>
+              <textarea id="profVisa" rows="2" style="width:100%;font-size:12px" placeholder="Open to relocation with visa support, or remote contracts..."></textarea>
+            </div>
+
+            <!-- Custom Resume Text Studio -->
+            <div style="margin-bottom:14px">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                <label style="font-size:12px;color:var(--text-muted);font-weight:600">Custom Resume Text Studio (Markdown or Plain Text)</label>
+                <span style="font-size:11px;color:var(--text-faint)">Injected into AI prompts</span>
+              </div>
+              <textarea id="profResumeText" rows="9" style="width:100%;font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.5" placeholder="Paste your CV text, key accomplishments, projects, and work history here. This allows full dynamic matching without any static PDF dependency..."></textarea>
+            </div>
+
+              <div style="background:rgba(13,21,39,0.5);border:1px solid var(--border);border-radius:var(--radius-md);padding:12px;margin-bottom:14px">
+                <div style="font-size:12px;font-weight:700;color:var(--purple-light);margin-bottom:8px">Freelance & Client Acquisition Settings</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px">
+                  <div>
+                    <label style="font-size:11px;color:var(--text-muted)">Hourly Rate (USD)</label>
+                    <input type="number" id="profRateHourly" style="width:100%" value="50">
+                  </div>
+                  <div>
+                    <label style="font-size:11px;color:var(--text-muted)">Daily Rate (EUR)</label>
+                    <input type="number" id="profRateDaily" style="width:100%" value="400">
+                  </div>
+                  <div>
+                    <label style="font-size:11px;color:var(--text-muted)">Currency</label>
+                    <select id="profCurrency" style="width:100%">
+                      <option value="EUR">EUR (€)</option>
+                      <option value="USD">USD ($)</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label style="font-size:11px;color:var(--text-muted);display:flex;justify-content:space-between">
+                    <span>Free Calendar Booking Link (Cal.com / Calendly)</span>
+                    <span style="color:var(--good);font-weight:600">Zero-Cost Free Tier</span>
+                  </label>
+                  <input type="url" id="profCalendarUrl" style="width:100%" placeholder="https://cal.com/your-username/15min or https://calendly.com/your-name/15min">
+                  <div style="font-size:10px;color:var(--text-faint);margin-top:3px">Automatically injected into proposals and DMs for 1-click discovery call booking with zero email ping-pong.</div>
+                </div>
+              </div>
+
+          </div>
+        </div>
+
+        <!-- Live Generated Search Matrix Preview -->
+        <div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--border)">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+            <div>
+              <h4 style="font-size:14px;font-weight:700">Live Search Query Matrix Preview</h4>
+              <div style="font-size:12px;color:var(--text-muted)">These are the exact queries generated for scrapers (JobSpy, Google) based on this profile's titles and locations.</div>
+            </div>
+            <button class="btn btn-sm" onclick="loadActiveMatrixPreview()">↻ Refresh Matrix</button>
+          </div>
+          <div class="data-table-wrap" style="max-height:260px">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Query ID</th>
+                  <th>Search Term</th>
+                  <th>Location</th>
+                  <th>Remote?</th>
+                  <th>Google Search Query</th>
+                </tr>
+              </thead>
+              <tbody id="previewMatrixBody">
+                <!-- Rendered dynamically -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- TAB 2: LIVE PIPELINE MONITOR -->
+      <div id="jLiveSection" class="panel" style="display:none">
+        <div class="panel-header" style="flex-wrap:wrap;gap:12px;margin-bottom:16px">
+          <div>
+            <h3 class="panel-title" style="display:flex;align-items:center;gap:8px">
+              <span>⚡ Live Pipeline Control & Engine Telemetry</span>
+            </h3>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:4px">
+              Real-time multi-source scraping, de-duplication, AI evaluation, HR discovery, and automated email applications.
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <span id="pipelineStatusBadge" class="pill pill-stage-discovered">IDLE</span>
+            <span id="pipelineLiveIndicator" class="pill" style="display:inline-flex;align-items:center;gap:6px;background:rgba(16,185,129,0.12);color:var(--good);border:1px solid rgba(16,185,129,0.3)">
+              <span class="pulse-dot"></span> Live Polling Active
+            </span>
+            <button id="btnTriggerPipelineLive" class="btn btn-primary" onclick="triggerJobPipeline()" style="padding:7px 14px;font-size:12px">
+              <span id="liveRunIcon">⚡</span> Run Discovery Pipeline
+            </button>
+            <button class="btn btn-secondary" onclick="manualRefreshLiveMonitor()" style="padding:7px 12px;font-size:12px" title="Refresh live telemetry">
+              <span class="refresh-icon">🔄</span> Refresh
+            </button>
+          </div>
+        </div>
+
+        <!-- 5-Stage Visual Pipeline Stepper -->
+        <div class="pipeline-stepper" id="pipelineStepper">
+          <div id="stepScraping" class="pipeline-step pending">
+            <div class="pipeline-step-header">
+              <span class="pipeline-step-num">1</span>
+              <span id="stepStatusScraping" class="pipeline-step-status" style="color:var(--text-faint)">PENDING</span>
+            </div>
+            <div class="pipeline-step-title"><span>🔍</span> Discovery & Scraping</div>
+            <div class="pipeline-step-desc">Parallel queries across RemoteOK, Himalayas, Jobicy, Arbeitnow, Google</div>
+          </div>
+
+          <div id="stepDedup" class="pipeline-step pending">
+            <div class="pipeline-step-header">
+              <span class="pipeline-step-num">2</span>
+              <span id="stepStatusDedup" class="pipeline-step-status" style="color:var(--text-faint)">PENDING</span>
+            </div>
+            <div class="pipeline-step-title"><span>⚡</span> De-duplication</div>
+            <div class="pipeline-step-desc">Fingerprint hashing, fresh job filtering, and candidate relevance ranking</div>
+          </div>
+
+          <div id="stepAiEval" class="pipeline-step pending">
+            <div class="pipeline-step-header">
+              <span class="pipeline-step-num">3</span>
+              <span id="stepStatusAiEval" class="pipeline-step-status" style="color:var(--text-faint)">PENDING</span>
+            </div>
+            <div class="pipeline-step-title"><span>🧠</span> AI Match Scoring</div>
+            <div class="pipeline-step-desc">Ollama/Claude scoring, visa & seniority checks, recruiter pitch generation</div>
+          </div>
+
+          <div id="stepHrEnrich" class="pipeline-step pending">
+            <div class="pipeline-step-header">
+              <span class="pipeline-step-num">4</span>
+              <span id="stepStatusHrEnrich" class="pipeline-step-status" style="color:var(--text-faint)">PENDING</span>
+            </div>
+            <div class="pipeline-step-title"><span>🎯</span> HR Discovery</div>
+            <div class="pipeline-step-desc">Autonomous recruiter & hiring manager direct email enrichment</div>
+          </div>
+
+          <div id="stepOutbound" class="pipeline-step pending">
+            <div class="pipeline-step-header">
+              <span class="pipeline-step-num">5</span>
+              <span id="stepStatusOutbound" class="pipeline-step-status" style="color:var(--text-faint)">PENDING</span>
+            </div>
+            <div class="pipeline-step-title"><span>✉️</span> Outbound Dispatch</div>
+            <div class="pipeline-step-desc">SMTP outbound dispatch & application audit logging</div>
+          </div>
+        </div>
+
+        <!-- Cockpit Status Banner -->
+        <div id="pipelineCockpitBanner" class="pipeline-cockpit-banner">
+          <div class="cockpit-left">
+            <div id="cockpitRadar" class="cockpit-radar">
+              <span id="cockpitRadarIcon">⚡</span>
+            </div>
+            <div class="cockpit-info">
+              <div id="pipelineCurrentTask" class="cockpit-task-title">Ready — click "Run Discovery Pipeline" to start execution cycle.</div>
+              <div class="cockpit-meta-row">
+                <span id="pipelinePhaseBadge" class="pill pill-stage-discovered" style="font-size:11px">IDLE</span>
+                <span id="pipelineProfileBadge" class="pill" style="background:rgba(139,92,246,0.12);color:var(--purple-light);font-size:11px">👤 Profile: Standard</span>
+                <span id="pipelineKeywordsPreview" class="pill" style="background:rgba(255,255,255,0.06);color:var(--text-muted);font-size:11px;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+                <span id="pipelineElapsedTimer" class="pill" style="background:rgba(6,182,212,0.12);color:var(--cyan-light);font-family:'JetBrains Mono';font-size:11px">⏱ 00:00</span>
+                <span id="pipelineTimestampMeta" style="font-size:11px;color:var(--text-faint)"></span>
+              </div>
+            </div>
+          </div>
+          <div class="cockpit-right">
+            <div id="pipelineProgressPctText" class="cockpit-pct-label">0%</div>
+            <div class="progress-bar-wrap" style="width:160px;height:6px;background:rgba(255,255,255,0.1);margin:0">
+              <div id="pipelineProgressBar" class="progress-bar-fill" style="width:0%"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Expanded 8-Card Telemetry KPI Grid -->
+        <div id="pipelineProgressDetails" class="kpi-grid" style="margin-bottom:20px"></div>
+
+        <!-- Two-Column Interactive Workspace: Left = Search Breakdown, Right = Real-Time Event Log -->
+        <div class="pipeline-workspace-grid">
+          <!-- Left Column: Source & Query Breakdown -->
+          <div style="background:rgba(15,23,42,0.6);border:1px solid var(--border);border-radius:var(--radius-md);padding:16px;display:flex;flex-direction:column">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+              <div>
+                <h4 style="font-size:14px;font-weight:700;color:#fff">Search Query & Target Feeds Breakdown</h4>
+                <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Live performance per search matrix query, target boards, discovered volume, and latency.</div>
+              </div>
+              <span id="pipelineQueryCountBadge" class="pill pill-cyan" style="font-size:10px">0 Queries</span>
+            </div>
+            <div class="data-table-wrap" style="flex:1;max-height:430px;overflow-y:auto">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Query / Search Term</th>
+                    <th>Target Boards</th>
+                    <th>Jobs Found</th>
+                    <th>Status</th>
+                    <th>Duration</th>
+                    <th>Diagnostics</th>
+                  </tr>
+                </thead>
+                <tbody id="pipelineSourcesTable"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Right Column: Live Milestone & Event Stream -->
+          <div style="background:rgba(15,23,42,0.6);border:1px solid var(--border);border-radius:var(--radius-md);padding:16px;display:flex;flex-direction:column">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+              <div>
+                <h4 style="font-size:14px;font-weight:700;color:#fff">Live Milestone & Activity Event Stream</h4>
+                <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Real-time chronological events published by the pipeline runner.</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px">
+                <span id="pipelineEventCountBadge" class="pill pill-stage-discovered" style="font-size:10px">0 Events</span>
+                <button class="btn btn-secondary" onclick="clearLiveEventStreamView()" style="padding:2px 8px;font-size:10px" title="Clear view">Clear</button>
+              </div>
+            </div>
+            <div id="pipelineEventStream" class="pipeline-event-stream">
+              <div style="color:var(--text-faint);text-align:center;margin:auto;padding:20px">
+                <div style="font-size:24px;margin-bottom:8px">📡</div>
+                <div>Ready for live pipeline events.</div>
+                <div style="font-size:11px;margin-top:4px;color:var(--text-faint)">Start a run or refresh to view live engine activity.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recent Pipeline Execution History -->
+        <div style="background:rgba(15,23,42,0.6);border:1px solid var(--border);border-radius:var(--radius-md);padding:16px;margin-top:20px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+            <div>
+              <h4 style="font-size:14px;font-weight:700;color:#fff">Recent Pipeline Executions History</h4>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Audit history of recent pipeline runs, discovered postings, AI scoring, and execution times.</div>
+            </div>
+          </div>
+          <div class="data-table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Run ID</th>
+                  <th>Status</th>
+                  <th>Started At</th>
+                  <th>Duration</th>
+                  <th>Gross Scraped</th>
+                  <th>Fresh Postings</th>
+                  <th>AI Evaluated</th>
+                  <th>Apps Dispatched</th>
+                  <th>Diagnostics</th>
+                </tr>
+              </thead>
+              <tbody id="pipelineHistoryBody">
+                <tr><td colspan="9" style="text-align:center;color:var(--text-faint)">No previous runs found.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- TAB 3: INBOX & REPLIES -->
+      <div id="jInboxSection" class="panel" style="display:none">
+        <div class="filter-bar">
+          <select id="inboxStatusFilter" onchange="loadInbox()">
+            <option value="">All Statuses</option>
+            <option value="matched">Matched to Job</option>
+            <option value="unmatched">Unmatched</option>
+            <option value="duplicate">Duplicate</option>
+          </select>
+        </div>
+        <div class="data-table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr><th>Received At</th><th>Status</th><th>Sender</th><th>Subject</th><th>Classification Reason</th><th>Message ID</th></tr>
+            </thead>
+            <tbody id="inboxTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- TAB 4: OUTBOUND LEDGER -->
+      <div id="jOutboundSection" class="panel" style="display:none">
+        <div class="filter-bar">
+          <select id="outboundStatusFilter" onchange="loadOutbound()">
+            <option value="">All Statuses</option>
+            <option value="sent">Sent</option>
+            <option value="pending">Pending</option>
+            <option value="failed">Failed</option>
+          </select>
+        </div>
+        <div class="data-table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr><th>Sent At</th><th>Type</th><th>Recipient</th><th>Subject</th><th>Status</th><th>Failure Reason</th><th>Job ID</th></tr>
+            </thead>
+            <tbody id="outboundTableBody"></tbody>
+          </table>
+        </div>
+        <h4 style="margin:24px 0 10px">Email Suppressions</h4>
+        <div class="filter-bar">
+          <input type="text" id="supEmailInput" placeholder="Email address">
+          <input type="text" id="supDomainInput" placeholder="Domain (e.g. example.com)">
+          <input type="text" id="supReasonInput" placeholder="Reason" value="manual">
+          <button class="btn btn-sm btn-primary" onclick="addSuppression()">Add Suppression</button>
+        </div>
+        <div id="suppressionList" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px"></div>
+      </div>
+
+      <!-- TAB: USER SETTINGS & ENVIRONMENT -->
+      <div id="jUserSettingsSection" class="panel" style="display:none">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px;border-bottom:1px solid var(--border);padding-bottom:12px">
+          <div>
+            <h3 style="font-size:18px;font-weight:800;color:var(--cyan-light);display:flex;align-items:center;gap:8px">
+              <span>⚙️ My Settings & Environment Configuration</span>
+            </h3>
+            <div style="font-size:12px;color:var(--text-muted)">Configure your personal sender credentials, SMTP/IMAP, notification channels, and custom environment variables.</div>
+          </div>
+          <div>
+            <button class="btn btn-sm btn-cyan" onclick="saveUserSettings()" style="font-weight:700">💾 Save All Settings</button>
+          </div>
+        </div>
+
+        <!-- Active Subscription & Plan Overview Card in Settings -->
+        <div class="panel" style="background:linear-gradient(135deg, rgba(30,27,75,0.5) 0%, rgba(15,23,42,0.85) 60%, rgba(6,182,212,0.1) 100%);border:1px solid rgba(139,92,246,0.3);margin-bottom:20px;padding:18px 20px;border-radius:var(--radius-md)">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px">
+            <div style="display:flex;align-items:center;gap:14px">
+              <div style="width:44px;height:44px;border-radius:10px;background:rgba(139,92,246,0.2);border:1px solid rgba(139,92,246,0.4);display:flex;align-items:center;justify-content:center;font-size:22px">
+                💎
+              </div>
+              <div>
+                <div style="font-size:11px;font-weight:700;color:var(--cyan-light);text-transform:uppercase;letter-spacing:0.04em">Membership Tier & Automation Quota</div>
+                <div style="display:flex;align-items:center;gap:10px;margin-top:2px">
+                  <span id="userSettingsPlanTitle" style="font-size:17px;font-weight:800;color:#fff">Free Tier</span>
+                  <span id="userSettingsQuotaBadge" class="pill pill-stage-deal_won" style="font-size:11px;font-weight:700">5 apps/day</span>
+                </div>
+                <div id="userSettingsPlanSub" style="font-size:12px;color:var(--text-muted);margin-top:3px">
+                  0 applications sent today
+                </div>
+              </div>
+            </div>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap" id="userSettingsPlanButtons">
+              <button type="button" class="btn btn-sm btn-cyan" onclick="openPaymentModal('pro')" style="font-weight:700">
+                🚀 Upgrade Plan
+              </button>
+              <button type="button" class="btn btn-sm" onclick="switchJobsTab('pricing')" style="border-color:rgba(16,185,129,0.4);color:var(--good);font-weight:700">
+                💎 Change Plan & Billing
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px">
+          <!-- Column 1: Outbound & Email -->
+          <div style="background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:10px;padding:16px">
+            <div style="font-size:14px;font-weight:700;color:var(--cyan-light);margin-bottom:12px">✉️ Outbound Email & SMTP / IMAP</div>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <div>
+                <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px">Sender Name</label>
+                <input type="text" id="usSenderName" class="form-control" placeholder="e.g. John Doe">
+              </div>
+              <div>
+                <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px">Sender Email</label>
+                <input type="email" id="usSenderEmail" class="form-control" placeholder="e.g. john@example.com">
+              </div>
+              <div style="display:grid;grid-template-columns:2fr 1fr;gap:8px">
+                <div>
+                  <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px">SMTP Host</label>
+                  <input type="text" id="usSmtpHost" class="form-control" placeholder="smtp.gmail.com">
+                </div>
+                <div>
+                  <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px">Port</label>
+                  <input type="number" id="usSmtpPort" class="form-control" placeholder="587" value="587">
+                </div>
+              </div>
+              <div>
+                <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px">SMTP App Password</label>
+                <input type="password" id="usSmtpPassword" class="form-control" placeholder="Enter password or leave unchanged">
+              </div>
+              <div style="display:grid;grid-template-columns:2fr 1fr;gap:8px">
+                <div>
+                  <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px">IMAP Host (for replies)</label>
+                  <input type="text" id="usImapHost" class="form-control" placeholder="imap.gmail.com">
+                </div>
+                <div>
+                  <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px">Port</label>
+                  <input type="number" id="usImapPort" class="form-control" placeholder="993" value="993">
+                </div>
+              </div>
+              <div>
+                <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px">IMAP Password</label>
+                <input type="password" id="usImapPassword" class="form-control" placeholder="Enter password or leave unchanged">
+              </div>
+            </div>
+          </div>
+
+          <!-- Column 2: Notifications & Links -->
+          <div style="background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:10px;padding:16px">
+            <div style="font-size:14px;font-weight:700;color:var(--purple-light);margin-bottom:12px">🔔 Notifications & Profile Links</div>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <div>
+                <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px">Alert Email Address</label>
+                <input type="email" id="usAlertEmail" class="form-control" placeholder="e.g. alerts@example.com">
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                <div>
+                  <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px">Telegram Bot Token</label>
+                  <input type="password" id="usTelegramBotToken" class="form-control" placeholder="Bot Token">
+                </div>
+                <div>
+                  <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px">Telegram Chat ID</label>
+                  <input type="text" id="usTelegramChatId" class="form-control" placeholder="Chat ID">
+                </div>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                <div>
+                  <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px">Phone Number</label>
+                  <input type="text" id="usPhoneNumber" class="form-control" placeholder="+212 600000000">
+                </div>
+                <div>
+                  <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px">Portfolio URL</label>
+                  <input type="url" id="usPortfolioUrl" class="form-control" placeholder="https://myportfolio.dev">
+                </div>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                <div>
+                  <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px">LinkedIn URL</label>
+                  <input type="url" id="usLinkedinUrl" class="form-control" placeholder="https://linkedin.com/in/username">
+                </div>
+                <div>
+                  <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px">GitHub URL</label>
+                  <input type="url" id="usGithubUrl" class="form-control" placeholder="https://github.com/username">
+                </div>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                <div>
+                  <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px">Min Match Score</label>
+                  <input type="number" id="usMinMatchScore" class="form-control" placeholder="65" min="0" max="100">
+                </div>
+                <div>
+                  <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px">Auto-Apply Mode</label>
+                  <select id="usAutoApplyMode" class="form-control" style="background:#0d1527;color:#fff">
+                    <option value="draft">Draft (Review first)</option>
+                    <option value="live">Live (Auto-send)</option>
+                    <option value="off">Disabled</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Custom Environment Variables (Per-User .env) -->
+        <div style="background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:10px;padding:16px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+            <div>
+              <div style="font-size:14px;font-weight:700;color:var(--cyan-light)">🔐 Custom Environment Variables (Per-User .env)</div>
+              <div style="font-size:12px;color:var(--text-muted)">Define custom key-value pairs stored securely for your user session and pipeline runs.</div>
+            </div>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-sm" onclick="addEnvRow()">➕ Add Variable</button>
+              <button class="btn btn-sm btn-cyan" onclick="saveCustomEnvVars()">Save Env Variables</button>
+            </div>
+          </div>
+          <div class="data-table-wrap" style="overflow-x:auto">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width:40%">Variable Name (KEY)</th>
+                  <th style="width:50%">Value</th>
+                  <th style="width:10%">Action</th>
+                </tr>
+              </thead>
+              <tbody id="userEnvTableBody">
+                <tr><td colspan="3" style="text-align:center;padding:16px;color:var(--text-muted)">No custom environment variables configured. Click "+ Add Variable" to add one.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB: PLANS, PRICING & UNIVERSAL BILLING -->
+      <div id="jPricingSection" class="panel" style="display:none">
+        
+        <!-- Header & Currency Toggle -->
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:16px;border-bottom:1px solid var(--border);padding-bottom:18px">
+          <div>
+            <div style="display:flex;align-items:center;gap:10px">
+              <h2 style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-0.02em">💎 Subscription Plans & Universal Billing</h2>
+              <span class="brand-badge" style="background:rgba(16,185,129,0.18);color:var(--good);border:1px solid rgba(16,185,129,0.35);font-size:11px">No-LTD Required</span>
+            </div>
+            <div style="font-size:13px;color:var(--text-muted);margin-top:4px">
+              Global individual checkout: Crypto (USDT, SOL, BTC), PayPal, Cards (Ko-fi), Wise, Revolut, and Moroccan Bank Wire (CIH / Attijari).
+            </div>
+          </div>
+          
+          <!-- Currency Selector -->
+          <div style="display:flex;align-items:center;gap:8px;background:rgba(15,23,42,0.8);border:1px solid var(--border);padding:4px 6px;border-radius:12px">
+            <span style="font-size:12px;font-weight:700;color:var(--text-muted);margin-left:6px;margin-right:4px">Currency:</span>
+            <button type="button" id="currBtnUSD" class="btn btn-sm btn-cyan" onclick="setPricingCurrency('USD')" style="font-weight:700;padding:4px 10px;font-size:12px">🇺🇸 USD ($)</button>
+            <button type="button" id="currBtnMAD" class="btn btn-sm" onclick="setPricingCurrency('MAD')" style="font-weight:700;padding:4px 10px;font-size:12px">🇲🇦 MAD (DH)</button>
+            <button type="button" id="currBtnEUR" class="btn btn-sm" onclick="setPricingCurrency('EUR')" style="font-weight:700;padding:4px 10px;font-size:12px">🇪🇺 EUR (€)</button>
+            <button type="button" id="currBtnUSDT" class="btn btn-sm" onclick="setPricingCurrency('USDT')" style="font-weight:700;padding:4px 10px;font-size:12px">₮ USDT (Crypto)</button>
+          </div>
+        </div>
+
+        <!-- Current Active Membership Status Banner -->
+        <div class="panel" style="background:linear-gradient(135deg, rgba(16,185,129,0.12) 0%, rgba(15,23,42,0.9) 60%, rgba(139,92,246,0.15) 100%);border:1px solid rgba(16,185,129,0.35);margin-bottom:28px;padding:20px;border-radius:var(--radius-md)">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px">
+            <div style="display:flex;align-items:center;gap:16px">
+              <div style="width:48px;height:48px;border-radius:12px;background:rgba(16,185,129,0.2);border:1px solid rgba(16,185,129,0.4);display:flex;align-items:center;justify-content:center;font-size:24px">
+                👑
+              </div>
+              <div>
+                <div style="font-size:11px;font-weight:700;color:var(--good);text-transform:uppercase;letter-spacing:0.06em">Your Active Membership</div>
+                <div style="display:flex;align-items:center;gap:10px;margin-top:2px">
+                  <span id="pricingActivePlanTitle" style="font-size:20px;font-weight:800;color:#fff">Free Tier</span>
+                  <span id="pricingActivePlanBadge" class="pill pill-stage-deal_won" style="font-size:12px;font-weight:700">5 apps/day</span>
+                </div>
+                <div id="pricingActiveQuotaSub" style="font-size:12px;color:var(--text-muted);margin-top:3px">
+                  Usage: 0 of 5 applications sent today · Free tier active
+                </div>
+              </div>
+            </div>
+            <div id="pricingActiveActionButtons" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+              <button class="btn btn-primary" onclick="openPaymentModal('pro')" style="font-weight:700;padding:9px 18px">
+                🚀 Upgrade / Extend Pro
+              </button>
+              <button class="btn" onclick="openPaymentModal('ultra')" style="font-weight:700;padding:9px 18px;border-color:rgba(168,85,247,0.4);color:var(--purple-light)">
+                ⚡ Get Unlimited Agency
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3 Plan Pricing Cards Grid -->
+        <div id="pricingCardsGrid" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(310px, 1fr));gap:24px;margin-bottom:32px">
+          <div style="text-align:center;padding:40px;color:var(--text-muted)">Loading pricing plans...</div>
+        </div>
+
+        <!-- Non-Ltd Universal Payment Methods Banner -->
+        <div class="panel" style="background:rgba(15,23,42,0.7);border:1px solid rgba(255,255,255,0.08);margin-bottom:32px;padding:22px;border-radius:var(--radius-md)">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+            <div>
+              <h3 style="font-size:16px;font-weight:800;color:#fff;display:flex;align-items:center;gap:8px">
+                <span>🌍 Frictionless & Private Global Payment Channels</span>
+                <span class="pill" style="font-size:10px;background:rgba(56,189,248,0.15);color:var(--cyan-light)">Zero Corporate Red-Tape</span>
+              </h3>
+              <div style="font-size:12px;color:var(--text-muted)">
+                Anyone worldwide can activate subscriptions instantly using individual and freelance-friendly channels.
+              </div>
+            </div>
+          </div>
+          
+          <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(210px, 1fr));gap:14px">
+            <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:14px">
+              <div style="font-size:22px;margin-bottom:6px">🪙</div>
+              <div style="font-size:13px;font-weight:700;color:#fff">Crypto / USDT</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:4px;line-height:1.4">
+                TRC-20, Polygon, Solana, BTC. Direct wallet transfer with negligible network fees and zero KYC barrier.
+              </div>
+            </div>
+            <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:14px">
+              <div style="font-size:22px;margin-bottom:6px">🅿️</div>
+              <div style="font-size:13px;font-weight:700;color:#fff">PayPal & Card</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:4px;line-height:1.4">
+                Pay via PayPal.me link or email. Accepts Visa, Mastercard, and PayPal balance worldwide.
+              </div>
+            </div>
+            <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:14px">
+              <div style="font-size:22px;margin-bottom:6px">☕</div>
+              <div style="font-size:13px;font-weight:700;color:#fff">Direct Card / Apple Pay</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:4px;line-height:1.4">
+                Ko-fi checkout link. Seamless credit/debit card payment without corporate registration.
+              </div>
+            </div>
+            <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:14px">
+              <div style="font-size:22px;margin-bottom:6px">🌐</div>
+              <div style="font-size:13px;font-weight:700;color:#fff">Wise & Revolut</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:4px;line-height:1.4">
+                Send USD, EUR, or GBP directly from Wise, Revolut tag, or SEPA bank transfer with 0 fees.
+              </div>
+            </div>
+            <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:14px">
+              <div style="font-size:22px;margin-bottom:6px">🇲🇦</div>
+              <div style="font-size:13px;font-weight:700;color:#fff">Morocco (CIH / Attijari)</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:4px;line-height:1.4">
+                Virement instantané CIH Bank, Attijariwafa Bank, ou versement agence CashPlus / Wafacash en Dirhams (MAD).
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- User's Submitted Payments & Activation History -->
+        <div class="panel" style="background:rgba(15,23,42,0.85);border:1px solid var(--border);border-radius:var(--radius-md);padding:20px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+            <div>
+              <h3 style="font-size:16px;font-weight:800;color:#fff;display:flex;align-items:center;gap:8px">
+                <span>📑 Your Payment & Verification History</span>
+              </h3>
+              <div style="font-size:12px;color:var(--text-muted)">Real-time ledger of your submitted transactions, proofs, and activation approvals</div>
+            </div>
+            <button class="btn btn-sm btn-cyan" onclick="loadUserPaymentHistory()" style="display:flex;align-items:center;gap:6px">
+              <span>↻</span> Refresh History
+            </button>
+          </div>
+          
+          <div class="data-table-wrap" style="overflow-x:auto">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Plan</th>
+                  <th>Amount</th>
+                  <th>Method</th>
+                  <th>Reference / TxHash</th>
+                  <th>Proof Receipt</th>
+                  <th>Status</th>
+                  <th>Submitted At</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody id="userPaymentsTableBody">
+                <tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text-muted)">Loading your payment history...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- TAB 5: SYSTEM & CONFIG -->
+      <div id="jSystemSection" class="panel" style="display:none">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+          <div>
+            <h4 style="margin-bottom:10px">AI Engine & Fallback Providers</h4>
+            <div id="systemProviders" style="display:flex;flex-direction:column;gap:10px"></div>
+          </div>
+          <div>
+            <h4 style="margin-bottom:10px">Runtime Configuration</h4>
+            <div class="code-block" id="systemConfigJson">Loading configuration...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB: ADMIN CENTER (Users, Payments & Real-time Logs) -->
+      <div id="jAdminSection" class="panel" style="display:none">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px;border-bottom:1px solid var(--border);padding-bottom:12px">
+          <div>
+            <h3 style="font-size:18px;font-weight:800;color:var(--purple-light);display:flex;align-items:center;gap:8px">
+              <span>🛡️ Platform Administration & Operations Center</span>
+            </h3>
+            <div style="font-size:12px;color:var(--text-muted)">Manage registered users, verify Moroccan subscription payments, and monitor live system logs</div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button id="adminSubTabUsers" class="btn btn-sm btn-cyan" onclick="switchAdminSubTab('users')">👥 Registered Users</button>
+            <button id="adminSubTabPayments" class="btn btn-sm" onclick="switchAdminSubTab('payments')">💳 Payment Verification <span id="adminPendingBadge" class="brand-badge" style="background:#ef4444;color:#fff;display:none">0</span></button>
+            <button id="adminSubTabPlans" class="btn btn-sm" onclick="switchAdminSubTab('plans')">💎 Plans, Prices & Quotas</button>
+            <button id="adminSubTabGateways" class="btn btn-sm" onclick="switchAdminSubTab('gateways')">⚙️ Payment Gateways</button>
+            <button id="adminSubTabChat" class="btn btn-sm" onclick="switchAdminSubTab('chat')">💬 Live Support & Chats <span id="adminChatUnreadBadge" class="brand-badge" style="background:#06b6d4;color:#fff;display:none">0</span></button>
+            <button id="adminSubTabLogs" class="btn btn-sm" onclick="switchAdminSubTab('logs')">📜 System Logs</button>
+            <button class="btn btn-sm" onclick="triggerAdminTestAlert('security')" style="border-color:rgba(239,68,68,0.4);color:#f87171" title="Trigger test security alert to admins">🚨 Test Security</button>
+            <button class="btn btn-sm" onclick="triggerAdminTestAlert('maintenance')" style="border-color:rgba(245,158,11,0.4);color:#fbbf24" title="Trigger test maintenance alert to admins">⚠️ Test Maintenance</button>
+          </div>
+        </div>
+
+        <!-- SUBTAB 1: USERS -->
+        <div id="adminPanelUsers">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <span style="font-size:13px;font-weight:700;color:var(--text-muted)">User Accounts & Daily Application Quotas</span>
+              <span id="adminUsersCountBadge" class="brand-badge" style="font-size:11px;background:rgba(6,182,212,0.12);color:var(--cyan-light)">0 Users</span>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <input type="text" id="adminUserSearchInput" placeholder="🔍 Search email/name..." style="font-size:11px;padding:5px 8px;width:150px;background:#0d1527;border:1px solid var(--border);border-radius:6px;color:#fff" oninput="filterAdminUsersTable()">
+              <select id="adminUserPlanFilter" style="font-size:11px;padding:5px 8px;background:#0d1527;border:1px solid var(--border);border-radius:6px;color:#fff" onchange="filterAdminUsersTable()" title="Filter users by assigned plan">
+                <option value="">All Plans</option>
+              </select>
+              <button class="btn btn-sm" onclick="syncAllUsersWithPlans()" style="border-color:rgba(168,85,247,0.5);color:var(--purple-light);font-size:11px;font-weight:700" title="Synchronize all users' daily application quotas to match their assigned plan default">⚡ Sync All to Plans</button>
+              <button class="btn btn-sm" onclick="loadAdminUsers()" title="Reload user accounts">🔄 Refresh</button>
+              <button class="btn btn-sm btn-cyan" onclick="openAdminCreateUserModal()">➕ Add New User</button>
+            </div>
+          </div>
+          <div class="data-table-wrap" style="overflow-x:auto">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>ID</th><th>User</th><th>Email</th><th>Role</th><th>Active Plan</th><th>Daily Limit</th><th>Status</th><th>Registered</th><th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="adminUsersTable">
+                <tr><td colspan="9" style="text-align:center;padding:20px;color:var(--text-muted)">Loading users...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- SUBTAB 2: PAYMENTS -->
+        <div id="adminPanelPayments" style="display:none">
+          <div class="data-table-wrap" style="overflow-x:auto">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>ID</th><th>User</th><th>Plan</th><th>Amount</th><th>Method</th><th>Reference Code</th><th>Receipt</th><th>Status</th><th>Submitted</th><th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="adminPaymentsTable">
+                <tr><td colspan="10" style="text-align:center;padding:20px;color:var(--text-muted)">Loading payments...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- SUBTAB 3: SYSTEM LOGS -->
+        <div id="adminPanelLogs" style="display:none">
+          <div class="filter-bar" style="margin-bottom:12px">
+            <select id="adminLogLevel" onchange="loadAdminLogs()">
+              <option value="ALL">All Levels</option>
+              <option value="INFO">INFO Only</option>
+              <option value="WARNING">WARNING Only</option>
+              <option value="ERROR">ERROR Only</option>
+            </select>
+            <input type="text" id="adminLogSearch" class="grow" placeholder="Search log messages..." oninput="debounce(loadAdminLogs, 300)()">
+            <button class="btn btn-sm" onclick="loadAdminLogs()">↻ Refresh Logs</button>
+          </div>
+          <div id="adminLogConsole" style="background:#050a14;border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:14px;font-family:'JetBrains Mono',monospace;font-size:11px;max-height:500px;overflow-y:auto;white-space:pre-wrap;color:#94a3b8">
+            Connecting to system log stream...
+          </div>
+        </div>
+
+        <!-- SUBTAB 4: LIVE SUPPORT & USER CHATS -->
+        <div id="adminPanelChat" style="display:none">
+          <div class="admin-support-grid">
+            <!-- Left Column: User Threads List -->
+            <div style="background:rgba(15,23,42,0.85);border:1px solid var(--border);border-radius:var(--radius-md);display:flex;flex-direction:column;overflow:hidden">
+              <div style="padding:12px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+                <span style="font-size:13px;font-weight:700;color:#fff">💬 Candidate Threads</span>
+                <button class="btn btn-sm" onclick="loadAdminChatConversations()" title="Refresh conversations">🔄</button>
+              </div>
+              <div style="padding:8px 12px;border-bottom:1px solid var(--border)">
+                <input type="text" id="adminChatSearch" placeholder="Search by name or email..." oninput="filterAdminChatThreads(this.value)" style="width:100%;font-size:12px;padding:6px 10px">
+              </div>
+              <div id="adminChatThreadsList" style="flex:1;overflow-y:auto;padding:10px">
+                <div style="text-align:center;padding:30px;color:var(--text-muted);font-size:12px">Loading active threads...</div>
+              </div>
+            </div>
+
+            <!-- Right Column: Active Conversation Stream & Reply Composer -->
+            <div id="adminChatActivePane" class="admin-chat-active-pane">
+              <!-- Placeholder when no thread is selected -->
+              <div id="adminChatEmptyState" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px;color:var(--text-muted)">
+                <div style="font-size:42px;margin-bottom:12px">💬</div>
+                <div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:6px">Select a Conversation</div>
+                <div style="font-size:12px;max-width:320px;text-align:center">Choose a candidate from the left pane to view their chat history and answer directly through the platform.</div>
+              </div>
+
+              <!-- Active Chat View -->
+              <div id="adminChatActiveView" style="display:none;flex:1;display:flex;flex-direction:column;height:100%;overflow:hidden">
+                <!-- Thread Top Bar -->
+                <div style="padding:12px 16px;background:rgba(255,255,255,0.02);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+                  <div style="display:flex;align-items:center;gap:10px">
+                    <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,var(--purple),var(--cyan));display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;font-size:14px" id="adminChatTargetAvatar">U</div>
+                    <div>
+                      <div style="font-size:14px;font-weight:800;color:#fff;display:flex;align-items:center;gap:8px">
+                        <span id="adminChatTargetName">Candidate Name</span>
+                        <span id="adminChatTargetPlanPill" class="pill pill-plan-free">free</span>
+                      </div>
+                      <div style="font-size:11px;color:var(--text-muted)" id="adminChatTargetEmail">user@example.com</div>
+                    </div>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:12px;font-size:12px">
+                    <span style="color:var(--text-muted)">Daily Limit: <strong id="adminChatTargetLimit" style="color:#fff">5</strong></span>
+                  </div>
+                </div>
+
+                <!-- Messages Stream -->
+                <div id="adminChatMessagesStream" style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px">
+                  <!-- Rendered dynamically -->
+                </div>
+
+                <!-- Canned Responses Toolbar -->
+                <div style="padding:8px 14px;background:rgba(0,0,0,0.25);border-top:1px solid var(--border);display:flex;gap:6px;overflow-x:auto;scrollbar-width:none">
+                  <button type="button" class="admin-canned-btn" onclick="insertAdminCanned('👋 Hello! How can I help you today with AutoHunt?')">👋 Hello</button>
+                  <button type="button" class="admin-canned-btn" onclick="insertAdminCanned('✅ Your subscription plan and daily limit have been activated! You can now start auto-applying.')">✅ Plan Activated</button>
+                  <button type="button" class="admin-canned-btn" onclick="insertAdminCanned('📧 Please check your SMTP settings in the Settings tab. Use a Gmail 16-character App Password.')">📧 Check SMTP</button>
+                  <button type="button" class="admin-canned-btn" onclick="insertAdminCanned('🚀 Click on Auto Apply in the Job Postings tab to start sending out applications.')">🚀 Run Apply</button>
+                </div>
+
+                <!-- Reply Composer -->
+                <div style="padding:12px 14px;border-top:1px solid var(--border);display:flex;gap:10px;align-items:flex-end;background:rgba(10,16,31,0.9)">
+                  <textarea id="adminChatReplyText" placeholder="Write reply to candidate as Platform Admin..." rows="2" style="flex:1;background:#060a14;border:1px solid var(--border);border-radius:var(--radius-md);padding:9px 12px;color:#fff;font-size:13px;resize:none;line-height:1.4;outline:none" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAdminChatReply();}"></textarea>
+                  <button id="adminChatSendBtn" class="btn btn-primary" onclick="sendAdminChatReply()" style="padding:10px 18px;font-weight:700">
+                    Send Reply 💬
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SUBTAB 5: PLANS, PRICES & QUOTAS MANAGEMENT -->
+        <div id="adminPanelPlans" style="display:none">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px;background:rgba(255,255,255,0.02);padding:14px 18px;border-radius:12px;border:1px solid var(--border)">
+            <div>
+              <div style="font-size:15px;font-weight:800;color:#fff;display:flex;align-items:center;gap:8px">
+                <span>💎 Subscription Plans, Dynamic Prices & Quotas</span>
+                <span class="badge" style="background:rgba(16,185,129,0.2);color:var(--good);font-size:11px">Live Instant Sync</span>
+              </div>
+              <div style="font-size:12px;color:var(--text-muted);margin-top:2px">
+                Manage all pricing plans, currency prices (MAD, USD, EUR, USDT), and daily application quotas. Updates take effect immediately across all registrations, checkout modals, and user limits.
+              </div>
+            </div>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-sm" onclick="loadAdminPlans()" title="Reload plans from database">🔄 Refresh</button>
+              <button class="btn btn-sm btn-cyan" onclick="openAdminPlanModal(null)" style="font-weight:700">➕ Create New Plan</button>
+            </div>
+          </div>
+
+          <!-- Live Dynamic Plans Grid -->
+          <div id="adminPlansGrid" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(320px, 1fr));gap:16px;margin-bottom:20px">
+            <div style="text-align:center;padding:30px;color:var(--text-muted);grid-column:1/-1">Loading platform plans...</div>
+          </div>
+
+          <!-- Quota Synchronization Info Box -->
+          <div style="background:linear-gradient(135deg, rgba(30,27,75,0.4) 0%, rgba(15,23,42,0.6) 100%);border:1px solid rgba(139,92,246,0.3);border-radius:12px;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+            <div style="display:flex;align-items:center;gap:12px">
+              <div style="font-size:24px">⚡</div>
+              <div>
+                <div style="font-size:13px;font-weight:700;color:#fff">Real-Time Quota Propagation Engine</div>
+                <div style="font-size:11.5px;color:var(--text-muted)">When you modify a plan's quota, checking the "Sync existing users" option automatically updates every active candidate on that plan in the database instantly.</div>
+              </div>
+            </div>
+            <button class="btn btn-sm" onclick="syncAllPlansQuotas()" style="border-color:rgba(168,85,247,0.4);color:var(--purple-light);font-weight:700">⚡ Re-sync All User Quotas</button>
+          </div>
+        </div>
+
+        <!-- SUBTAB 6: PAYMENT GATEWAYS CONFIGURATION -->
+        <div id="adminPanelGateways" style="display:none">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px;background:rgba(255,255,255,0.02);padding:14px 18px;border-radius:12px;border:1px solid var(--border)">
+            <div>
+              <div style="font-size:15px;font-weight:800;color:#fff;display:flex;align-items:center;gap:8px">
+                <span>⚙️ Universal Payment Gateways & Live Keys</span>
+                <span class="badge" style="background:rgba(56,189,248,0.2);color:var(--cyan-light);font-size:11px">Multi-Method</span>
+              </div>
+              <div style="font-size:12px;color:var(--text-muted);margin-top:2px">
+                Configure live API credentials for Stripe, PayPal, Crypto wallets, and Moroccan bank accounts (CIH, Attijariwafa, CashPlus). Toggling a gateway activates or hides it in real-time from the user checkout modal.
+              </div>
+            </div>
+            <button class="btn btn-sm" onclick="loadAdminGateways()" title="Reload gateways from database">🔄 Refresh Gateways</button>
+          </div>
+
+          <div id="adminGatewaysCards" style="display:flex;flex-direction:column;gap:16px">
+            <div style="text-align:center;padding:30px;color:var(--text-muted)">Loading payment gateways...</div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+
+  </div>
+
+  <!-- ================================================================= -->
+  <!-- MODAL: FREELANCE LEAD & PITCH STUDIO -->
+  <!-- ================================================================= -->
+  <div id="leadModal" class="modal-backdrop" onclick="if(event.target===this)closeLeadModal()">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span id="modalLeadId" style="font-family:'JetBrains Mono';font-size:12px;color:var(--purple-light)">#0</span>
+            <span id="modalLeadPlatform" class="platform-tag tag-default">PLATFORM</span>
+            <span id="modalLeadStage" class="pill pill-stage-discovered">Stage</span>
+          </div>
+          <h3 id="modalLeadTitle" style="font-size:18px;margin-top:4px;font-weight:700">Project Title</h3>
+          <div id="modalLeadClient" style="font-size:12px;color:var(--text-muted)">Client Name</div>
+        </div>
+        <button class="btn btn-sm btn-icon" onclick="closeLeadModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        
+        <!-- Modal Tabs -->
+        <div class="modal-tabs">
+          <button id="mTabIntel" class="tab-btn active" onclick="switchModalTab('intel')">🔍 Intel & Requirements</button>
+          <button id="mTabPitch" class="tab-btn" onclick="switchModalTab('pitch')">✍️ Pitch Studio</button>
+          <button id="mTabHistory" class="tab-btn" onclick="switchModalTab('history')">💬 Messages & History</button>
+          <button id="mTabDeal" class="tab-btn" onclick="switchModalTab('deal')">💰 Deal Terms & Notes</button>
+        </div>
+
+        <!-- MODAL TAB 1: INTEL -->
+        <div id="modalTabIntel">
+          <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px;">
+            <div class="kpi-card"><div class="kpi-label">Match Score</div><div class="kpi-value" id="mIntelScore">0</div></div>
+            <div class="kpi-card"><div class="kpi-label">Budget Estimate</div><div class="kpi-value" id="mIntelBudget" style="font-size:20px;color:#34d399">—</div></div>
+            <div class="kpi-card"><div class="kpi-label">Follow-Ups</div><div class="kpi-value" id="mIntelFollowUps">0</div></div>
+          </div>
+          <h4 style="font-size:13px;text-transform:uppercase;color:var(--text-muted);margin-bottom:6px">Evaluation Analysis</h4>
+          <div class="code-block" id="mIntelReason" style="margin-bottom:16px">No evaluation analysis yet.</div>
+          <h4 style="font-size:13px;text-transform:uppercase;color:var(--text-muted);margin-bottom:6px">Raw Project Description</h4>
+          <div class="code-block" id="mIntelDescription" style="max-height:250px">No description available.</div>
+          <div id="mIntelUrlWrap" style="margin-top:12px"></div>
+        </div>
+
+        <!-- MODAL TAB 2: PITCH STUDIO -->
+        <div id="modalTabPitch" style="display:none">
+          <!-- Multi-Channel Format Switcher -->
+          <div style="background:rgba(10,16,31,0.7);border:1px solid var(--border);border-radius:var(--radius-md);padding:10px 12px;margin-bottom:14px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px">
+              <span style="font-size:11px;font-weight:700;color:var(--cyan-light);text-transform:uppercase;letter-spacing:0.5px">⚡ Direct Outreach Channel & Format</span>
+              <span id="mFormatHint" style="font-size:11px;color:var(--text-muted)">1-click format for high reply rates</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;overflow-x:auto;padding-bottom:2px;flex-wrap:wrap">
+              <button id="fmtBtn_email" class="btn btn-sm btn-primary" onclick="switchPitchFormat('email')" type="button">✉️ Full Email Pitch</button>
+              <button id="fmtBtn_linkedin" class="btn btn-sm" onclick="switchPitchFormat('linkedin')" type="button" style="border-color:#0a66c2;color:#70b5f9">💼 LinkedIn (&lt;300c)</button>
+              <button id="fmtBtn_chat_dm" class="btn btn-sm" onclick="switchPitchFormat('chat_dm')" type="button" style="border-color:#10b981;color:#6ee7b7">💬 Chat DM (Reddit/Slack/X)</button>
+              <button id="fmtBtn_follow_up_1" class="btn btn-sm" onclick="switchPitchFormat('follow_up_1')" type="button" style="border-color:#f59e0b;color:#fcd34d">⏰ Follow-Up #1</button>
+              <button id="fmtBtn_follow_up_2" class="btn btn-sm" onclick="switchPitchFormat('follow_up_2')" type="button" style="border-color:#f59e0b;color:#fcd34d">⏰ Follow-Up #2</button>
+            </div>
+          </div>
+
+          <!-- Proposal Angle Selector -->
+          <div id="mAngleWrap" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:var(--radius-md);padding:8px 12px;flex-wrap:wrap;gap:8px">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="font-size:12px;font-weight:700;color:var(--purple-light)">Offer Strategy Angle:</span>
+              <select id="mPitchAngle" style="font-size:12px;padding:4px 8px;background:#060a14">
+                <option value="mvp_speed">⚡ Rapid MVP & Speed to Market</option>
+                <option value="architecture_quality">🏗️ Scalable Architecture & Clean Code</option>
+                <option value="roi_advisory">💰 Business ROI & Pragmatic Build</option>
+              </select>
+            </div>
+            <button class="btn btn-sm btn-primary" onclick="generateLeadPitch(document.getElementById('mPitchAngle').value)">✨ Generate with Angle</button>
+          </div>
+
+          <div id="mPitchSubjectWrap" style="margin-bottom:14px">
+            <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:4px;font-weight:600">Email Subject Line</label>
+            <input type="text" id="mPitchSubject" style="width:100%" placeholder="e.g. Re: Your React & FastAPI project — I can help">
+          </div>
+          <div style="margin-bottom:14px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+              <label id="mPitchBodyLabel" style="font-size:12px;color:var(--text-muted);font-weight:600">Proposal / Pitch Body</label>
+              <div style="font-family:'JetBrains Mono';font-size:11px;display:flex;gap:12px;align-items:center">
+                <span id="mPitchCounter" style="color:var(--text-faint)">0 words</span>
+                <span id="mPitchLimitAlert" style="display:none;font-weight:700"></span>
+              </div>
+            </div>
+            <textarea id="mPitchBody" rows="10" style="width:100%;font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.6" oninput="updatePitchCounter()" placeholder="Write or generate a proposal pitch..."></textarea>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn btn-sm btn-primary" onclick="generateLeadPitch()">✨ AI Regenerate</button>
+              <button class="btn btn-sm" onclick="saveLeadPitch()">💾 Save Draft</button>
+              <button id="btnCopyPitch" class="btn btn-sm btn-cyan" onclick="copyPitchText()" style="font-weight:700">📋 Copy to Clipboard (Instant Paste)</button>
+            </div>
+            <button class="btn btn-sm btn-success" id="btnSendPitch" onclick="sendLeadPitch()">📤 Send via Email (SMTP)</button>
+          </div>
+
+          <!-- Smart Follow-Up Cadence Panel -->
+          <div style="margin-top:16px;padding:12px 14px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.25);border-radius:var(--radius-md)">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px">
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="font-size:13px;font-weight:700;color:var(--warn)">⏰ Smart Follow-Up Cadence</span>
+                <span id="mFollowUpStatusBadge" class="pill pill-stage-pitched" style="font-size:10px">FU #0</span>
+                <span id="mNextDueText" style="font-size:11px;color:var(--text-muted)"></span>
+              </div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap">
+                <button class="btn btn-sm" onclick="generateLeadFollowUp(1)" style="border-color:rgba(245,158,11,0.4);color:var(--warn);background:rgba(245,158,11,0.1)">⚡ Draft FU #1 (Architecture)</button>
+                <button class="btn btn-sm" onclick="generateLeadFollowUp(2)" style="border-color:rgba(245,158,11,0.4);color:var(--warn);background:rgba(245,158,11,0.1)">⚡ Draft FU #2 (Roadmap)</button>
+              </div>
+            </div>
+            <div style="font-size:11px;color:var(--text-muted)">
+              Over 60% of freelance contracts close on the 2nd or 3rd touchpoint. Cadence schedules +3 days after initial proposal and injects technical architecture value.
+            </div>
+          </div>
+        </div>
+
+        <!-- MODAL TAB 3: MESSAGES & HISTORY -->
+        <div id="modalTabHistory" style="display:none">
+          <div id="mTimelineContainer" class="timeline"></div>
+        </div>
+
+        <!-- MODAL TAB 4: DEAL TERMS -->
+        <div id="modalTabDeal" style="display:none">
+          <!-- Deal Pricing Calculator -->
+          <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:var(--radius-md);padding:10px 14px;margin-bottom:14px">
+            <div style="font-size:11px;font-weight:700;color:var(--cyan-light);text-transform:uppercase;margin-bottom:6px">Deal Pricing & Value Calculator</div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:12px;flex-wrap:wrap">
+              <span>Estimated Delivery:</span>
+              <input type="number" id="mCalcDays" style="width:70px;padding:3px 6px" value="10" min="1" oninput="recalcDealEstimate()">
+              <span>days ×</span>
+              <input type="number" id="mCalcDailyRate" style="width:80px;padding:3px 6px" value="400" oninput="recalcDealEstimate()">
+              <span>= <strong id="mCalcTotal" style="color:var(--good);font-family:'JetBrains Mono'">4000 EUR</strong></span>
+              <button class="btn btn-sm btn-cyan" type="button" onclick="applyCalculatedDeal()">Apply to Offer</button>
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+            <div>
+              <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:4px;font-weight:600">Offer / Project Amount</label>
+              <input type="number" id="mDealAmount" style="width:100%" placeholder="e.g. 5000">
+            </div>
+            <div>
+              <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:4px;font-weight:600">Currency</label>
+              <input type="text" id="mDealCurrency" style="width:100%" placeholder="USD / EUR">
+            </div>
+          </div>
+          <div style="margin-bottom:14px">
+            <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:4px;font-weight:600">Agreed Scope / Offer Terms</label>
+            <textarea id="mDealTerms" rows="4" style="width:100%" placeholder="Milestones, deliverables, payment schedules..."></textarea>
+          </div>
+          <div style="margin-bottom:14px">
+            <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:4px;font-weight:600">Strategic Counter-Offer Notes</label>
+            <textarea id="mDealNotes" rows="3" style="width:100%" placeholder="Counter-offer strategy, client constraints, negotiation buffer..."></textarea>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px">
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-sm btn-success" onclick="quickSetStage('deal_won')">🏆 Mark Deal Won</button>
+              <button class="btn btn-sm" onclick="quickSetStage('in_discussion')">💬 Mark In Discussion</button>
+              <button class="btn btn-sm" onclick="quickSetStage('lost')">❌ Mark Lost</button>
+            </div>
+            <button class="btn btn-sm btn-primary" onclick="saveDealDetails()">Save Deal Details</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================= -->
+  <!-- MODAL: JOB DETAIL VIEWER -->
+  <!-- ================================================================= -->
+  <div id="jobModal" class="modal-backdrop" onclick="if(event.target===this)closeJobModal()">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span id="modalJobId" style="font-family:'JetBrains Mono';font-size:12px;color:var(--cyan-light)">#0</span>
+            <span id="modalJobStage" class="pill pill-stage-discovered">Stage</span>
+            <span id="modalJobVisa" class="pill">Visa</span>
+          </div>
+          <h3 id="modalJobTitle" style="font-size:18px;margin-top:4px;font-weight:700">Role Title</h3>
+          <div id="modalJobMeta" style="font-size:12px;color:var(--text-muted)">Company · Location · Source</div>
+        </div>
+        <button class="btn btn-sm btn-icon" onclick="closeJobModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="filter-bar" style="justify-content:space-between">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:12px;font-weight:600;color:var(--text-muted)">Update Stage:</span>
+            <select id="modalJobStageSelect" onchange="saveJobStage()"></select>
+          </div>
+          <div id="modalJobLinks" style="display:flex;gap:8px"></div>
+        </div>
+        <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px;">
+          <div class="kpi-card"><div class="kpi-label">Match Score</div><div class="kpi-value" id="mJobScore">0</div></div>
+          <div class="kpi-card"><div class="kpi-label">AI Relevance</div><div class="kpi-value" id="mJobAiScore">—</div></div>
+          <div class="kpi-card"><div class="kpi-label">Applied At</div><div class="kpi-value" id="mJobAppliedAt" style="font-size:15px;line-height:28px">—</div></div>
+          <div class="kpi-card"><div class="kpi-label">Follow-Ups</div><div class="kpi-value" id="mJobFollowUps">0</div></div>
+        </div>
+
+        <!-- Precision Fit Breakdown Card -->
+        <div class="panel" style="background:rgba(15,23,42,0.85);border:1px solid rgba(56,189,248,0.3);border-radius:var(--radius-md);padding:14px;margin-bottom:16px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+            <h4 style="font-size:12px;font-weight:800;text-transform:uppercase;color:var(--cyan-light);letter-spacing:0.05em;margin:0">🎯 Precision Fit Analysis</h4>
+            <span id="mJobFitBadge" class="pill pill-stage-deal_won" style="font-size:10px">Accurate Match</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));gap:10px;">
+            <div style="background:rgba(255,255,255,0.03);padding:8px 10px;border-radius:8px;border:1px solid var(--border);">
+              <div style="font-size:11px;color:var(--text-muted);font-weight:600">🌍 Continent & Location</div>
+              <div id="mJobContinent" style="font-size:13px;font-weight:700;color:#fff;margin-top:3px">Europe</div>
+            </div>
+            <div style="background:rgba(255,255,255,0.03);padding:8px 10px;border-radius:8px;border:1px solid var(--border);">
+              <div style="font-size:11px;color:var(--text-muted);font-weight:600">💼 Experience Required</div>
+              <div id="mJobExp" style="font-size:13px;font-weight:700;color:#fff;margin-top:3px">Entry-Level (0-2y)</div>
+            </div>
+            <div style="background:rgba(255,255,255,0.03);padding:8px 10px;border-radius:8px;border:1px solid var(--border);">
+              <div style="font-size:11px;color:var(--text-muted);font-weight:600">🎓 Degree Required</div>
+              <div id="mJobDegree" style="font-size:13px;font-weight:700;color:#fff;margin-top:3px">Bachelor / Flexible</div>
+            </div>
+            <div style="background:rgba(255,255,255,0.03);padding:8px 10px;border-radius:8px;border:1px solid var(--border);">
+              <div style="font-size:11px;color:var(--text-muted);font-weight:600">✈️ Visa & Relocation</div>
+              <div id="mJobVisaCat" style="font-size:13px;font-weight:700;color:#fff;margin-top:3px">Visa Sponsored</div>
+            </div>
+          </div>
+          <div id="mJobEvaluationReason" style="margin-top:10px;font-size:12px;color:var(--text-muted);padding:8px 10px;background:rgba(0,0,0,0.3);border-radius:6px;border-left:3px solid var(--cyan)"></div>
+        </div>
+
+        <!-- Source & Scraping Info -->
+        <div class="panel" style="background:rgba(15,23,42,0.65);border:1px solid var(--border);border-radius:var(--radius-md);padding:12px 14px;margin-bottom:16px;">
+          <h4 style="font-size:11px;font-weight:800;text-transform:uppercase;color:var(--purple-light);letter-spacing:0.05em;margin:0 0 8px">📡 Source & Scraping Details</h4>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(160px, 1fr));gap:8px;">
+            <div style="font-size:12px"><span style="color:var(--text-muted)">Source Site:</span> <strong id="mJobSourceSite">—</strong></div>
+            <div style="font-size:12px"><span style="color:var(--text-muted)">Date Posted:</span> <strong id="mJobDatePosted">—</strong></div>
+            <div style="font-size:12px"><span style="color:var(--text-muted)">Scraped At:</span> <strong id="mJobScrapedAt">—</strong></div>
+            <div style="font-size:12px"><span style="color:var(--text-muted)">Eval Method:</span> <strong id="mJobEvalMethod">—</strong></div>
+          </div>
+        </div>
+
+        <!-- Application Contacts -->
+        <div class="panel" style="background:rgba(15,23,42,0.65);border:1px solid var(--border);border-radius:var(--radius-md);padding:12px 14px;margin-bottom:16px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px">
+            <h4 style="font-size:11px;font-weight:800;text-transform:uppercase;color:var(--cyan-light);letter-spacing:0.05em;margin:0">📧 Application & Contact Details</h4>
+            <button id="btnModalEnrichHr" class="btn btn-sm btn-cyan" onclick="enrichModalJobHr()" style="font-size:11px;padding:3px 10px;font-weight:700">
+              <span id="modalHrIcon">🎯</span> Find HR Contacts for this Company
+            </button>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:8px;">
+            <div style="font-size:12px"><span style="color:var(--text-muted)">Email:</span> <strong id="mJobAppEmail" style="word-break:break-all">—</strong></div>
+            <div style="font-size:12px"><span style="color:var(--text-muted)">Alt Emails:</span> <strong id="mJobAppEmails" style="word-break:break-all">—</strong></div>
+            <div style="font-size:12px"><span style="color:var(--text-muted)">Company URL:</span> <span id="mJobCompanyUrl">—</span></div>
+            <div style="font-size:12px"><span style="color:var(--text-muted)">App Status:</span> <strong id="mJobAppStatus">—</strong></div>
+            <div style="font-size:12px"><span style="color:var(--text-muted)">App Method:</span> <strong id="mJobAppMethod">—</strong></div>
+            <div style="font-size:12px"><span style="color:var(--text-muted)">Thread Subject:</span> <strong id="mJobThreadSubject" style="word-break:break-all">—</strong></div>
+          </div>
+        </div>
+
+        <!-- Web Portal / ATS Verification & Screenshot Audit -->
+        <div id="mJobAtsAuditSection" class="panel" style="background:rgba(15,23,42,0.7);border:1px solid rgba(6,182,212,0.3);margin-bottom:16px;display:none">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <h4 style="font-size:13px;text-transform:uppercase;color:var(--cyan-light);margin:0;display:flex;align-items:center;gap:6px">
+              <span>🤖 Browser ATS Submission Proof</span>
+            </h4>
+            <span id="mJobAtsVerifyBadge" class="pill" style="font-size:10px;font-weight:700"></span>
+          </div>
+          <div id="mJobAtsErrorNote" style="font-size:12px;color:var(--text-muted);margin-bottom:10px;background:rgba(0,0,0,0.25);padding:8px 10px;border-radius:6px;border-left:3px solid var(--accent)"></div>
+          <div id="mJobScreenshotWrap" style="display:none;margin-top:8px">
+            <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">📸 Playwright Full-Page Submission Screenshot:</div>
+            <a id="mJobScreenshotLink" href="" target="_blank" title="Click to view full size screenshot in new tab">
+              <img id="mJobScreenshotImg" src="" style="width:100%;max-height:280px;object-fit:cover;object-position:top;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:#020617;cursor:zoom-in" alt="Playwright Application Screenshot">
+            </a>
+            <div style="font-size:10px;color:var(--text-faint);margin-top:4px">👆 Click screenshot to expand full page verification evidence in a new tab.</div>
+          </div>
+        </div>
+
+        <!-- ML Vector Fit & Skill Gap Analysis Card -->
+        <div id="mJobMlFitSection" class="panel" style="background:rgba(15,23,42,0.85);border:1px solid rgba(168,85,247,0.3);margin-bottom:16px;border-radius:var(--radius-md);padding:14px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+            <h4 style="font-size:12px;text-transform:uppercase;color:var(--purple-light);margin:0;display:flex;align-items:center;gap:6px">
+              <span>🧠 Vector ML Fit & Skill Gap Analysis</span>
+            </h4>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="font-size:11px;color:var(--text-muted)">Cosine Similarity:</span>
+              <strong id="mJobMlCosineSim" style="font-family:'JetBrains Mono';color:var(--cyan-light);font-size:13px">0.0</strong>
+              <span id="mJobMlScoreBadge" class="pill pill-stage-deal_won" style="font-size:11px;font-weight:800">0% Match</span>
+            </div>
+          </div>
+          
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px">
+            <div>
+              <div style="font-size:11px;font-weight:700;color:var(--good);margin-bottom:4px">✅ Matching Candidate Skills:</div>
+              <div id="mJobMlMatchingSkills" style="display:flex;flex-wrap:wrap;gap:4px"></div>
+            </div>
+            <div>
+              <div style="font-size:11px;font-weight:700;color:#f59e0b;margin-bottom:4px">⚠️ Desired / Missing Skills:</div>
+              <div id="mJobMlMissingSkills" style="display:flex;flex-wrap:wrap;gap:4px"></div>
+            </div>
+          </div>
+          <div id="mJobMlFitNote" style="font-size:11px;color:var(--text-muted);background:rgba(0,0,0,0.25);padding:6px 10px;border-radius:4px"></div>
+        </div>
+
+        <h4 style="font-size:13px;text-transform:uppercase;color:var(--text-muted);margin-bottom:6px">Matched Key Skills</h4>
+        <div id="mJobSkills" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px"></div>
+        <h4 style="font-size:13px;text-transform:uppercase;color:var(--text-muted);margin-bottom:6px">Visa & Relocation Analysis</h4>
+        <div class="code-block" id="mJobVisaNotes" style="margin-bottom:16px"></div>
+        <h4 style="font-size:13px;text-transform:uppercase;color:var(--text-muted);margin-bottom:6px">Tailored Pitch (English)</h4>
+        <div class="code-block" id="mJobPitchEn" style="margin-bottom:16px"></div>
+        <h4 style="font-size:13px;text-transform:uppercase;color:var(--text-muted);margin-bottom:6px">Tailored Pitch (French)</h4>
+        <div class="code-block" id="mJobPitchFr" style="margin-bottom:16px"></div>
+        <h4 style="font-size:13px;text-transform:uppercase;color:var(--text-muted);margin-bottom:6px">Job Description</h4>
+        <div class="code-block" id="mJobDesc" style="max-height:240px"></div>
+        <h4 style="font-size:13px;text-transform:uppercase;color:var(--text-muted);margin:16px 0 6px">Email Conversation History</h4>
+        <div id="mJobEmails" class="timeline"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notifications Container -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- MODAL: UNIVERSAL MULTI-METHOD PAYMENT & PROOF CHECKOUT -->
+  <div id="paymentModal" class="modal-backdrop" style="display:none;z-index:9999" onclick="if(event.target===this)closePaymentModal()">
+    <div class="modal-card" style="max-width:680px;width:95%;max-height:92vh;overflow-y:auto;border:1px solid rgba(139,92,246,0.35);box-shadow:0 24px 60px rgba(0,0,0,0.85)">
+      
+      <!-- Modal Header -->
+      <div class="modal-header" style="background:linear-gradient(135deg, rgba(30,27,75,0.7) 0%, rgba(15,23,42,0.95) 100%);padding:18px 22px;border-bottom:1px solid rgba(255,255,255,0.08)">
+        <div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <h3 id="payModalPlanTitle" style="font-size:18px;font-weight:800;color:#fff">Upgrade Subscription</h3>
+            <span id="payModalPlanBadge" class="brand-badge" style="background:rgba(16,185,129,0.2);color:var(--good)">Instant Access</span>
+          </div>
+          <div id="payModalPlanSubtitle" style="font-size:12px;color:var(--cyan-light);margin-top:2px">
+            Choose your preferred payment method — zero corporate registration required.
+          </div>
+        </div>
+        <button type="button" class="btn btn-sm btn-icon" onclick="closePaymentModal()">✕</button>
+      </div>
+
+      <div class="modal-body" style="padding:22px">
+
+        <!-- Selected Plan Info Bar -->
+        <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:10px;padding:12px 16px;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+          <div>
+            <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">Selected Plan</div>
+            <div id="paySummaryPlanName" style="font-size:15px;font-weight:800;color:#fff">Pro Hunter & Freelancer</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">Price to Pay</div>
+            <div id="paySummaryPrice" style="font-size:18px;font-weight:800;color:var(--good)">$35 USD <span style="font-size:12px;color:var(--text-muted)">/ month</span></div>
+          </div>
+        </div>
+
+        <!-- Interactive 1-Click Plan Switcher -->
+        <div style="margin-bottom:18px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <label style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">Switch or Choose Plan:</label>
+            <span id="modalCurrentPlanIndicator" style="font-size:11px;color:var(--cyan-light);font-weight:600"></span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px" id="modalPlanSwitchGroup">
+            <button type="button" id="modalPlanBtn_starter" class="btn btn-sm" onclick="selectModalPlan('starter')" style="border-radius:10px;padding:9px 6px;display:flex;flex-direction:column;align-items:center;gap:3px;background:rgba(255,255,255,0.03);border:1px solid var(--border);cursor:pointer;transition:all 0.2s ease">
+              <span style="font-weight:700;font-size:12px;color:#fff">⚡ Starter</span>
+              <span id="modalPlanPrice_starter" style="font-size:11px;font-family:'JetBrains Mono';color:var(--cyan-light);font-weight:700">$15/mo</span>
+              <span style="font-size:9.5px;color:var(--text-muted)">50 apps/day</span>
+            </button>
+            <button type="button" id="modalPlanBtn_pro" class="btn btn-sm btn-primary" onclick="selectModalPlan('pro')" style="border-radius:10px;padding:9px 6px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;transition:all 0.2s ease">
+              <span style="font-weight:800;font-size:12px;color:#fff">⭐ Pro Hunter</span>
+              <span id="modalPlanPrice_pro" style="font-size:11px;font-family:'JetBrains Mono';color:#c084fc;font-weight:700">$35/mo</span>
+              <span style="font-size:9.5px;color:var(--text-muted)">150 apps + Deals</span>
+            </button>
+            <button type="button" id="modalPlanBtn_ultra" class="btn btn-sm" onclick="selectModalPlan('ultra')" style="border-radius:10px;padding:9px 6px;display:flex;flex-direction:column;align-items:center;gap:3px;background:rgba(255,255,255,0.03);border:1px solid var(--border);cursor:pointer;transition:all 0.2s ease">
+              <span style="font-weight:700;font-size:12px;color:#fff">🚀 Ultra Agency</span>
+              <span id="modalPlanPrice_ultra" style="font-size:11px;font-family:'JetBrains Mono';color:#facc15;font-weight:700">$69/mo</span>
+              <span style="font-size:9.5px;color:var(--text-muted)">Unlimited apps</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Channel Navigation Tabs -->
+        <div style="margin-bottom:16px">
+          <label style="font-size:12px;font-weight:700;color:var(--text-muted);display:block;margin-bottom:8px">1. Select Payment Channel:</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap" id="payChannelTabs">
+            <button type="button" id="payTabStripe" class="tab-btn" onclick="switchPayChannel('stripe')" style="font-size:12px;padding:7px 12px;color:#a5b4fc;border-color:rgba(99,102,241,0.35)">💳 Card / Apple Pay (Stripe)</button>
+            <button type="button" id="payTabCrypto" class="tab-btn active" onclick="switchPayChannel('crypto')" style="font-size:12px;padding:7px 12px">🪙 Crypto (USDT / SOL / BTC)</button>
+            <button type="button" id="payTabPaypal" class="tab-btn" onclick="switchPayChannel('paypal')" style="font-size:12px;padding:7px 12px">🅿️ PayPal & Cards</button>
+            <button type="button" id="payTabCard" class="tab-btn" onclick="switchPayChannel('card')" style="font-size:12px;padding:7px 12px">☕ Card (Ko-fi)</button>
+            <button type="button" id="payTabWise" class="tab-btn" onclick="switchPayChannel('wise')" style="font-size:12px;padding:7px 12px">🌐 Wise & Revolut</button>
+            <button type="button" id="payTabMorocco" class="tab-btn" onclick="switchPayChannel('morocco')" style="font-size:12px;padding:7px 12px">🇲🇦 Morocco (CIH / CashPlus)</button>
+          </div>
+        </div>
+
+        <!-- CHANNEL PANE: STRIPE DIRECT CARD -->
+        <div id="payPaneStripe" class="pay-pane" style="display:none;background:rgba(10,16,31,0.7);border:1px solid rgba(99,102,241,0.35);border-radius:12px;padding:18px;margin-bottom:20px">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+            <div style="font-size:28px">💳</div>
+            <div>
+              <div style="font-size:15px;font-weight:800;color:#fff">Instant Card Checkout via Stripe</div>
+              <div style="font-size:12px;color:var(--text-muted)">Pay securely with Visa, Mastercard, Apple Pay or Google Pay. Your subscription and daily quota will be activated immediately!</div>
+            </div>
+          </div>
+          <div style="background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.08);padding:14px 16px;border-radius:10px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+            <div>
+              <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase">Amount to Charge</div>
+              <div id="stripeChargeAmountDisplay" style="font-size:18px;font-weight:800;color:var(--good)">$35.00 USD</div>
+            </div>
+            <button type="button" id="btnStripeCheckoutAction" class="btn btn-primary" onclick="initiateStripeCheckout()" style="padding:10px 22px;font-weight:800;font-size:13px;box-shadow:0 0 15px rgba(139,92,246,0.5)">
+              🚀 Pay with Stripe Checkout →
+            </button>
+          </div>
+          <div style="font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:6px">
+            <span>🔒 Encrypted 256-bit SSL connection. Instant account activation upon checkout completion.</span>
+          </div>
+        </div>
+
+        <!-- CHANNEL PANE 1: CRYPTO -->
+        <div id="payPaneCrypto" class="pay-pane" style="background:rgba(10,16,31,0.7);border:1px solid rgba(56,189,248,0.2);border-radius:12px;padding:16px;margin-bottom:20px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+            <div style="font-size:12px;font-weight:700;color:var(--cyan-light)">Select Crypto Network:</div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <button type="button" id="cryptoNetTrc20" class="btn btn-sm btn-cyan" onclick="switchCryptoNetwork('usdt_trc20')" style="font-size:11px;padding:3px 8px">USDT (TRC-20)</button>
+              <button type="button" id="cryptoNetPolygon" class="btn btn-sm" onclick="switchCryptoNetwork('usdt_polygon')" style="font-size:11px;padding:3px 8px">Polygon (USDT/USDC)</button>
+              <button type="button" id="cryptoNetSolana" class="btn btn-sm" onclick="switchCryptoNetwork('solana')" style="font-size:11px;padding:3px 8px">Solana (SOL)</button>
+              <button type="button" id="cryptoNetBtc" class="btn btn-sm" onclick="switchCryptoNetwork('btc')" style="font-size:11px;padding:3px 8px">Bitcoin (BTC)</button>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+            <div style="background:#fff;padding:8px;border-radius:10px;display:flex;align-items:center;justify-content:center;min-width:140px;min-height:140px">
+              <img id="cryptoQrImg" src="" alt="Crypto QR Code" style="width:140px;height:140px;display:block;border-radius:6px">
+            </div>
+            <div style="flex:1;min-width:240px">
+              <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">
+                <span id="cryptoNetLabel" style="font-weight:700;color:#fff">Tron Network (TRC-20)</span>
+                <span id="cryptoFeeNote" class="pill" style="font-size:10px;margin-left:6px;background:rgba(16,185,129,0.15);color:var(--good)">Low fee (~$1)</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px;background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.1);padding:8px 12px;border-radius:8px;margin-bottom:8px">
+                <input type="text" id="cryptoWalletAddr" readonly style="border:none !important;background:transparent !important;box-shadow:none !important;padding:0 !important;font-family:'JetBrains Mono';font-size:12px;color:var(--cyan-light);width:100%" value="...">
+                <button type="button" id="btnCopyCrypto" class="btn btn-sm btn-cyan" onclick="copyText('cryptoWalletAddr', 'btnCopyCrypto')" style="font-size:11px;white-space:nowrap;padding:4px 8px">📋 Copy</button>
+              </div>
+              <div style="font-size:11px;color:var(--text-muted);line-height:1.4">
+                Send exact plan amount. After sending, copy your transaction hash (TxHash) into the reference field below.
+                <div style="margin-top:4px">
+                  <a href="https://www.moonpay.com/buy" target="_blank" rel="noopener" style="color:var(--purple-light);text-decoration:underline">Need crypto? Buy with card on MoonPay ↗</a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- CHANNEL PANE 2: PAYPAL & CARDS -->
+        <div id="payPanePaypal" class="pay-pane" style="display:none;background:rgba(10,16,31,0.7);border:1px solid rgba(59,130,246,0.25);border-radius:12px;padding:16px;margin-bottom:20px">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+            <div style="font-size:28px">🅿️</div>
+            <div>
+              <div style="font-size:14px;font-weight:700;color:#fff">PayPal Personal & Card Checkout</div>
+              <div style="font-size:11px;color:var(--text-muted)">Pay easily with any Visa, Mastercard, or PayPal account balance without corporate restrictions.</div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              <a id="paypalMeLink" href="#" target="_blank" rel="noopener" class="btn btn-primary" style="font-weight:800;font-size:13.5px;padding:10px 22px;text-decoration:none;border-radius:9px;display:inline-flex;align-items:center;gap:8px;box-shadow:0 0 16px rgba(59,130,246,0.4)">
+                🅿️ Pay with PayPal.me Checkout ↗
+              </a>
+              <span style="font-size:12px;color:var(--text-muted)">Opens official PayPal checkout with prefilled plan amount</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.1);padding:8px 12px;border-radius:8px">
+              <input type="text" id="paypalEmailVal" readonly style="border:none !important;background:transparent !important;box-shadow:none !important;padding:0 !important;font-family:'JetBrains Mono';font-size:12px;color:#fff;width:100%" value="...">
+              <button type="button" id="btnCopyPaypal" class="btn btn-sm" onclick="copyText('paypalEmailVal', 'btnCopyPaypal')" style="font-size:11px;white-space:nowrap;padding:4px 8px">📋 Copy Email</button>
+            </div>
+            <div style="font-size:11px;color:var(--text-muted)">
+              Note: Include your account email in the transfer notes or message.
+            </div>
+          </div>
+        </div>
+
+        <!-- CHANNEL PANE 3: CARD CHECKOUT (KO-FI / BUY ME A COFFEE) -->
+        <div id="payPaneCard" class="pay-pane" style="display:none;background:rgba(10,16,31,0.7);border:1px solid rgba(245,158,11,0.25);border-radius:12px;padding:16px;margin-bottom:20px">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+            <div style="font-size:28px">💳</div>
+            <div>
+              <div style="font-size:14px;font-weight:700;color:#fff">Credit / Debit Card & Apple Pay (Ko-fi)</div>
+              <div style="font-size:11px;color:var(--text-muted)">Simple 1-click checkout for Visa, Mastercard, Google Pay & Apple Pay via creator tipping checkout.</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+            <a id="cardCheckoutLink" href="#" target="_blank" rel="noopener" class="btn btn-cyan" style="font-weight:800;font-size:13.5px;padding:10px 22px;text-decoration:none;border-radius:9px;display:inline-flex;align-items:center;gap:8px;box-shadow:0 0 16px rgba(6,182,212,0.4)">
+              💳 Pay with Card (Ko-fi Checkout) ↗
+            </a>
+            <div style="font-size:11px;color:var(--text-muted);max-width:320px;line-height:1.4">
+              Direct card payment. After completing, enter your order confirmation ID or transaction reference below.
+            </div>
+          </div>
+        </div>
+
+        <!-- CHANNEL PANE 4: WISE & REVOLUT -->
+        <div id="payPaneWise" class="pay-pane" style="display:none;background:rgba(10,16,31,0.7);border:1px solid rgba(16,185,129,0.25);border-radius:12px;padding:16px;margin-bottom:20px">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+            <div style="font-size:28px">🌐</div>
+            <div>
+              <div style="font-size:14px;font-weight:700;color:#fff">Wise & Revolut (Global P2P & Bank Wire)</div>
+              <div style="font-size:11px;color:var(--text-muted)">Send USD, EUR, or GBP directly from your Wise or Revolut account with zero exchange markup.</div>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div style="background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.08);padding:10px 12px;border-radius:8px">
+              <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">Wise Account Email:</div>
+              <div style="display:flex;align-items:center;gap:6px">
+                <input type="text" id="wiseEmailVal" readonly style="border:none !important;background:transparent !important;box-shadow:none !important;padding:0 !important;font-family:'JetBrains Mono';font-size:12px;color:var(--good);width:100%" value="...">
+                <button type="button" id="btnCopyWise" class="btn btn-sm" onclick="copyText('wiseEmailVal', 'btnCopyWise')" style="font-size:10px;padding:3px 6px">Copy</button>
+              </div>
+            </div>
+            <div style="background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.08);padding:10px 12px;border-radius:8px">
+              <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">Revolut Tag:</div>
+              <div style="display:flex;align-items:center;gap:6px">
+                <input type="text" id="revolutTagVal" readonly style="border:none !important;background:transparent !important;box-shadow:none !important;padding:0 !important;font-family:'JetBrains Mono';font-size:12px;color:var(--cyan-light);width:100%" value="...">
+                <button type="button" id="btnCopyRevolut" class="btn btn-sm" onclick="copyText('revolutTagVal', 'btnCopyRevolut')" style="font-size:10px;padding:3px 6px">Copy</button>
+              </div>
+            </div>
+          </div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:8px">
+            Reference / Memo: Include your registered email address in the transfer description.
+          </div>
+        </div>
+
+        <!-- CHANNEL PANE 5: MOROCCO LOCAL -->
+        <div id="payPaneMorocco" class="pay-pane" style="display:none;background:rgba(10,16,31,0.7);border:1px solid rgba(239,68,68,0.25);border-radius:12px;padding:16px;margin-bottom:20px">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+            <div style="font-size:28px">🇲🇦</div>
+            <div>
+              <div style="font-size:14px;font-weight:700;color:#fff">Virement Bancaire & CashPlus Maroc (MAD)</div>
+              <div style="font-size:11px;color:var(--text-muted)">Virement instantané direct ou dépôt d'espèces en agence au Maroc.</div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div style="background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.08);padding:10px 12px;border-radius:8px">
+              <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">CIH Bank RIB (24 chiffres):</div>
+              <div style="display:flex;align-items:center;gap:6px">
+                <input type="text" id="cihRibVal" readonly style="border:none !important;background:transparent !important;box-shadow:none !important;padding:0 !important;font-family:'JetBrains Mono';font-size:12px;color:#fff;width:100%" value="...">
+                <button type="button" id="btnCopyCih" class="btn btn-sm btn-cyan" onclick="copyText('cihRibVal', 'btnCopyCih')" style="font-size:10px;padding:3px 6px">Copy RIB</button>
+              </div>
+            </div>
+            <div style="background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.08);padding:10px 12px;border-radius:8px">
+              <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">Attijariwafa Bank RIB (24 chiffres):</div>
+              <div style="display:flex;align-items:center;gap:6px">
+                <input type="text" id="attijariRibVal" readonly style="border:none !important;background:transparent !important;box-shadow:none !important;padding:0 !important;font-family:'JetBrains Mono';font-size:12px;color:#fff;width:100%" value="...">
+                <button type="button" id="btnCopyAttijari" class="btn btn-sm" onclick="copyText('attijariRibVal', 'btnCopyAttijari')" style="font-size:10px;padding:3px 6px">Copy RIB</button>
+              </div>
+            </div>
+            <div style="font-size:11px;color:var(--text-muted)">
+              Versement CashPlus / Wafacash: <span id="cashplusInfoVal" style="color:#fff;font-weight:600">Contact support for CIN details</span>
+            </div>
+            <div style="margin-top:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              <a id="moroccoWhatsappLink" href="https://wa.me/212600000000" target="_blank" rel="noopener" class="btn btn-sm" style="display:inline-flex;align-items:center;gap:6px;background:#22c55e;color:#fff;border:none;font-weight:700;padding:8px 14px;border-radius:8px;text-decoration:none">
+                <span>💬</span> Confirmer / Envoyer reçu sur WhatsApp ↗
+              </a>
+              <span style="font-size:11px;color:var(--text-muted)">Activation prioritaire en &lt;15 minutes</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Submission Form (Step 2: Verification for Manual / External Methods) -->
+        <div id="payVerificationSection">
+          <form id="payForm" onsubmit="handlePaymentSubmit(event)">
+            <input type="hidden" id="payPlanName" value="pro">
+            <input type="hidden" id="payAmountVal" value="35">
+            <input type="hidden" id="payCurrencyVal" value="USD">
+            <input type="hidden" id="payMethodSelected" value="usdt_trc20">
+
+            <div style="margin-bottom:8px">
+              <label style="font-size:12px;font-weight:700;color:var(--text-muted);display:block">2. Verification Details (Manual Transfer / Proof):</label>
+              <div style="font-size:11.5px;color:var(--text-muted);margin-top:2px">After completing payment through your selected gateway above, enter your transaction reference or receipt to activate your quota immediately.</div>
+            </div>
+
+            <div class="form-group" style="margin-bottom:14px">
+              <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">
+                Reference Code / TxHash / Transaction ID <span style="color:#ef4444">*</span>
+              </label>
+              <input type="text" id="payRefCode" required placeholder="e.g. USDT TxHash, PayPal Order ID, Bank reference, or receipt number..." style="width:100%">
+            </div>
+
+            <!-- Drag and Drop Receipt Upload -->
+            <div class="form-group" style="margin-bottom:14px">
+              <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">
+                Upload Receipt / Screenshot (Speeds up activation 🚀)
+              </label>
+              <div id="receiptDropZone" style="border:2px dashed rgba(255,255,255,0.15);border-radius:10px;padding:16px;text-align:center;background:rgba(0,0,0,0.2);cursor:pointer;transition:border-color 0.2s" onclick="document.getElementById('receiptFileInput').click()">
+                <input type="file" id="receiptFileInput" accept="image/png,image/jpeg,image/webp" style="display:none" onchange="handleReceiptFileSelect(event)">
+                <div id="receiptDropContent">
+                  <div style="font-size:24px;margin-bottom:4px">📸</div>
+                  <div style="font-size:12px;font-weight:600;color:#fff">Click or drag screenshot here to upload proof</div>
+                  <div style="font-size:11px;color:var(--text-muted);margin-top:2px">PNG, JPG, or WEBP (Max 10MB)</div>
+                </div>
+                <div id="receiptPreviewWrap" style="display:none;align-items:center;justify-content:center;gap:12px;position:relative">
+                  <img id="receiptPreviewImg" src="" alt="Receipt Preview" style="max-height:80px;border-radius:6px;border:1px solid rgba(255,255,255,0.2)">
+                  <div style="text-align:left">
+                    <div id="receiptFileName" style="font-size:12px;font-weight:700;color:#fff;word-break:break-all">screenshot.png</div>
+                    <div id="receiptFileSize" style="font-size:11px;color:var(--text-muted)">120 KB</div>
+                    <button type="button" class="btn btn-sm" onclick="event.stopPropagation();removeReceiptFile()" style="font-size:10px;padding:2px 8px;margin-top:4px;color:#f87171;border-color:rgba(239,68,68,0.3)">✕ Remove</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-group" style="margin-bottom:18px">
+              <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Notes or Sender Details (Optional)</label>
+              <input type="text" id="payNotes" placeholder="e.g. Sender name, wallet alias, or specific instruction..." style="width:100%">
+            </div>
+
+            <button type="submit" id="btnSubmitPayment" class="btn btn-primary" style="width:100%;padding:13px;font-weight:800;font-size:14px;border-radius:10px;display:flex;align-items:center;justify-content:center;gap:8px">
+              <span>🚀</span> Submit Payment Proof for Activation
+            </button>
+          </form>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: FULL RESOLUTION RECEIPT VIEWER -->
+  <div id="receiptModal" class="modal-backdrop" style="display:none;z-index:10000" onclick="if(event.target===this)closeReceiptModal()">
+    <div class="modal-card" style="max-width:800px;width:95%;max-height:92vh;overflow-y:auto;border:1px solid var(--border);background:#0b1325">
+      <div class="modal-header" style="padding:14px 18px;border-bottom:1px solid rgba(255,255,255,0.08)">
+        <h3 style="font-size:16px;font-weight:800;color:#fff;display:flex;align-items:center;gap:8px">
+          <span>📷 Payment Proof Receipt</span>
+        </h3>
+        <button type="button" class="btn btn-sm btn-icon" onclick="closeReceiptModal()">✕</button>
+      </div>
+      <div class="modal-body" style="padding:18px;text-align:center;background:rgba(0,0,0,0.5)">
+        <img id="receiptModalImg" src="" alt="Payment Receipt" style="max-width:100%;max-height:75vh;border-radius:8px;box-shadow:0 8px 30px rgba(0,0,0,0.8);object-fit:contain">
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ADMIN EDIT / CREATE PLAN -->
+  <div id="adminPlanModal" class="modal-backdrop" style="display:none;z-index:9999" onclick="if(event.target===this)closeAdminPlanModal()">
+    <div class="modal-card" style="max-width:680px;width:95%;max-height:92vh;overflow-y:auto;border:1px solid rgba(139,92,246,0.4);box-shadow:0 24px 60px rgba(0,0,0,0.85)">
+      <div class="modal-header" style="background:linear-gradient(135deg, rgba(30,27,75,0.8) 0%, rgba(15,23,42,0.95) 100%);padding:16px 20px;border-bottom:1px solid rgba(255,255,255,0.08)">
+        <div>
+          <h3 id="adminPlanModalTitle" style="font-size:18px;font-weight:800;color:#fff">Edit Subscription Plan</h3>
+          <div style="font-size:12px;color:var(--cyan-light);margin-top:2px">Configure plan pricing, currency rates, quotas, and feature entitlements</div>
+        </div>
+        <button type="button" class="btn btn-sm btn-icon" onclick="closeAdminPlanModal()">✕</button>
+      </div>
+      <div class="modal-body" style="padding:20px">
+        <form id="adminPlanForm" onsubmit="handleAdminPlanSave(event)">
+          <input type="hidden" id="apmPlanId" value="">
+          
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+            <div class="form-group">
+              <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Plan Name *</label>
+              <input type="text" id="apmName" required placeholder="e.g. Pro Hunter & Freelancer" style="width:100%">
+            </div>
+            <div class="form-group">
+              <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Unique Slug * (e.g. starter, pro, ultra)</label>
+              <input type="text" id="apmSlug" required placeholder="pro" style="width:100%">
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+            <div class="form-group">
+              <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Badge Label (optional)</label>
+              <input type="text" id="apmBadge" placeholder="e.g. Most Popular ⭐ or Best Value" style="width:100%">
+            </div>
+            <div class="form-group">
+              <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Billing Interval</label>
+              <input type="text" id="apmBilling" value="/ month" placeholder="/ month" style="width:100%">
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-bottom:14px">
+            <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Plan Description</label>
+            <input type="text" id="apmDescription" placeholder="Short summary of what this tier provides..." style="width:100%">
+          </div>
+
+          <!-- Multi-Currency Pricing Grid -->
+          <div style="background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--cyan-light);margin-bottom:8px">💵 Multi-Currency Pricing:</div>
+            <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:10px">
+              <div class="form-group">
+                <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:3px">Moroccan MAD (DH)</label>
+                <input type="number" id="apmPriceMad" value="350" min="0" step="1" style="width:100%;font-weight:700">
+              </div>
+              <div class="form-group">
+                <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:3px">US Dollar (USD $)</label>
+                <input type="number" id="apmPriceUsd" value="35.0" min="0" step="0.5" style="width:100%;font-weight:700">
+              </div>
+              <div class="form-group">
+                <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:3px">Euro (EUR €)</label>
+                <input type="number" id="apmPriceEur" value="32.0" min="0" step="0.5" style="width:100%">
+              </div>
+              <div class="form-group">
+                <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:3px">Crypto USDT (₮)</label>
+                <input type="number" id="apmPriceUsdt" value="35.0" min="0" step="0.5" style="width:100%">
+              </div>
+            </div>
+          </div>
+
+          <!-- Quotas Grid -->
+          <div style="background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--purple-light);margin-bottom:8px">⚡ Daily Operational Quotas:</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div class="form-group">
+                <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:3px">Daily Applications Limit (jobs/day) *</label>
+                <input type="number" id="apmDailyLimit" value="150" min="1" max="9999" required style="width:100%;font-weight:700">
+              </div>
+              <div class="form-group">
+                <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:3px">Max Daily AI Evaluation Calls *</label>
+                <input type="number" id="apmMaxAiCalls" value="200" min="1" max="9999" required style="width:100%;font-weight:700">
+              </div>
+            </div>
+          </div>
+
+          <!-- Entitlements & Flags -->
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
+              <input type="checkbox" id="apmIsActive" checked>
+              <span>Active in Checkout</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
+              <input type="checkbox" id="apmIsRecommended">
+              <span>Featured / Best Value</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
+              <input type="checkbox" id="apmCanFreelance" checked>
+              <span>Freelance Deals Engine</span>
+            </label>
+          </div>
+
+          <!-- Features List Textarea -->
+          <div class="form-group" style="margin-bottom:16px">
+            <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Feature Bullets (1 per line for pricing table):</label>
+            <textarea id="apmFeatures" rows="4" placeholder="150 Automated Applications / Day&#10;Automated Freelance Deal Finder&#10;Direct Recruiter & HR Contact Discovery" style="width:100%;font-size:12px;line-height:1.4"></textarea>
+          </div>
+
+          <!-- Immediate Sync Checkbox -->
+          <div style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.25);border-radius:8px;padding:10px 12px;margin-bottom:16px">
+            <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;color:#fff;font-weight:600">
+              <input type="checkbox" id="apmSyncUsers" checked>
+              <span>⚡ Immediately update daily quota for all active subscribers on this plan</span>
+            </label>
+          </div>
+
+          <div style="display:flex;gap:10px;justify-content:flex-end">
+            <button type="button" class="btn btn-sm" onclick="closeAdminPlanModal()">Cancel</button>
+            <button type="submit" class="btn btn-primary" style="padding:10px 22px;font-weight:700">
+              Save Plan & Quotas ✓
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ADMIN CREATE USER -->
+  <div id="adminCreateUserModal" class="modal-backdrop" style="display:none;z-index:9999" onclick="if(event.target===this)closeAdminCreateUserModal()">
+    <div class="modal-card" style="max-width:480px">
+      <div class="modal-header">
+        <div>
+          <h3 style="font-size:18px;font-weight:800;color:var(--cyan-light)">➕ Create New User</h3>
+          <div style="font-size:12px;color:var(--text-muted)">Add a user directly with custom role and daily quota</div>
+        </div>
+        <button type="button" class="btn btn-sm btn-icon" onclick="closeAdminCreateUserModal()">✕</button>
+      </div>
+      <div class="modal-body" style="padding:20px">
+        <form id="adminCreateUserForm" onsubmit="handleAdminCreateUser(event)">
+          <div class="form-group" style="margin-bottom:12px">
+            <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Email Address *</label>
+            <input type="email" id="acuEmail" required placeholder="user@example.com" style="width:100%">
+          </div>
+          <div class="form-group" style="margin-bottom:12px">
+            <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Full Name</label>
+            <input type="text" id="acuFullName" placeholder="e.g. Sarah Smith" style="width:100%">
+          </div>
+          <div class="form-group" style="margin-bottom:12px">
+            <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Initial Password (leave empty to auto-generate)</label>
+            <input type="password" id="acuPassword" placeholder="Minimum 6 characters or auto-generated" style="width:100%">
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+            <div class="form-group">
+              <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Role</label>
+              <select id="acuRole" style="width:100%">
+                <option value="user">User</option>
+                <option value="admin">Administrator</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Subscription Plan</label>
+              <select id="acuPlan" style="width:100%" onchange="onAdminCreatePlanChange(this.value)">
+                <option value="free">Free Tier (5 apps/day)</option>
+                <option value="starter">Starter Hunter (50 apps/day)</option>
+                <option value="pro">Pro Hunter & Freelancer (150 apps/day)</option>
+                <option value="ultra">Executive & Agency (Unlimited)</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group" style="margin-bottom:16px">
+            <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Daily Application Quota</label>
+            <input type="number" id="acuDailyLimit" value="5" min="1" max="1000" style="width:100%">
+          </div>
+          <div style="display:flex;gap:10px;justify-content:flex-end">
+            <button type="button" class="btn btn-sm" onclick="closeAdminCreateUserModal()">Cancel</button>
+            <button type="submit" class="btn btn-primary" style="padding:10px 20px;font-weight:700">
+              Create User Account ✓
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/js/app.js?v=6.3.0"></script>
+  <!-- Real-Time Floating Notification Toasts -->
+  <div id="notifToastContainer" style="position:fixed;bottom:96px;right:24px;display:flex;flex-direction:column-reverse;gap:10px;z-index:99999;pointer-events:none"></div>
+
+  <!-- ================================================================= -->
+  <!-- FLOATING CHATBOT WIDGET (Bottom Right Corner) -->
+  <!-- ================================================================= -->
+  <!-- Floating Launcher Button -->
+  <div id="chatbotToggleBtn" class="chatbot-launcher" onclick="toggleChatbot()" title="Open AutoHunt AI Assistant & Support">
+    <span style="font-size:24px" id="chatbotLauncherIcon">🤖</span>
+    <span id="chatbotUnreadBadge" class="chatbot-launcher-badge" style="display:none">0</span>
+  </div>
+
+  <!-- Floating Chat Popover Window -->
+  <div id="chatbotWidget" class="chatbot-widget collapsed">
+    <!-- Header -->
+    <div class="chatbot-header">
+      <div class="chatbot-header-left">
+        <div class="chatbot-avatar">
+          <span>🤖</span>
+          <span class="status-dot-online"></span>
+        </div>
+        <div>
+          <div class="chatbot-title">
+            AutoHunt AI Assistant
+            <span style="font-size:10px;background:rgba(139,92,246,0.25);color:var(--purple-light);padding:1px 6px;border-radius:4px;font-weight:700">AI + Support</span>
+          </div>
+          <div class="chatbot-subtitle" id="chatbotHeaderSub">Any language (EN, FR, العربية, ES...)</div>
+        </div>
+      </div>
+      <div class="chatbot-header-actions">
+        <button type="button" class="chatbot-close-btn" onclick="toggleChatbot(false)" title="Minimize Chat">✕</button>
+      </div>
+    </div>
+
+    <!-- Quick Prompt Suggestions Chips -->
+    <div class="chatbot-quick-chips">
+      <button type="button" class="chatbot-chip" onclick="handleChipClick('How does automated applying work?')">⚡ How to apply?</button>
+      <button type="button" class="chatbot-chip" onclick="handleChipClick('What are the subscription plans and global payment methods?')">💳 Plans & Payments</button>
+      <button type="button" class="chatbot-chip" onclick="handleChipClick('How do I configure my personal Gmail SMTP in Settings?')">⚙️ Connect Email</button>
+      <button type="button" class="chatbot-chip" onclick="handleChipClick('I need help from an administrator or support agent')">👤 Talk to Admin</button>
+    </div>
+
+    <!-- Chat Messages Stream -->
+    <div id="chatbotMessages" class="chatbot-messages">
+      <!-- Welcome message -->
+      <div class="chat-bubble-wrap bot">
+        <div class="chat-sender-label">
+          <span>🤖 AutoHunt Assistant</span>
+        </div>
+        <div class="chat-bubble bot">
+          👋 <strong>Hello! I am your AutoHunt AI Assistant.</strong><br><br>
+          I can help you navigate the platform, set up your CV & email, explain daily quotas, and answer your questions in <strong>any language</strong> (Français, العربية, English, Español...).<br><br>
+          An administrator can also join this conversation directly if you ever need human support! How can I assist you today?
+        </div>
+        <div class="chat-time">Just now</div>
+      </div>
+    </div>
+
+    <!-- Typing Indicator -->
+    <div id="chatbotTyping" style="display:none;padding:0 16px 8px">
+      <div class="chat-typing-indicator">
+        <span class="chat-typing-dot"></span>
+        <span class="chat-typing-dot"></span>
+        <span class="chat-typing-dot"></span>
+      </div>
+    </div>
+
+    <!-- Input Bar -->
+    <form id="chatbotForm" class="chatbot-input-bar" onsubmit="handleChatSubmit(event)">
+      <textarea id="chatbotInput" class="chatbot-input" placeholder="Ask in any language... (العربية, FR, EN...)" rows="1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();handleChatSubmit(event);}"></textarea>
+      <button type="submit" id="chatbotSendBtn" class="chatbot-send-btn" title="Send message">
+        <span style="font-size:16px">➤</span>
+      </button>
+    </form>
+  </div>
+</body>
+</html>
+

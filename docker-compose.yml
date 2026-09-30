@@ -1,0 +1,222 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-jobsearch}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-jobsearch-local-change-me}
+      POSTGRES_DB: ${POSTGRES_DB:-jobsearch_db}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    environment:
+      OLLAMA_HOST: 0.0.0.0:11434
+    volumes:
+      - ollama:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "OLLAMA_HOST=http://127.0.0.1:11434 ollama list >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  ollama-init:
+    image: ollama/ollama:latest
+    restart: "no"
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:3b}
+    volumes:
+      - ollama:/root/.ollama
+    entrypoint: ["/bin/sh", "-lc"]
+    command: ['ollama pull "$${OLLAMA_MODEL}"']
+
+  browser:
+    image: mcr.microsoft.com/playwright:v1.62.0-noble
+    restart: unless-stopped
+    init: true
+    ipc: host
+    cap_add:
+      - SYS_ADMIN
+    user: pwuser
+    working_dir: /home/pwuser
+    shm_size: "1gb"
+    volumes:
+      - ./scripts/start_browser_server.js:/home/pwuser/start_browser_server.js:ro
+    environment:
+      PORT: 3000
+      WS_PATH: browser
+      BROWSER_TYPE: firefox
+    command: ["/bin/sh", "-lc", "npx -y playwright@1.62.0 install firefox >/dev/null 2>&1 || true; NODE_PATH=$$(find /home/pwuser/.npm -type d -name node_modules 2>/dev/null | head -n 1) node /home/pwuser/start_browser_server.js"]
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3001').then(()=>process.exit(0)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-autohunt}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-autohunt_rabbit_pass}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  app:
+    image: jobsearch-final2:local
+    build:
+      context: .
+      dockerfile: Dockerfile.microservices
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama-init:
+        condition: service_completed_successfully
+      browser:
+        condition: service_healthy
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-jobsearch}:${POSTGRES_PASSWORD:-jobsearch-local-change-me}@postgres:5432/${POSTGRES_DB:-jobsearch_db}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:3b}
+      PLAYWRIGHT_WS_ENDPOINT: ${PLAYWRIGHT_WS_ENDPOINT:-ws://browser:3000/browser}
+      APP_ENVIRONMENT: ${APP_ENVIRONMENT:-production}
+      DASHBOARD_USERNAME: ${DASHBOARD_USERNAME:-admin}
+      DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD:-local-admin-change-me}
+    command: ["python", "scripts/run_pipeline.py", "--loop"]
+    read_only: true
+    tmpfs:
+      - /tmp
+    volumes:
+      - outreach_drafts:/app/outreach_drafts
+      - ./candidate_data:/app/candidate_data:ro
+      - ./config:/app/config:ro
+      - ./src:/app/src:ro
+      - ./scripts:/app/scripts:ro
+
+  inbox_monitor:
+    image: jobsearch-final2:local
+    build:
+      context: .
+      dockerfile: Dockerfile.microservices
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama-init:
+        condition: service_completed_successfully
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-jobsearch}:${POSTGRES_PASSWORD:-jobsearch-local-change-me}@postgres:5432/${POSTGRES_DB:-jobsearch_db}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:3b}
+      APP_ENVIRONMENT: ${APP_ENVIRONMENT:-production}
+    command: ["python", "scripts/check_inbox.py", "--loop"]
+    read_only: true
+    tmpfs:
+      - /tmp
+    volumes:
+      - outreach_drafts:/app/outreach_drafts
+      - ./candidate_data:/app/candidate_data:ro
+      - ./config:/app/config:ro
+      - ./src:/app/src:ro
+      - ./scripts:/app/scripts:ro
+
+  dashboard:
+    image: jobsearch-final2:local
+    build:
+      context: .
+      dockerfile: Dockerfile.microservices
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_started
+      browser:
+        condition: service_healthy
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-jobsearch}:${POSTGRES_PASSWORD:-jobsearch-local-change-me}@postgres:5432/${POSTGRES_DB:-jobsearch_db}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:3b}
+      PLAYWRIGHT_WS_ENDPOINT: ${PLAYWRIGHT_WS_ENDPOINT:-ws://browser:3000/browser}
+      APP_ENVIRONMENT: ${APP_ENVIRONMENT:-production}
+      DASHBOARD_USERNAME: ${DASHBOARD_USERNAME:-admin}
+      DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD:-local-admin-change-me}
+      N8N_WEBHOOK_SECRET: ${N8N_WEBHOOK_SECRET:-n8n-secret-token}
+    command: ["python", "scripts/dashboard.py"]
+    ports:
+      - "8080:8080"
+    read_only: true
+    tmpfs:
+      - /tmp
+    volumes:
+      - outreach_drafts:/app/outreach_drafts
+      - ./candidate_data:/app/candidate_data:ro
+      - ./config:/app/config:ro
+      - ./src:/app/src:ro
+      - ./scripts:/app/scripts:ro
+      - ./tests:/app/tests:ro
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  n8n:
+    image: n8nio/n8n:latest
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - NODE_ENV=production
+      - WEBHOOK_URL=http://localhost:5678/
+      - GENERIC_TIMEZONE=Europe/Paris
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - n8n_data:/home/node/.n8n
+
+volumes:
+  pgdata:
+  ollama:
+  outreach_drafts:
+  n8n_data:
+  rabbitmq_data:

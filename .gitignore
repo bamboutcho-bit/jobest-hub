@@ -1,0 +1,166 @@
+# =============================================================================
+# Job Hunter Pro / Jobest Hub - Git Ignore Rules
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Environment & Secrets (NEVER COMMIT SENSITIVE KEYS OR PASSWORDS)
+# -----------------------------------------------------------------------------
+.env
+.env.*
+*.env
+!.env.example
+!.env.monolith.example
+!.env.*.example
+
+# -----------------------------------------------------------------------------
+# Local Databases & State (Docker uses PostgreSQL; ignore local SQLite)
+# -----------------------------------------------------------------------------
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+jobsearch.db*
+jobsearch_local.db*
+
+# -----------------------------------------------------------------------------
+# Credentials, Authentication Cookies & Tokens
+# -----------------------------------------------------------------------------
+*cookie*.txt
+admin_cookie.txt
+*.pem
+*.key
+*.cert
+*.crt
+*.pfx
+*.p12
+credentials.json
+token.json
+client_secret*.json
+
+# -----------------------------------------------------------------------------
+# Candidate Personal Documents (resumes, cover letters, private PDFs/Word docs)
+# -----------------------------------------------------------------------------
+candidate_data/*.pdf
+candidate_data/*.docx
+candidate_data/*.doc
+candidate_data/*.odt
+candidate_data/*.rtf
+!candidate_data/profile.json
+
+# -----------------------------------------------------------------------------
+# Markdown Documentation (ignore all .md files except main README.md)
+# -----------------------------------------------------------------------------
+*.md
+**/*.md
+!/README.md
+
+# -----------------------------------------------------------------------------
+# Python Bytecode & Runtime Caches
+# -----------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+*.so
+
+# Distribution / Packaging
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# -----------------------------------------------------------------------------
+# Virtual Environments
+# -----------------------------------------------------------------------------
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# -----------------------------------------------------------------------------
+# Testing & Coverage
+# -----------------------------------------------------------------------------
+.pytest_cache/
+.coverage
+.coverage.*
+nosetests.xml
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+
+# -----------------------------------------------------------------------------
+# Playwright & Browser Testing Artifacts
+# -----------------------------------------------------------------------------
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+.playwright/
+
+# -----------------------------------------------------------------------------
+# Logs & Generated Drafts / Outreach Outputs
+# -----------------------------------------------------------------------------
+*.log
+logs/
+outreach_drafts/
+exports/
+
+# -----------------------------------------------------------------------------
+# Node & Frontend Dependencies (if used)
+# -----------------------------------------------------------------------------
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# -----------------------------------------------------------------------------
+# IDEs, Code Editors & OS Metadata
+# -----------------------------------------------------------------------------
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+*.sublime-project
+*.sublime-workspace
+.project
+.pydevproject
+
+# Operating System Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# -----------------------------------------------------------------------------
+# Temporary & Scratch Development Scripts / Notes
+# -----------------------------------------------------------------------------
+scratch/
+scratch_*.py
+extract.py
+nxt.txt
+tmp/
+temp/

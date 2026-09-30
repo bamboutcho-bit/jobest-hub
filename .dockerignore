@@ -1,0 +1,36 @@
+# Secrets / local state
+.env
+.git
+.idea
+.vscode
+.pytest_cache
+**/__pycache__
+*.pyc
+*.pyo
+*.pyd
+outreach_drafts
+
+# Virtual environments
+.venv
+venv
+env
+ENV
+
+# Local SQLite databases (Docker uses PostgreSQL)
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+jobsearch_local.db*
+
+# Candidate documents are mounted into containers at runtime
+candidate_data/*.pdf
+candidate_data/*.docx
+candidate_data/*.doc
+
+# Local development / generated files
+*.log
+.DS_Store
+.coverage
+htmlcov

@@ -1,0 +1,467 @@
+{
+  "name": "AutoHunt - Master Job Search Pipeline",
+  "id": "autohunt-pipeline-01",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 3
+            }
+          ]
+        }
+      },
+      "id": "e22934b1-b4f0-4660-8431-000000000001",
+      "name": "Schedule: Every 3 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        220,
+        320
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "e22934b1-b4f0-4660-8431-000000000002",
+      "name": "When clicking ‘Test workflow’",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        220,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://dashboard:8080/api/webhook/n8n/status",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-webhook-secret",
+              "value": "n8n-secret-token"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "e22934b1-b4f0-4660-8431-000000000003",
+      "name": "Check AutoHunt Health & Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "ok",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e22934b1-b4f0-4660-8431-000000000004",
+      "name": "Is Backend Healthy?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        720,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://dashboard:8080/api/webhook/n8n/new-matches?since_hours=24&min_score=70",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-webhook-secret",
+              "value": "n8n-secret-token"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "e22934b1-b4f0-4660-8431-000000000005",
+      "name": "Fetch Top Matches & Scheduled Interviews",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        980,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process and rank incoming match data & interviews\nconst inputData = $input.first().json;\nconst matches = inputData.matches || [];\nconst interviews = inputData.interviews || [];\nconst hasInterviews = Boolean(inputData.has_interviews && interviews.length > 0);\nconst tgConfigured = Boolean(inputData.telegram_configured);\nconst tgToken = inputData.telegram_bot_token || '';\nconst tgChatId = inputData.telegram_chat_id || '';\n\n// 1. Format Interview Alert Digest (Only sent if an interview is scheduled/requested)\nlet interviewAlertText = '';\nif (hasInterviews) {\n  const interviewCards = interviews.map(i => {\n    const stageTitle = i.stage === 'interview_scheduled' ? '🗓️ INTERVIEW CONFIRMED' : '📩 INTERVIEW REQUEST RECEIVED';\n    const notesText = i.interview_notes || i.notes ? `\\n📝 *Notes:* ${i.interview_notes || i.notes}` : '';\n    const applyUrl = i.application_url || 'http://localhost:8080/app#inbox';\n    return `🎉 *${stageTitle}* 🚀\\n\\n` +\n      `💼 *Company:* *${i.company}*\\n` +\n      `🎯 *Role:* *${i.title}*\\n` +\n      (i.location ? `📍 *Location:* ${i.location}\\n` : '') +\n      notesText + `\\n` +\n      `🔗 *AutoHunt Inbox:* ${applyUrl}`;\n  });\n  interviewAlertText = interviewCards.join('\\n\\n━━━━━━━━━━━━━━━━━━━━\\n\\n');\n}\n\n// 2. Process CRM Rows\nmatches.sort((a, b) => (b.score || 0) - (a.score || 0));\nconst enriched = matches.map((job, idx) => {\n  const score = job.score || 0;\n  let tier = '💼 Tier 3 (Good Fit)';\n  let badge = '⭐';\n  if (score >= 90) {\n    tier = '🦄 Tier 1 (Unicorn Fit)';\n    badge = '🚀';\n  } else if (score >= 80) {\n    tier = '🎯 Tier 2 (High Fit)';\n    badge = '🎯';\n  }\n\n  const appUrl = job.application_url || job.job_url || 'https://linkedin.com';\n  const visaText = job.visa_category ? ` | 🛂 Visa: ${job.visa_category}` : '';\n\n  return {\n    rank: idx + 1,\n    id: job.id,\n    title: job.title,\n    company: job.company,\n    location: job.location,\n    score: score,\n    tier: tier,\n    badge: badge,\n    visa: job.visa_category || 'Standard',\n    stage: job.stage || 'evaluated',\n    url: appUrl,\n    scraped_at: job.scraped_at,\n    summary_line: `${badge} [${score}%] *${job.title}* at *${job.company}* (${job.location}${visaText})\\n🔗 Apply: ${appUrl}`\n  };\n});\n\nreturn [{\n  json: {\n    has_matches: enriched.length > 0,\n    count: enriched.length,\n    top_score: enriched[0] ? enriched[0].score : 0,\n    top_job: enriched[0] ? `${enriched[0].title} at ${enriched[0].company}` : 'None',\n    has_interviews: hasInterviews,\n    interview_count: interviews.length,\n    interview_digest: interviewAlertText,\n    interviews: interviews,\n    telegram_configured: tgConfigured,\n    telegram_bot_token: tgToken,\n    telegram_chat_id: tgChatId,\n    all_matches: enriched\n  }\n}];"
+      },
+      "id": "e22934b1-b4f0-4660-8431-000000000006",
+      "name": "Rank & Format Deal Intelligence",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1220,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "c2",
+              "leftValue": "={{ $json.has_matches }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e22934b1-b4f0-4660-8431-000000000007",
+      "name": "Any Matches Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1460,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "c3",
+              "leftValue": "={{ $json.telegram_configured }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "c4",
+              "leftValue": "={{ $json.has_interviews }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e22934b1-b4f0-4660-8431-000000000013",
+      "name": "Is Interview Scheduled & Telegram Ready?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1720,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $json.telegram_bot_token }}/sendMessage",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"chat_id\": \"{{ $json.telegram_chat_id }}\",\n  \"text\": {{ JSON.stringify($json.interview_digest) }},\n  \"parse_mode\": \"Markdown\",\n  \"disable_web_page_preview\": false\n}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "e22934b1-b4f0-4660-8431-000000000014",
+      "name": "Send Telegram Interview Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2000,
+        -20
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare individual rows for Google Sheets / Notion / Airtable CRM Sync\nconst matches = $input.first().json.all_matches || [];\nreturn matches.map(m => ({\n  json: {\n    Job_ID: m.id,\n    Rank: m.rank,\n    Title: m.title,\n    Company: m.company,\n    Location: m.location,\n    Match_Score: m.score,\n    Tier: m.tier,\n    Visa_Status: m.visa,\n    Pipeline_Stage: m.stage,\n    Application_URL: m.url,\n    Date_Scraped: m.scraped_at,\n    Exported_At: new Date().toISOString()\n  }\n}));"
+      },
+      "id": "e22934b1-b4f0-4660-8431-000000000008",
+      "name": "Prepare CRM / Sheets Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1720,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://dashboard:8080/api/webhook/n8n/notify",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-webhook-secret",
+              "value": "n8n-secret-token"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"event\": \"n8n_sync_completed\",\n  \"data\": {\n    \"matches_found\": {{ $('Rank & Format Deal Intelligence').first().json.count }},\n    \"interviews_found\": {{ $('Rank & Format Deal Intelligence').first().json.interview_count }},\n    \"top_job\": \"{{ $('Rank & Format Deal Intelligence').first().json.top_job }}\",\n    \"top_score\": {{ $('Rank & Format Deal Intelligence').first().json.top_score }},\n    \"synced_at\": \"{{ $now.toISO() }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "e22934b1-b4f0-4660-8431-000000000009",
+      "name": "Log Sync in AutoHunt Audit Trail",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1960,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://dashboard:8080/api/webhook/n8n/trigger-pipeline",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-webhook-secret",
+              "value": "n8n-secret-token"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e22934b1-b4f0-4660-8431-000000000010",
+      "name": "Auto-Trigger Discovery Pipeline",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1720,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### 🛡️ System Alert: Backend Unreachable\nAutoHunt backend responded with a non-OK status or is restarting.\nCheck docker containers via:\n`docker compose ps`",
+        "height": 160,
+        "width": 300,
+        "color": 7
+      },
+      "id": "e22934b1-b4f0-4660-8431-000000000011",
+      "name": "Backend Down Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        960,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### 🎯 Telegram: Interview Alert Only\nLe bot Telegram ne se déclenche **QUE si un entretien est planifié ou demandé** (`has_interviews == true`).\n\nLes simples jobs scrapés ou correspondances de routine ne polluent **jamais** vos notifications !",
+        "height": 160,
+        "width": 340,
+        "color": 6
+      },
+      "id": "e22934b1-b4f0-4660-8431-000000000015",
+      "name": "Telegram Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1720,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### 🚀 AutoHunt Master Automation\n**Features included:**\n1. **Periodic 3-Hour Poller & On-Demand Webhook**\n2. **Heartbeat / Watchdog Health Verification**\n3. **Scheduled Interview Detection & Dedicated Telegram Alerting**\n4. **Tier 1 (Unicorn), Tier 2 (High Fit), Tier 3 Categorization**\n5. **Prepared Data Rows for Google Sheets / Notion CRM**\n6. **Self-Healing: Autonomous Pipeline Trigger when backlog is low**\n7. **Audit Event logging directly inside AutoHunt**",
+        "height": 270,
+        "width": 440,
+        "color": 4
+      },
+      "id": "e22934b1-b4f0-4660-8431-000000000012",
+      "name": "Workflow Documentation",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        220,
+        20
+      ]
+    }
+  ],
+  "connections": {
+    "Schedule: Every 3 Hours": {
+      "main": [
+        [
+          {
+            "node": "Check AutoHunt Health & Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When clicking ‘Test workflow’": {
+      "main": [
+        [
+          {
+            "node": "Check AutoHunt Health & Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check AutoHunt Health & Status": {
+      "main": [
+        [
+          {
+            "node": "Is Backend Healthy?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Backend Healthy?": {
+      "main": [
+        [
+          {
+            "node": "Fetch Top Matches & Scheduled Interviews",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Top Matches & Scheduled Interviews": {
+      "main": [
+        [
+          {
+            "node": "Rank & Format Deal Intelligence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rank & Format Deal Intelligence": {
+      "main": [
+        [
+          {
+            "node": "Any Matches Found?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Is Interview Scheduled & Telegram Ready?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Interview Scheduled & Telegram Ready?": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram Interview Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Any Matches Found?": {
+      "main": [
+        [
+          {
+            "node": "Prepare CRM / Sheets Rows",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Auto-Trigger Discovery Pipeline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare CRM / Sheets Rows": {
+      "main": [
+        [
+          {
+            "node": "Log Sync in AutoHunt Audit Trail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

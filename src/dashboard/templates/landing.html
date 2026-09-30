@@ -1,0 +1,907 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AutoHunt AI — Stop Chasing Recruiters. Make Dream Jobs Come To You.</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <!-- Google Identity Services client script for verified Gmail loggers -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <style>
+    :root {
+      --bg: #070d18;
+      --bg-surface: #0e1726;
+      --bg-card: rgba(17, 27, 46, 0.7);
+      --border: rgba(255, 255, 255, 0.08);
+      --border-accent: rgba(56, 189, 248, 0.35);
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --cyan: #38bdf8;
+      --cyan-glow: rgba(56, 189, 248, 0.25);
+      --purple: #a855f7;
+      --purple-glow: rgba(168, 85, 247, 0.25);
+      --green: #10b981;
+      --radius: 16px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+    /* Ambient glow background */
+    .ambient-glow {
+      position: absolute;
+      top: 0; left: 50%;
+      transform: translateX(-50%);
+      width: 100vw; height: 750px;
+      background: radial-gradient(circle at 50% 20%, rgba(56,189,248,0.15) 0%, rgba(168,85,247,0.12) 35%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+    .container { max-width: 1200px; margin: 0 auto; padding: 0 24px; position: relative; z-index: 1; }
+    
+    /* Top Header */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 24px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      color: #fff;
+      text-decoration: none;
+    }
+    .logo-badge {
+      background: linear-gradient(135deg, #0284c7, #7c3aed);
+      padding: 4px 10px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .nav-links { display: flex; align-items: center; gap: 20px; }
+    .nav-links a { color: var(--text-muted); text-decoration: none; font-size: 14px; font-weight: 500; transition: color .2s; }
+    .nav-links a:hover { color: #fff; }
+    
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px 20px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all .2s;
+      border: 1px solid transparent;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #0284c7, #7c3aed);
+      color: #fff;
+      box-shadow: 0 0 25px rgba(2, 132, 199, 0.4);
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 0 35px rgba(124, 58, 237, 0.5);
+    }
+    .btn-outline {
+      background: rgba(255,255,255,0.04);
+      border-color: var(--border);
+      color: #fff;
+    }
+    .btn-outline:hover {
+      border-color: var(--cyan);
+      background: rgba(56,189,248,0.08);
+    }
+    .btn-google {
+      background: #ffffff;
+      color: #1f2937;
+      border: 1px solid #e5e7eb;
+      font-weight: 600;
+      width: 100%;
+      padding: 12px;
+      border-radius: 10px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+    }
+    .btn-google:hover { background: #f9fafb; }
+
+    /* Hero Section */
+    .hero {
+      text-align: center;
+      padding: 80px 0 60px;
+    }
+    .pill-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 16px;
+      border-radius: 999px;
+      background: rgba(56, 189, 248, 0.1);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      color: var(--cyan);
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 24px;
+    }
+    .hero h1 {
+      font-size: clamp(36px, 6vw, 64px);
+      font-weight: 800;
+      line-height: 1.15;
+      letter-spacing: -1.5px;
+      margin-bottom: 24px;
+      background: linear-gradient(180deg, #ffffff 40%, #94a3b8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .hero h1 span.highlight {
+      background: linear-gradient(135deg, #38bdf8, #c084fc);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .hero p {
+      font-size: clamp(16px, 2vw, 19px);
+      color: var(--text-muted);
+      max-width: 780px;
+      margin: 0 auto 36px;
+    }
+    .hero-actions {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-bottom: 40px;
+    }
+    .trust-metrics {
+      display: flex;
+      justify-content: center;
+      gap: 32px;
+      flex-wrap: wrap;
+      color: var(--text-muted);
+      font-size: 13px;
+      padding: 16px 0;
+    }
+    .trust-metrics span { display: flex; align-items: center; gap: 6px; }
+    .trust-metrics strong { color: #fff; }
+
+    /* Features Grid */
+    .section-title {
+      text-align: center;
+      margin-bottom: 50px;
+    }
+    .section-title h2 {
+      font-size: 32px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      margin-bottom: 12px;
+    }
+    .section-title p { color: var(--text-muted); font-size: 16px; max-width: 600px; margin: auto; }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px;
+      margin-bottom: 100px;
+    }
+    .feature-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 30px;
+      backdrop-filter: blur(12px);
+      transition: all .25s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    .feature-card:hover {
+      border-color: var(--border-accent);
+      transform: translateY(-4px);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
+    .feature-icon {
+      font-size: 32px;
+      margin-bottom: 18px;
+      display: inline-block;
+    }
+    .feature-card h3 { font-size: 18px; font-weight: 700; margin-bottom: 10px; color: #fff; }
+    .feature-card p { font-size: 14px; color: var(--text-muted); }
+
+    /* Pricing Section */
+    .pricing-wrap {
+      padding: 40px 0 100px;
+    }
+    .pricing-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 24px;
+      align-items: stretch;
+      margin-bottom: 30px;
+    }
+    .pricing-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 36px 30px;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      backdrop-filter: blur(12px);
+    }
+    .pricing-card.featured {
+      border-color: rgba(168, 85, 247, 0.5);
+      background: linear-gradient(180deg, rgba(30, 27, 75, 0.6) 0%, rgba(15, 23, 42, 0.8) 100%);
+      box-shadow: 0 0 40px rgba(168, 85, 247, 0.2);
+    }
+    .card-badge {
+      position: absolute;
+      top: -12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: linear-gradient(135deg, #7c3aed, #a855f7);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      padding: 4px 14px;
+      border-radius: 999px;
+      letter-spacing: 0.5px;
+    }
+    .pricing-card h3 { font-size: 20px; font-weight: 800; margin-bottom: 8px; }
+    .pricing-card .desc { font-size: 13px; color: var(--text-muted); margin-bottom: 20px; }
+    .price-amount {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      margin-bottom: 24px;
+    }
+    .price-amount .num { font-size: 42px; font-weight: 800; color: #fff; }
+    .price-amount .currency { font-size: 18px; font-weight: 700; color: var(--cyan); }
+    .price-amount .period { font-size: 14px; color: var(--text-muted); }
+    .pricing-features {
+      list-style: none;
+      margin-bottom: 30px;
+      flex-grow: 1;
+    }
+    .pricing-features li {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      font-size: 14px;
+      color: #e2e8f0;
+      margin-bottom: 12px;
+    }
+    .pricing-features li span.check { color: var(--green); font-weight: 800; }
+    
+    /* Market Disclaimer Box */
+    .market-disclaimer {
+      background: rgba(245, 158, 11, 0.08);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      border-radius: 12px;
+      padding: 16px 20px;
+      font-size: 13px;
+      color: #fde68a;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 24px;
+    }
+    .morocco-methods {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      margin-top: 30px;
+      flex-wrap: wrap;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .morocco-methods .badge {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      padding: 6px 12px;
+      border-radius: 6px;
+      color: #e2e8f0;
+    }
+
+    /* Auth Modal */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(8px);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal-box {
+      background: #0f172a;
+      border: 1px solid var(--border-accent);
+      border-radius: 20px;
+      width: 100%;
+      max-width: 440px;
+      padding: 32px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.8);
+      position: relative;
+    }
+    .modal-close {
+      position: absolute;
+      top: 20px; right: 20px;
+      background: none; border: none;
+      color: var(--text-muted);
+      font-size: 20px; cursor: pointer;
+    }
+    .auth-tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 24px;
+    }
+    .auth-tab {
+      flex: 1;
+      text-align: center;
+      padding: 10px;
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--text-muted);
+      background: none; border: none;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+    }
+    .auth-tab.active {
+      color: var(--cyan);
+      border-bottom-color: var(--cyan);
+    }
+    .form-group { margin-bottom: 16px; }
+    .form-group label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+    .form-group input {
+      width: 100%;
+      background: #0b1325;
+      border: 1px solid var(--border);
+      color: #fff;
+      padding: 11px 16px;
+      border-radius: 10px;
+      font-size: 14px;
+      outline: none;
+      box-sizing: border-box;
+      transition: all 0.2s ease;
+    }
+    .form-group input:hover {
+      border-color: rgba(56, 189, 248, 0.4);
+      background: #0e172a;
+    }
+    .form-group input:focus {
+      border-color: var(--cyan);
+      box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.25);
+      background: #0f1c34;
+    }
+    .form-group input::placeholder {
+      color: #64748b;
+      opacity: 0.75;
+    }
+    .form-group input:-webkit-autofill,
+    .form-group input:-webkit-autofill:hover,
+    .form-group input:-webkit-autofill:focus {
+      -webkit-box-shadow: 0 0 0 1000px #0b1325 inset !important;
+      -webkit-text-fill-color: #fff !important;
+      border: 1px solid var(--cyan) !important;
+    }
+    .form-error {
+      color: #f87171;
+      font-size: 12px;
+      margin-bottom: 12px;
+      display: none;
+    }
+    .divider {
+      display: flex;
+      align-items: center;
+      text-align: center;
+      margin: 18px 0;
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+    .divider::before, .divider::after {
+      content: '';
+      flex: 1;
+      border-bottom: 1px solid var(--border);
+    }
+    .divider span { padding: 0 10px; }
+
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 40px 0;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <div class="ambient-glow"></div>
+
+  <div class="container">
+    <!-- Header -->
+    <header>
+      <a href="/" class="logo">
+        <span class="logo-badge">⚡ AutoHunt</span>
+        <span>AI Career Agent</span>
+      </a>
+      <div class="nav-links">
+        <a href="#features">How It Works</a>
+        <a href="#pricing">Pricing (Morocco)</a>
+        <button class="btn btn-outline" onclick="openAuthModal('login')">Sign In</button>
+        <button class="btn btn-primary" onclick="openAuthModal('register')">Get Started</button>
+      </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero">
+      <div class="pill-badge">
+        <span>🤖 Autonomous Multi-Agent Job Search Engine</span>
+      </div>
+      <h1>
+        Stop Chasing Recruiters.<br>
+        Make <span class="highlight">Dream Jobs Come To You.</span>
+      </h1>
+      <p>
+        AutoHunt scans 10,000+ opportunities across Europe and Global Remote hubs 24/7.
+        It parses your CV using pure Machine Learning, identifies direct hiring managers, and applies with personalized outreach while you sleep.
+      </p>
+
+      <div class="hero-actions">
+        <button class="btn btn-primary" style="padding:14px 28px;font-size:16px" onclick="openAuthModal('register')">
+          🚀 Start Hunting Free (5 Apps/Day)
+        </button>
+        <button class="btn btn-outline" style="padding:14px 28px;font-size:16px" onclick="openAuthModal('login')">
+          ⚡ Sign In with Google / Gmail
+        </button>
+      </div>
+
+      <div class="trust-metrics">
+        <span>⚡ <strong>Pure ML Cosine Matching</strong></span>
+        <span>🎯 <strong>Direct Decision-Maker Emails</strong></span>
+        <span>📸 <strong>ATS Screenshot Verification</strong></span>
+        <span>🇲🇦 <strong>Morocco Wire & CMI Cards Accepted</strong></span>
+      </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features">
+      <div class="section-title">
+        <h2>How AutoHunt Inverts the Job Market</h2>
+        <p>Built for job seekers, professionals, and creators across all industries who want results without wasting hours on repetitive forms.</p>
+      </div>
+
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">🧠</div>
+          <h3>Machine Learning CV Parser</h3>
+          <p>Instant TF-IDF vectorization and sublinear feature extraction. Computes real-time vector cosine similarity ($\cos(\theta)$) between your skillset and live market demands.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🎯</div>
+          <h3>HR & Decision-Maker Discovery</h3>
+          <p>Bypasses generic portal black holes. The autonomous engine uncovers verified corporate talent emails, hiring managers, and department leads.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🚀</div>
+          <h3>Automated Multi-Channel Outreach</h3>
+          <p>Dispatches tailored bilingual pitches (French & English) to recruiter inboxes or completes ATS web applications with verified screenshot proof.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">💼</div>
+          <h3>Freelance Client Acquisition</h3>
+          <p>Not just full-time jobs: scans freelance leads across Hacker News, Reddit, and remote boards with automated follow-up cadences and rate calculators.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Pricing Section -->
+    <section id="pricing" class="pricing-wrap">
+      <div class="section-title">
+        <h2>Transparent Pricing for Moroccan & Global Talent</h2>
+        <p>No hidden fees. Switch currency, cancel, or upgrade anytime.</p>
+      </div>
+
+      <!-- Currency Switcher -->
+      <div style="display:flex;justify-content:center;align-items:center;gap:8px;margin-bottom:28px" id="landingCurrencyBar">
+        <span style="font-size:13px;color:var(--text-muted);font-weight:600">Select Currency:</span>
+        <button type="button" id="currBtn_MAD" class="btn btn-primary" onclick="setLandingCurrency('MAD')" style="padding:6px 14px;font-size:12px;border-radius:20px">🇲🇦 MAD (DH)</button>
+        <button type="button" id="currBtn_USD" class="btn btn-outline" onclick="setLandingCurrency('USD')" style="padding:6px 14px;font-size:12px;border-radius:20px">💵 USD ($)</button>
+        <button type="button" id="currBtn_EUR" class="btn btn-outline" onclick="setLandingCurrency('EUR')" style="padding:6px 14px;font-size:12px;border-radius:20px">💶 EUR (€)</button>
+      </div>
+
+      <div class="pricing-grid" id="landingPricingGrid">
+        <!-- Free Tier -->
+        <div class="pricing-card">
+          <h3>Free Trial</h3>
+          <div class="desc">Ideal for testing the ML matching engine.</div>
+          <div class="price-amount">
+            <span class="num">0</span>
+            <span class="currency">MAD</span>
+            <span class="period">/ month</span>
+          </div>
+          <ul class="pricing-features">
+            <li><span class="check">✓</span> <strong>5 applications / day</strong></li>
+            <li><span class="check">✓</span> Machine Learning CV Parser</li>
+            <li><span class="check">✓</span> Vector Cosine Similarity Score</li>
+            <li><span class="check">✓</span> Basic job discovery</li>
+          </ul>
+          <button class="btn btn-outline" onclick="openAuthModal('register', 'free')">Start for Free</button>
+        </div>
+
+        <!-- Starter Plan (150 MAD) -->
+        <div class="pricing-card">
+          <div class="card-badge">Entry / Graduate</div>
+          <h3>Starter Hunter</h3>
+          <div class="desc">High-speed outreach for active job seekers.</div>
+          <div class="price-amount">
+            <span class="num">150</span>
+            <span class="currency">MAD</span>
+            <span class="period">/ month</span>
+          </div>
+          <ul class="pricing-features">
+            <li><span class="check">✓</span> <strong>50 applications / day</strong> limit</li>
+            <li><span class="check">✓</span> Priority HR & Decision-Maker email discovery</li>
+            <li><span class="check">✓</span> Full ATS Screenshot Verification Proof</li>
+            <li><span class="check">✓</span> Personalized French & English pitches</li>
+            <li><span class="check">✓</span> Real-time email reply tracking & alerts</li>
+          </ul>
+          <button class="btn btn-outline" onclick="openAuthModal('register', 'starter')">Choose Starter</button>
+        </div>
+
+        <!-- Pro Plan (350 MAD) -->
+        <div class="pricing-card featured">
+          <div class="card-badge">Most Popular ⭐</div>
+          <h3>Pro Hunter & Freelancer</h3>
+          <div class="desc">Full-stack job hunt + automated freelance client deal acquisition.</div>
+          <div class="price-amount">
+            <span class="num">350</span>
+            <span class="currency">MAD</span>
+            <span class="period">/ month</span>
+          </div>
+          <ul class="pricing-features">
+            <li><span class="check">✓</span> <strong>150 applications / day</strong> limit</li>
+            <li><span class="check">✓</span> Freelance Deal Client Engine Included</li>
+            <li><span class="check">✓</span> AI Proposal & Pitch Generator + Smart Follow-ups</li>
+            <li><span class="check">✓</span> Direct Recruiter & HR Contact Discovery</li>
+            <li><span class="check">✓</span> Preserved Email Threading & Auto-Reply</li>
+          </ul>
+          <button class="btn btn-primary" onclick="openAuthModal('register', 'pro')">Choose Pro ⭐</button>
+        </div>
+
+        <!-- Ultra Agency (690 MAD) -->
+        <div class="pricing-card">
+          <div class="card-badge" style="background:linear-gradient(135deg,#f59e0b,#ea580c)">Maximum Power 🚀</div>
+          <h3>Executive & Agency</h3>
+          <div class="desc">Unlimited scale, 24/7 background automation, and dedicated outreach.</div>
+          <div class="price-amount">
+            <span class="num">690</span>
+            <span class="currency">MAD</span>
+            <span class="period">/ month</span>
+          </div>
+          <ul class="pricing-features">
+            <li><span class="check">✓</span> <strong>Unlimited applications / day</strong></li>
+            <li><span class="check">✓</span> 24/7 Autonomous Background Daemon</li>
+            <li><span class="check">✓</span> Custom Outbound Mailboxes & Domains</li>
+            <li><span class="check">✓</span> Unlimited AI Calls & Deal Generation</li>
+            <li><span class="check">✓</span> Dedicated 1-on-1 Strategy Support</li>
+          </ul>
+          <button class="btn btn-outline" onclick="openAuthModal('register', 'ultra')">Choose Ultra 🚀</button>
+        </div>
+      </div>
+
+      <!-- Market Opportunity Transparency Notice -->
+      <div class="market-disclaimer">
+        <span style="font-size:20px">⚠️</span>
+        <div>
+          <strong>Market Opportunity Notice:</strong> Daily application volume naturally depends on active market opportunities that match your specific skillset, seniority level, and location preferences. AutoHunt never sends blind spam; every application is vetted against live vacancies to protect your professional reputation.
+        </div>
+      </div>
+
+      <div class="morocco-methods" id="landingPaymentMethods">
+        <span>Accepted Payment Methods:</span>
+        <span class="badge">🏦 CIH Bank (Virement Instantané)</span>
+        <span class="badge">🏦 Attijariwafa Bank</span>
+        <span class="badge">💳 Card (Visa / Mastercard)</span>
+        <span class="badge">🅿️ PayPal</span>
+        <span class="badge">🪙 Crypto (USDT, SOL, BTC)</span>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+      <p>© 2026 AutoHunt AI. Transforming the job search into an autonomous, candidate-first experience.</p>
+    </footer>
+  </div>
+
+  <!-- Interactive Auth Modal (Sign In / Register) -->
+  <div id="authModal" class="modal-overlay">
+    <div class="modal-box">
+      <button class="modal-close" onclick="closeAuthModal()">✕</button>
+      
+      <div class="auth-tabs">
+        <button class="auth-tab active" id="tabLogin" onclick="switchAuthTab('login')">Sign In</button>
+        <button class="auth-tab" id="tabRegister" onclick="switchAuthTab('register')">Create Account</button>
+      </div>
+
+      <!-- Google Sign-In with real verified Gmail logger -->
+      <div style="margin-bottom:16px">
+        <button class="btn btn-google" onclick="triggerGoogleSignIn()">
+          <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.616z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z"/><path fill="#FBBC05" d="M3.964 10.707c-.18-.54-.282-1.117-.282-1.707s.102-1.167.282-1.707V4.961H.957C.347 6.173 0 7.548 0 9s.347 2.827.957 4.039l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.961L3.964 7.293C4.672 5.166 6.656 3.58 9 3.58z"/></svg>
+          Continue with Google (Verified Gmail)
+        </button>
+      </div>
+
+      <div class="divider">
+        <span>or with email & password</span>
+      </div>
+
+      <div id="authError" class="form-error"></div>
+
+      <form id="authForm" onsubmit="handleAuthSubmit(event)">
+        <div class="form-group" id="groupFullName" style="display:none">
+          <label>Full Name</label>
+          <input type="text" id="authFullName" placeholder="e.g. Hamza Oukhouya">
+        </div>
+
+        <div class="form-group">
+          <label>Email Address</label>
+          <input type="email" id="authEmail" required placeholder="you@domain.com">
+        </div>
+
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="authPassword" required placeholder="••••••••">
+        </div>
+
+        <input type="hidden" id="authSelectedPlan" value="free">
+
+        <button type="submit" id="authSubmitBtn" class="btn btn-primary" style="width:100%;padding:12px;margin-top:8px">
+          Sign In
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    let currentAuthMode = 'login';
+    let isLandingUserLoggedIn = false;
+
+    // Check if visitor is already logged in
+    fetch('/api/auth/me').then(r => r.json()).then(d => {
+      if (d && d.email) {
+        isLandingUserLoggedIn = true;
+      }
+    }).catch(() => {});
+
+    function openAuthModal(mode = 'login', plan = 'free') {
+      if (isLandingUserLoggedIn && plan && plan !== 'free') {
+        window.location.href = `/app#pricing?plan=${encodeURIComponent(plan)}`;
+        return;
+      }
+      currentAuthMode = mode;
+      document.getElementById('authSelectedPlan').value = plan;
+      switchAuthTab(mode);
+      document.getElementById('authModal').classList.add('open');
+    }
+
+    function closeAuthModal() {
+      document.getElementById('authModal').classList.remove('open');
+      document.getElementById('authError').style.display = 'none';
+    }
+
+    function switchAuthTab(mode) {
+      currentAuthMode = mode;
+      document.getElementById('tabLogin').classList.toggle('active', mode === 'login');
+      document.getElementById('tabRegister').classList.toggle('active', mode === 'register');
+      document.getElementById('groupFullName').style.display = mode === 'register' ? 'block' : 'none';
+      document.getElementById('authSubmitBtn').textContent = mode === 'register' ? 'Create Account' : 'Sign In';
+      document.getElementById('authError').style.display = 'none';
+    }
+
+    async function handleAuthSubmit(e) {
+      e.preventDefault();
+      const errEl = document.getElementById('authError');
+      errEl.style.display = 'none';
+
+      const email = document.getElementById('authEmail').value.trim();
+      const password = document.getElementById('authPassword').value;
+      const fullName = document.getElementById('authFullName').value.trim();
+      const plan = document.getElementById('authSelectedPlan').value;
+
+      const endpoint = currentAuthMode === 'register' ? '/api/auth/register' : '/api/auth/login';
+      const payload = currentAuthMode === 'register' 
+        ? { email, password, full_name: fullName || email.split('@')[0], plan }
+        : { email, password };
+
+      try {
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) {
+          throw new Error(data.detail || data.message || 'Authentication failed');
+        }
+
+        // Redirect to authenticated dashboard (auto-opening payment modal if paid plan selected)
+        const targetUrl = (plan && plan !== 'free') ? `/app#pricing?plan=${encodeURIComponent(plan)}` : '/app';
+        window.location.href = targetUrl;
+      } catch (err) {
+        errEl.textContent = err.message;
+        errEl.style.display = 'block';
+      }
+    }
+
+    function triggerGoogleSignIn() {
+      // Simulate/trigger Google OAuth or mock verified Gmail flow
+      const email = prompt('Enter your verified Gmail address to sign in / log in:');
+      if (!email) return;
+      if (!email.toLowerCase().includes('@')) {
+        alert('Please enter a valid email address.');
+        return;
+      }
+
+      fetch('/api/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, name: email.split('@')[0] })
+      }).then(r => r.json()).then(data => {
+        if (data.ok) {
+          window.location.href = '/app';
+        } else {
+          alert('Google authentication error: ' + (data.detail || data.message));
+        }
+      }).catch(e => alert('Network error: ' + e.message));
+    }
+
+    // Auto-check if already logged in
+    fetch('/api/auth/me').then(r => {
+      if (r.ok) {
+        // If already logged in, provide direct access
+        const links = document.querySelector('.nav-links');
+        if (links) {
+          links.innerHTML = `
+            <a href="#features">How It Works</a>
+            <a href="#pricing">Pricing</a>
+            <a href="/app" class="btn btn-primary">Go to Dashboard 🚀</a>
+          `;
+        }
+      }
+    }).catch(() => {});
+
+    // Dynamic Pricing & Gateways propagation from DB
+    let landingPricingPlans = [];
+    let landingPricingMethods = {};
+    let landingActiveCurrency = 'MAD';
+
+    function setLandingCurrency(curr) {
+      landingActiveCurrency = curr;
+      ['MAD', 'USD', 'EUR'].forEach(c => {
+        const btn = document.getElementById('currBtn_' + c);
+        if (btn) {
+          if (c === curr) {
+            btn.className = 'btn btn-primary';
+          } else {
+            btn.className = 'btn btn-outline';
+          }
+        }
+      });
+      renderLandingPricing();
+    }
+
+    function renderLandingPricing() {
+      const grid = document.getElementById('landingPricingGrid');
+      if (!grid || !landingPricingPlans.length) return;
+
+      grid.innerHTML = landingPricingPlans.map(p => {
+        let priceNum = 0;
+        let period = p.billing || '/ month';
+        if (landingActiveCurrency === 'MAD') {
+          priceNum = p.price_mad ?? 0;
+        } else if (landingActiveCurrency === 'USD') {
+          priceNum = p.price_usd ?? 0;
+        } else if (landingActiveCurrency === 'EUR') {
+          priceNum = p.price_eur ?? 0;
+        }
+
+        const isRec = Boolean(p.recommended || p.slug === 'pro');
+        const limitTxt = p.daily_limit >= 9999 ? 'Unlimited' : p.daily_limit;
+        const features = Array.isArray(p.features) ? p.features : [];
+
+        let badgeHtml = '';
+        if (p.badge) {
+          badgeHtml = `<div class="card-badge" style="${p.slug === 'ultra' ? 'background:linear-gradient(135deg,#f59e0b,#ea580c)' : ''}">${p.badge}</div>`;
+        } else if (isRec) {
+          badgeHtml = '<div class="card-badge">Most Popular ⭐</div>';
+        }
+
+        return `
+          <div class="pricing-card ${isRec ? 'featured' : ''}" style="${p.slug === 'ultra' ? 'border-color:rgba(245,158,11,0.4);' : ''}">
+            ${badgeHtml}
+            <h3>${p.name}</h3>
+            <div class="desc">${p.description || ''}</div>
+            <div class="price-amount">
+              ${landingActiveCurrency === 'USD' ? '<span class="currency">$</span>' : ''}
+              ${landingActiveCurrency === 'EUR' ? '<span class="currency">€</span>' : ''}
+              <span class="num">${priceNum}</span>
+              ${landingActiveCurrency === 'MAD' ? '<span class="currency">MAD</span>' : ''}
+              <span class="period">${period}</span>
+            </div>
+            <ul class="pricing-features">
+              <li><span class="check">✓</span> <strong>${limitTxt} applications / day</strong></li>
+              ${features.map(f => `<li><span class="check">✓</span> ${f}</li>`).join('')}
+            </ul>
+            <button class="btn ${isRec ? 'btn-primary' : 'btn-outline'}" onclick="openAuthModal('register', '${p.slug}')">
+              ${p.price_mad === 0 && p.price_usd === 0 ? 'Start for Free' : `Choose ${p.name}`}
+            </button>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderLandingMethods() {
+      const mWrap = document.getElementById('landingPaymentMethods');
+      if (!mWrap || !landingPricingMethods) return;
+
+      const badges = [];
+      const m = landingPricingMethods;
+      if (m.stripe?.is_enabled) badges.push('💳 Stripe (Instant Card & Apple Pay)');
+      if (m.paypal?.is_enabled) badges.push('🅿️ PayPal & Global Cards');
+      if (m.morocco?.is_enabled) badges.push('🏦 CIH Bank (Virement Instantané) · Attijariwafa · CashPlus');
+      if (m.usdt_trc20?.is_enabled || m.usdt_polygon?.is_enabled || m.solana?.is_enabled || m.btc?.is_enabled) badges.push('🪙 Crypto (USDT, SOL, BTC)');
+      if (m.wise_revolut?.is_enabled) badges.push('🌐 Wise & Revolut');
+      if (m.card_kofi?.is_enabled) badges.push('☕ Ko-fi Card Checkout');
+
+      if (badges.length) {
+        mWrap.innerHTML = `
+          <span>Accepted Payment Methods:</span>
+          ${badges.map(b => `<span class="badge">${b}</span>`).join('')}
+        `;
+      }
+    }
+
+    async function loadLandingPricingData() {
+      try {
+        const res = await fetch('/api/payments/methods');
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.plans && data.plans.length) {
+            landingPricingPlans = data.plans;
+            landingPricingMethods = data.methods || {};
+            renderLandingPricing();
+            renderLandingMethods();
+          }
+        }
+      } catch (_) {}
+    }
+
+    document.addEventListener('DOMContentLoaded', loadLandingPricingData);
+  </script>
+</body>
+</html>

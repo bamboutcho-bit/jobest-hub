@@ -1,0 +1,162 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-jobsearch}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-jobsearch-local-change-me}
+      POSTGRES_DB: ${POSTGRES_DB:-jobsearch_db}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    environment:
+      OLLAMA_HOST: 0.0.0.0:11434
+    volumes:
+      - ollama:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "OLLAMA_HOST=http://127.0.0.1:11434 ollama list >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  ollama-init:
+    image: ollama/ollama:latest
+    restart: "no"
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:3b}
+    volumes:
+      - ollama:/root/.ollama
+    entrypoint: ["/bin/sh", "-lc"]
+    command: ['ollama pull "$${OLLAMA_MODEL}"']
+
+  browser:
+    image: mcr.microsoft.com/playwright:v1.62.0-noble
+    restart: unless-stopped
+    init: true
+    user: pwuser
+    working_dir: /home/pwuser
+    shm_size: "1gb"
+    command: ["/bin/sh", "-lc", "npx -y playwright@1.62.0 run-server --port 3000 --host 0.0.0.0"]
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000').then(()=>process.exit(0)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    tmpfs:
+      - /tmp
+
+  app:
+    image: jobsearch-final2:local
+    build:
+      context: .
+      dockerfile: Dockerfile.microservices
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama-init:
+        condition: service_completed_successfully
+      browser:
+        condition: service_healthy
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-jobsearch}:${POSTGRES_PASSWORD:-jobsearch-local-change-me}@postgres:5432/${POSTGRES_DB:-jobsearch_db}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:3b}
+      PLAYWRIGHT_WS_ENDPOINT: ${PLAYWRIGHT_WS_ENDPOINT:-ws://browser:3000/browser}
+      APP_ENVIRONMENT: ${APP_ENVIRONMENT:-production}
+      DASHBOARD_USERNAME: ${DASHBOARD_USERNAME:-admin}
+      DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD:-local-admin-change-me}
+    command: ["python", "scripts/run_pipeline.py", "--loop"]
+    read_only: true
+    tmpfs:
+      - /tmp
+    volumes:
+      - outreach_drafts:/app/outreach_drafts
+      - ./candidate_data:/app/candidate_data:ro
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  inbox_monitor:
+    image: jobsearch-final2:local
+    build:
+      context: .
+      dockerfile: Dockerfile.microservices
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama-init:
+        condition: service_completed_successfully
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-jobsearch}:${POSTGRES_PASSWORD:-jobsearch-local-change-me}@postgres:5432/${POSTGRES_DB:-jobsearch_db}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:3b}
+      APP_ENVIRONMENT: ${APP_ENVIRONMENT:-production}
+    command: ["python", "scripts/check_inbox.py", "--loop"]
+    read_only: true
+    tmpfs:
+      - /tmp
+    volumes:
+      - outreach_drafts:/app/outreach_drafts
+      - ./candidate_data:/app/candidate_data:ro
+
+  dashboard:
+    image: jobsearch-final2:local
+    build:
+      context: .
+      dockerfile: Dockerfile.microservices
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama-init:
+        condition: service_completed_successfully
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-jobsearch}:${POSTGRES_PASSWORD:-jobsearch-local-change-me}@postgres:5432/${POSTGRES_DB:-jobsearch_db}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:3b}
+      APP_ENVIRONMENT: ${APP_ENVIRONMENT:-production}
+      DASHBOARD_USERNAME: ${DASHBOARD_USERNAME:-admin}
+      DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD:-local-admin-change-me}
+    command: ["python", "scripts/dashboard.py"]
+    ports:
+      - "8080:8080"
+    read_only: true
+    tmpfs:
+      - /tmp
+    volumes:
+      - outreach_drafts:/app/outreach_drafts
+      - ./candidate_data:/app/candidate_data:ro
+
+volumes:
+  pgdata:
+  ollama:
+  outreach_drafts:
