@@ -4527,6 +4527,10 @@
 
         // Render custom environment variables table
         renderEnvVars(s.custom_env || {});
+
+        try {
+          await loadIntegrationsStatus();
+        } catch (_) {}
       } catch (err) {
         console.error('Failed to load user settings:', err);
       }
@@ -4672,8 +4676,300 @@
       try {
         const res = await apiSend('/api/user/settings', 'PUT', payload);
         showToast(res.message || 'User settings saved successfully! ✓', 'success');
+        try {
+          await loadIntegrationsStatus();
+        } catch (_) {}
       } catch (err) {
         showToast('Failed to save settings: ' + err.message, 'error');
+      }
+    }
+
+    // ---------------------------------------------------------------------------
+    // Candidate Portal Integrations (LinkedIn Easy Apply & Indeed Apply)
+    // ---------------------------------------------------------------------------
+
+    async function loadIntegrationsStatus(notify = false) {
+      try {
+        const res = await apiGet('/api/user/integrations');
+        if (!res || !res.ok) return;
+
+        // 1. LinkedIn Card UI
+        const li = res.linkedin || {};
+        const liBadge = document.getElementById('liStatusBadge');
+        const btnDisconnectLi = document.getElementById('btnDisconnectLi');
+        const liVerifiedAt = document.getElementById('liVerifiedAt');
+        const liPreview = document.getElementById('liCookiePreview');
+        const liInput = document.getElementById('usLinkedinCookie');
+        const liAuto = document.getElementById('usAutoApplyLinkedin');
+
+        if (liBadge) {
+          if (li.connected) {
+            liBadge.textContent = 'Connected ✓';
+            liBadge.style.background = 'rgba(16,185,129,0.15)';
+            liBadge.style.color = '#10b981';
+            liBadge.style.border = '1px solid rgba(16,185,129,0.3)';
+          } else {
+            liBadge.textContent = 'Not Linked';
+            liBadge.style.background = 'rgba(239,68,68,0.1)';
+            liBadge.style.color = '#ef4444';
+            liBadge.style.border = '1px solid rgba(239,68,68,0.2)';
+          }
+        }
+
+        if (btnDisconnectLi) {
+          btnDisconnectLi.style.display = li.connected ? 'inline-block' : 'none';
+        }
+
+        if (liVerifiedAt) {
+          if (li.verified_at) {
+            try {
+              liVerifiedAt.textContent = new Date(li.verified_at).toLocaleDateString() + ' ' + new Date(li.verified_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+            } catch (_) {
+              liVerifiedAt.textContent = li.verified_at;
+            }
+          } else {
+            liVerifiedAt.textContent = li.connected ? 'Active' : 'Never';
+          }
+        }
+
+        if (liPreview) {
+          liPreview.textContent = li.cookie_preview || (li.connected ? '••••••••' : 'None');
+        }
+
+        if (liInput && li.connected && !liInput.value) {
+          liInput.placeholder = 'Connected (enter new li_at to overwrite)';
+        }
+
+        if (liAuto && li.auto_apply_enabled !== undefined) {
+          liAuto.checked = li.auto_apply_enabled !== false;
+        }
+
+        // 2. Indeed Card UI
+        const ind = res.indeed || {};
+        const indBadge = document.getElementById('indStatusBadge');
+        const btnDisconnectInd = document.getElementById('btnDisconnectInd');
+        const indVerifiedAt = document.getElementById('indVerifiedAt');
+        const indPreview = document.getElementById('indCookiePreview');
+        const indInput = document.getElementById('usIndeedCookie');
+        const indAuto = document.getElementById('usAutoApplyIndeed');
+
+        if (indBadge) {
+          if (ind.connected) {
+            indBadge.textContent = 'Connected ✓';
+            indBadge.style.background = 'rgba(16,185,129,0.15)';
+            indBadge.style.color = '#10b981';
+            indBadge.style.border = '1px solid rgba(16,185,129,0.3)';
+          } else {
+            indBadge.textContent = 'Not Linked';
+            indBadge.style.background = 'rgba(239,68,68,0.1)';
+            indBadge.style.color = '#ef4444';
+            indBadge.style.border = '1px solid rgba(239,68,68,0.2)';
+          }
+        }
+
+        if (btnDisconnectInd) {
+          btnDisconnectInd.style.display = ind.connected ? 'inline-block' : 'none';
+        }
+
+        if (indVerifiedAt) {
+          if (ind.verified_at) {
+            try {
+              indVerifiedAt.textContent = new Date(ind.verified_at).toLocaleDateString() + ' ' + new Date(ind.verified_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+            } catch (_) {
+              indVerifiedAt.textContent = ind.verified_at;
+            }
+          } else {
+            indVerifiedAt.textContent = ind.connected ? 'Active' : 'Never';
+          }
+        }
+
+        if (indPreview) {
+          indPreview.textContent = ind.cookie_preview || (ind.connected ? '••••••••' : 'None');
+        }
+
+        if (indInput && ind.connected && !indInput.value) {
+          indInput.placeholder = 'Connected (enter new cookie to overwrite)';
+        }
+
+        if (indAuto && ind.auto_apply_enabled !== undefined) {
+          indAuto.checked = ind.auto_apply_enabled !== false;
+        }
+
+        if (notify) {
+          showToast('Portal connection status updated ✓', 'success');
+        }
+      } catch (err) {
+        console.error('Failed to load portal integration statuses:', err);
+      }
+    }
+
+    async function connectPortal(platform) {
+      platform = (platform || '').toLowerCase().trim();
+      const isLi = platform === 'linkedin';
+      const inputId = isLi ? 'usLinkedinCookie' : 'usIndeedCookie';
+      const autoId = isLi ? 'usAutoApplyLinkedin' : 'usAutoApplyIndeed';
+      const btnId = isLi ? 'btnConnectLi' : 'btnConnectInd';
+      const feedbackId = isLi ? 'liFeedbackBox' : 'indFeedbackBox';
+
+      const cookieVal = (document.getElementById(inputId)?.value || '').trim();
+      const autoVal = document.getElementById(autoId)?.checked !== false;
+      const btn = document.getElementById(btnId);
+      const feedback = document.getElementById(feedbackId);
+
+      if (!cookieVal) {
+        showToast(`Please enter your ${isLi ? 'LinkedIn li_at' : 'Indeed session'} cookie.`, 'error');
+        return;
+      }
+
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Connecting...';
+      }
+
+      try {
+        const payload = {
+          cookie: cookieVal,
+          auto_apply: autoVal,
+        };
+        if (isLi) {
+          payload.profile_url = (document.getElementById('usLinkedinUrl')?.value || '').trim();
+        }
+
+        const res = await apiSend(`/api/user/integrations/${platform}/connect`, 'POST', payload);
+        showToast(res.message || `${platform.toUpperCase()} connected successfully! ✓`, 'success');
+
+        if (feedback) {
+          feedback.style.display = 'block';
+          feedback.style.background = 'rgba(16,185,129,0.15)';
+          feedback.style.color = '#10b981';
+          feedback.style.border = '1px solid rgba(16,185,129,0.3)';
+          feedback.textContent = res.message || 'Connected successfully! Ready for auto-apply.';
+        }
+
+        // Clear input to not show raw cookie
+        const inp = document.getElementById(inputId);
+        if (inp) inp.value = '';
+
+        await loadIntegrationsStatus();
+      } catch (err) {
+        showToast(`Failed to connect ${platform}: ` + err.message, 'error');
+        if (feedback) {
+          feedback.style.display = 'block';
+          feedback.style.background = 'rgba(239,68,68,0.15)';
+          feedback.style.color = '#ef4444';
+          feedback.style.border = '1px solid rgba(239,68,68,0.3)';
+          feedback.textContent = err.message || 'Connection failed';
+        }
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = '🔗 Save & Connect';
+        }
+      }
+    }
+
+    async function disconnectPortal(platform) {
+      platform = (platform || '').toLowerCase().trim();
+      const isLi = platform === 'linkedin';
+      const name = isLi ? 'LinkedIn' : 'Indeed';
+      if (!confirm(`Are you sure you want to disconnect your ${name} account? Auto-apply on ${name} will be paused.`)) {
+        return;
+      }
+
+      try {
+        const res = await apiSend(`/api/user/integrations/${platform}/disconnect`, 'POST', {});
+        showToast(res.message || `${name} account disconnected.`, 'info');
+        const inputId = isLi ? 'usLinkedinCookie' : 'usIndeedCookie';
+        const inp = document.getElementById(inputId);
+        if (inp) inp.value = '';
+
+        const feedbackId = isLi ? 'liFeedbackBox' : 'indFeedbackBox';
+        const feedback = document.getElementById(feedbackId);
+        if (feedback) feedback.style.display = 'none';
+
+        await loadIntegrationsStatus();
+      } catch (err) {
+        showToast(`Failed to disconnect ${name}: ` + err.message, 'error');
+      }
+    }
+
+    async function testPortalConnection(platform) {
+      platform = (platform || '').toLowerCase().trim();
+      const isLi = platform === 'linkedin';
+      const inputId = isLi ? 'usLinkedinCookie' : 'usIndeedCookie';
+      const btnId = isLi ? 'btnTestLi' : 'btnTestInd';
+      const feedbackId = isLi ? 'liFeedbackBox' : 'indFeedbackBox';
+
+      const cookieVal = (document.getElementById(inputId)?.value || '').trim();
+      const btn = document.getElementById(btnId);
+      const feedback = document.getElementById(feedbackId);
+
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Verifying...';
+      }
+      if (feedback) {
+        feedback.style.display = 'block';
+        feedback.style.background = 'rgba(255,255,255,0.05)';
+        feedback.style.color = 'var(--text-muted)';
+        feedback.style.border = '1px solid var(--border)';
+        feedback.textContent = `Testing session validity for ${isLi ? 'LinkedIn' : 'Indeed'}...`;
+      }
+
+      try {
+        const res = await apiSend('/api/user/integrations/verify', 'POST', {
+          platform: platform,
+          cookie: cookieVal || undefined,
+        });
+
+        if (res.connected && res.ok) {
+          showToast(res.message, 'success');
+          if (feedback) {
+            feedback.style.background = 'rgba(16,185,129,0.15)';
+            feedback.style.color = '#10b981';
+            feedback.style.border = '1px solid rgba(16,185,129,0.3)';
+            feedback.textContent = res.message;
+          }
+        } else {
+          showToast(res.message, 'warning');
+          if (feedback) {
+            feedback.style.background = 'rgba(239,68,68,0.15)';
+            feedback.style.color = '#ef4444';
+            feedback.style.border = '1px solid rgba(239,68,68,0.3)';
+            feedback.textContent = res.message;
+          }
+        }
+      } catch (err) {
+        showToast('Verification check error: ' + err.message, 'error');
+        if (feedback) {
+          feedback.style.background = 'rgba(239,68,68,0.15)';
+          feedback.style.color = '#ef4444';
+          feedback.style.border = '1px solid rgba(239,68,68,0.3)';
+          feedback.textContent = err.message;
+        }
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = '⚡ Test Session';
+        }
+      }
+    }
+
+    function toggleGuide(guideId) {
+      const el = document.getElementById(guideId);
+      if (!el) return;
+      el.style.display = el.style.display === 'none' ? 'block' : 'none';
+    }
+
+    function togglePasswordVisibility(inputId, btnEl) {
+      const inp = document.getElementById(inputId);
+      if (!inp) return;
+      if (inp.type === 'password') {
+        inp.type = 'text';
+        if (btnEl) btnEl.textContent = '🙈';
+      } else {
+        inp.type = 'password';
+        if (btnEl) btnEl.textContent = '👁️';
       }
     }
 
@@ -6833,6 +7129,14 @@
     window.handleOnbCvFileSelect = handleOnbCvFileSelect;
     window.triggerOnbMlAnalysis = triggerOnbMlAnalysis;
     window.submitOnboardingAndLaunch = submitOnboardingAndLaunch;
+
+    // Expose Portal Integration Functions Globally
+    window.loadIntegrationsStatus = loadIntegrationsStatus;
+    window.connectPortal = connectPortal;
+    window.disconnectPortal = disconnectPortal;
+    window.testPortalConnection = testPortalConnection;
+    window.toggleGuide = toggleGuide;
+    window.togglePasswordVisibility = togglePasswordVisibility;
 
 
 

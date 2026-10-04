@@ -499,7 +499,12 @@ def _send_email(msg: EmailMessage, to_addr: str, session, *, job_id: int | None,
         return False, f"SMTP delivery state unknown: {exc}"
 
 
-def _candidate_application_url(raw_description: str, direct_url: str | None, source_url: str | None) -> str | None:
+def _candidate_application_url(
+    raw_description: str,
+    direct_url: str | None,
+    source_url: str | None,
+    user_id: int | None = None,
+) -> str | None:
     urls = []
     for value in (direct_url, source_url):
         if isinstance(value, str) and value.startswith(("http://", "https://")):
@@ -510,24 +515,37 @@ def _candidate_application_url(raw_description: str, direct_url: str | None, sou
         if not is_board_url(url):
             return url
 
+    # Resolve per-user effective settings for web and portal auto-apply
+    user_cfg = {}
+    if user_id:
+        try:
+            from src.storage.user_settings import get_user_effective_settings
+            user_cfg = get_user_effective_settings(user_id=user_id)
+        except Exception:
+            pass
+
+    web_enabled = user_cfg.get("auto_apply_web_enabled") if "auto_apply_web_enabled" in user_cfg else getattr(settings, "auto_apply_web_enabled", True)
+    linkedin_enabled = user_cfg.get("auto_apply_linkedin_enabled") if "auto_apply_linkedin_enabled" in user_cfg else getattr(settings, "auto_apply_linkedin_enabled", True)
+    indeed_enabled = user_cfg.get("auto_apply_indeed_enabled") if "auto_apply_indeed_enabled" in user_cfg else getattr(settings, "auto_apply_indeed_enabled", True)
+
     # 2. If web automation is enabled, allow LinkedIn and Indeed portals
-    if getattr(settings, "auto_apply_web_enabled", True):
+    if web_enabled:
         for url in urls:
             host = (urlparse(url).hostname or "").lower().removeprefix("www.")
-            if "linkedin.com" in host and getattr(settings, "auto_apply_linkedin_enabled", True):
+            if "linkedin.com" in host and linkedin_enabled:
                 return url
-            if "indeed.com" in host and getattr(settings, "auto_apply_indeed_enabled", True):
+            if "indeed.com" in host and indeed_enabled:
                 return url
 
     return None
 
 
 def apply_to_job(job_record: dict, session=None, profile: dict | None = None) -> dict:
+    uid = job_record.get("user_id")
     if profile is None:
-        user_id = job_record.get("user_id")
         try:
             from src.candidate.profile_manager import get_active_profile
-            profile = get_active_profile(user_id=user_id, session=session)
+            profile = get_active_profile(user_id=uid, session=session)
         except Exception:
             profile = None
 
@@ -540,7 +558,12 @@ def apply_to_job(job_record: dict, session=None, profile: dict | None = None) ->
         discovered = bool(emails)
     ranked = rank_application_emails(emails, raw_description, job_record.get("company_url"))
     app_email = clean_email(ranked[0]) if ranked else None
-    app_url = _candidate_application_url(raw_description, job_record.get("application_url"), job_record.get("job_url"))
+    app_url = _candidate_application_url(
+        raw_description,
+        job_record.get("application_url"),
+        job_record.get("job_url"),
+        user_id=uid,
+    )
 
     if ranked:
         primary_email = clean_email(ranked[0])
@@ -552,7 +575,6 @@ def apply_to_job(job_record: dict, session=None, profile: dict | None = None) ->
             return {"application_method": "recruiter_email", "application_email": primary_email, "application_url": app_url, "application_status": "content_missing", "application_error": "No generated application message was available.", "resume_attached": False, "applied": False, "thread_subject": subject, "message_id": None}
         
         # Save a single draft
-        uid = job_record.get("user_id")
         msg, resume_attached = _build_application_message(
             primary_email,
             subject,
@@ -588,7 +610,18 @@ def apply_to_job(job_record: dict, session=None, profile: dict | None = None) ->
             }
         return {"application_method": "recruiter_email_draft", "application_email": primary_email, "application_url": app_url, "application_status": "draft", "resume_attached": resume_attached, "draft_path": draft_path, "applied": False, "thread_subject": subject, "application_body": body, "message_id": None}
 
-    if session is not None and app_url and settings.auto_apply_mode == "send" and settings.auto_apply_web_enabled:
+    u_cfg = {}
+    if uid:
+        try:
+            from src.storage.user_settings import get_user_effective_settings
+            u_cfg = get_user_effective_settings(user_id=uid)
+        except Exception:
+            pass
+
+    apply_mode = u_cfg.get("auto_apply_mode") or getattr(settings, "auto_apply_mode", "send")
+    web_enabled = u_cfg.get("auto_apply_web_enabled") if "auto_apply_web_enabled" in u_cfg else getattr(settings, "auto_apply_web_enabled", True)
+
+    if session is not None and app_url and apply_mode == "send" and web_enabled:
         body = _application_body(job_record, profile=profile)
         subject = _application_subject(job_record, profile=profile)
         result = apply_via_browser({**job_record, "application_url": app_url, "application_body": body, "application_subject": subject}, session, profile=profile)

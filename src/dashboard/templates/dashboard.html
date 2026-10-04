@@ -1326,28 +1326,128 @@
         </div>
 
         <!-- Job Portals Automation: LinkedIn & Indeed -->
-        <div style="background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:10px;padding:16px">
-          <div style="font-size:14px;font-weight:700;color:var(--cyan-light);margin-bottom:8px">🌐 Job Portals Automation (LinkedIn & Indeed)</div>
-          <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Enable browser automation directly on LinkedIn and Indeed job postings. Set session cookies to bypass login walls and automate Easy Apply / Indeed Apply.</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+        <div style="background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:12px;padding:20px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:16px">
             <div>
-              <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px">LinkedIn Session Cookie (li_at)</label>
-              <input type="password" id="usLinkedinCookie" class="form-control" placeholder="Paste li_at cookie value to enable LinkedIn Easy Apply">
+              <div style="font-size:15px;font-weight:700;color:#fff;display:flex;align-items:center;gap:8px">
+                <span style="font-size:18px">🔗</span> Connected Candidate Accounts & Job Portals (Auto-Apply)
+              </div>
+              <div style="font-size:12px;color:var(--text-muted);margin-top:4px">
+                Link your personal LinkedIn and Indeed sessions so the browser engine can automatically apply directly on your behalf using <strong>Easy Apply</strong> and <strong>Indeed Apply</strong>.
+              </div>
             </div>
-            <div>
-              <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px">Indeed Session Cookie</label>
-              <input type="password" id="usIndeedCookie" class="form-control" placeholder="Paste Indeed session cookie or token">
-            </div>
+            <button class="btn btn-sm" type="button" onclick="loadIntegrationsStatus(true)" title="Refresh connection status" style="border:1px solid var(--border);display:flex;align-items:center;gap:6px">
+              <span>↻</span> Refresh Status
+            </button>
           </div>
-          <div style="display:flex;gap:20px;flex-wrap:wrap">
-            <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:#fff;cursor:pointer">
-              <input type="checkbox" id="usAutoApplyLinkedin" checked style="accent-color:var(--cyan)">
-              <span>Auto-apply via LinkedIn (Easy Apply & company portals)</span>
-            </label>
-            <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:#fff;cursor:pointer">
-              <input type="checkbox" id="usAutoApplyIndeed" checked style="accent-color:var(--cyan)">
-              <span>Auto-apply via Indeed (Indeed Apply & company portals)</span>
-            </label>
+
+          <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(340px, 1fr));gap:16px;margin-bottom:14px">
+            <!-- LinkedIn Account Card -->
+            <div style="background:rgba(10,102,194,0.05);border:1px solid rgba(10,102,194,0.3);border-radius:10px;padding:16px;display:flex;flex-direction:column;justify-content:space-between">
+              <div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+                  <div style="display:flex;align-items:center;gap:10px">
+                    <div style="width:34px;height:34px;border-radius:8px;background:#0A66C2;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:18px">in</div>
+                    <div>
+                      <div style="font-size:14px;font-weight:700;color:#fff">LinkedIn Account</div>
+                      <div style="font-size:11px;color:var(--text-muted)">Easy Apply & Portal Automation</div>
+                    </div>
+                  </div>
+                  <span id="liStatusBadge" class="badge" style="background:rgba(255,255,255,0.08);color:var(--text-muted);padding:4px 10px;border-radius:20px;font-size:11px">Checking...</span>
+                </div>
+
+                <div style="margin-bottom:12px">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+                    <label style="font-size:11px;color:var(--text-muted);font-weight:600">Session Cookie (li_at)</label>
+                    <a href="javascript:void(0)" onclick="toggleGuide('liGuide')" style="font-size:11px;color:var(--cyan);text-decoration:none">ℹ️ How to get li_at</a>
+                  </div>
+                  <div style="position:relative">
+                    <input type="password" id="usLinkedinCookie" class="form-control" placeholder="Paste your li_at session cookie here..." style="padding-right:40px;font-family:monospace;font-size:12px">
+                    <button type="button" onclick="togglePasswordVisibility('usLinkedinCookie', this)" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:14px" title="Show/Hide">👁️</button>
+                  </div>
+                  <div id="liGuide" style="display:none;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:10px;margin-top:8px;font-size:11px;color:var(--text-muted);line-height:1.5">
+                    <strong style="color:var(--cyan-light)">How to get your LinkedIn li_at cookie:</strong><br>
+                    1. Open <strong>linkedin.com</strong> in your browser (Chrome/Edge/Firefox) and log in.<br>
+                    2. Press <code>F12</code> or right-click &gt; <em>Inspect</em> to open Developer Tools.<br>
+                    3. Go to the <strong>Application</strong> (or <strong>Storage</strong>) tab &gt; <strong>Cookies</strong> &gt; <code>https://www.linkedin.com</code>.<br>
+                    4. Find the cookie named <code>li_at</code>, double-click its value, copy and paste it above.<br>
+                    <span style="color:#f59e0b">🔒 Token is kept private to your user profile and used strictly for automated applications.</span>
+                  </div>
+                </div>
+
+                <div style="display:flex;align-items:center;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-bottom:12px;background:rgba(255,255,255,0.02);padding:8px 10px;border-radius:6px">
+                  <div>Verified: <span id="liVerifiedAt" style="color:#fff">Never</span></div>
+                  <div>Preview: <span id="liCookiePreview" style="color:var(--cyan-light);font-family:monospace">None</span></div>
+                </div>
+
+                <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:#fff;cursor:pointer;margin-bottom:14px">
+                  <input type="checkbox" id="usAutoApplyLinkedin" checked style="accent-color:var(--cyan)">
+                  <span>Auto-apply via LinkedIn (Easy Apply & company portals)</span>
+                </label>
+              </div>
+
+              <div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap">
+                  <button type="button" class="btn btn-sm btn-cyan" id="btnConnectLi" onclick="connectPortal('linkedin')" style="flex:1">🔗 Save & Connect</button>
+                  <button type="button" class="btn btn-sm" id="btnTestLi" onclick="testPortalConnection('linkedin')" style="border:1px solid rgba(255,255,255,0.2)">⚡ Test Session</button>
+                  <button type="button" class="btn btn-sm" id="btnDisconnectLi" onclick="disconnectPortal('linkedin')" style="border:1px solid #ef4444;color:#ef4444;display:none">Unlink</button>
+                </div>
+                <div id="liFeedbackBox" style="display:none;margin-top:8px;padding:6px 10px;border-radius:6px;font-size:11px"></div>
+              </div>
+            </div>
+
+            <!-- Indeed Account Card -->
+            <div style="background:rgba(33,100,243,0.05);border:1px solid rgba(33,100,243,0.3);border-radius:10px;padding:16px;display:flex;flex-direction:column;justify-content:space-between">
+              <div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+                  <div style="display:flex;align-items:center;gap:10px">
+                    <div style="width:34px;height:34px;border-radius:8px;background:#2164f3;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:16px">ind</div>
+                    <div>
+                      <div style="font-size:14px;font-weight:700;color:#fff">Indeed Account</div>
+                      <div style="font-size:11px;color:var(--text-muted)">Indeed Apply & Portal Automation</div>
+                    </div>
+                  </div>
+                  <span id="indStatusBadge" class="badge" style="background:rgba(255,255,255,0.08);color:var(--text-muted);padding:4px 10px;border-radius:20px;font-size:11px">Checking...</span>
+                </div>
+
+                <div style="margin-bottom:12px">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+                    <label style="font-size:11px;color:var(--text-muted);font-weight:600">Indeed Session Cookie / Token</label>
+                    <a href="javascript:void(0)" onclick="toggleGuide('indGuide')" style="font-size:11px;color:var(--cyan);text-decoration:none">ℹ️ How to get cookie</a>
+                  </div>
+                  <div style="position:relative">
+                    <input type="password" id="usIndeedCookie" class="form-control" placeholder="Paste your SHARED_SESSION_ID or cookie header..." style="padding-right:40px;font-family:monospace;font-size:12px">
+                    <button type="button" onclick="togglePasswordVisibility('usIndeedCookie', this)" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:14px" title="Show/Hide">👁️</button>
+                  </div>
+                  <div id="indGuide" style="display:none;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:10px;margin-top:8px;font-size:11px;color:var(--text-muted);line-height:1.5">
+                    <strong style="color:var(--cyan-light)">How to get your Indeed session cookie:</strong><br>
+                    1. Open <strong>indeed.com</strong> and log in.<br>
+                    2. Press <code>F12</code> &gt; <strong>Application</strong> / <strong>Storage</strong> &gt; <strong>Cookies</strong> &gt; <code>https://www.indeed.com</code>.<br>
+                    3. Copy either the <code>SHARED_SESSION_ID</code> value or the full cookie string.<br>
+                    <span style="color:#f59e0b">🔒 Token is kept private to your user profile and used strictly for automated applications.</span>
+                  </div>
+                </div>
+
+                <div style="display:flex;align-items:center;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-bottom:12px;background:rgba(255,255,255,0.02);padding:8px 10px;border-radius:6px">
+                  <div>Verified: <span id="indVerifiedAt" style="color:#fff">Never</span></div>
+                  <div>Preview: <span id="indCookiePreview" style="color:var(--cyan-light);font-family:monospace">None</span></div>
+                </div>
+
+                <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:#fff;cursor:pointer;margin-bottom:14px">
+                  <input type="checkbox" id="usAutoApplyIndeed" checked style="accent-color:var(--cyan)">
+                  <span>Auto-apply via Indeed (Indeed Apply & company portals)</span>
+                </label>
+              </div>
+
+              <div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap">
+                  <button type="button" class="btn btn-sm btn-cyan" id="btnConnectInd" onclick="connectPortal('indeed')" style="flex:1">🔗 Save & Connect</button>
+                  <button type="button" class="btn btn-sm" id="btnTestInd" onclick="testPortalConnection('indeed')" style="border:1px solid rgba(255,255,255,0.2)">⚡ Test Session</button>
+                  <button type="button" class="btn btn-sm" id="btnDisconnectInd" onclick="disconnectPortal('indeed')" style="border:1px solid #ef4444;color:#ef4444;display:none">Unlink</button>
+                </div>
+                <div id="indFeedbackBox" style="display:none;margin-top:8px;padding:6px 10px;border-radius:6px;font-size:11px"></div>
+              </div>
+            </div>
           </div>
         </div>
 

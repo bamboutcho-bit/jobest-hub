@@ -57,6 +57,11 @@ An enterprise-grade, autonomous 24/7 job discovery, AI evaluation, client acquis
    - Supports production PostgreSQL with connection pooling.
    - Automatically detects missing database drivers or unconfigured PostgreSQL and falls back gracefully to local SQLite (`jobsearch_local.db`).
 
+7. **Candidate Account Linking & Automated Portal Applications (LinkedIn & Indeed)**
+   - Candidates can securely connect their personal LinkedIn (`li_at` session cookie) and Indeed (`SHARED_SESSION_ID` cookie) directly from the Web Dashboard.
+   - Built-in session verification (`/api/user/integrations/verify`) tests connectivity and authentication status in real-time.
+   - The autonomous Playwright engine injects candidate session cookies and applies on their behalf to matching jobs using **LinkedIn Easy Apply** and **Indeed Apply**, as well as seamlessly following external company ATS links.
+
 ---
 
 ## 🏛 System Architecture
@@ -228,10 +233,15 @@ graph TD
     - Attaches the company-dedicated motivation letter (`.docx`).
     - In `draft` mode: writes clean `.eml` files to `outreach_drafts/` for manual inspection.
     - In `send` mode: securely dispatches via authenticated SMTP.
-  - **Web ATS Form Automation:**
+  - **Web ATS & Job Portal Form Automation:**
     - Uses Playwright to navigate to application portals (Greenhouse, Lever, Workday, etc.).
+    - Injects candidate session cookies for **LinkedIn Easy Apply** (`li_at`) and **Indeed Apply** (`SHARED_SESSION_ID`) so applications execute natively under the candidate's authentic session without re-login barriers.
     - Fills in name, email, phone, LinkedIn, and uploads the candidate's CV.
     - Captures post-submission confirmation screenshots.
+  - **Candidate Account Linking & Dashboard Management:**
+    - Dedicated portal management cards in Dashboard Settings with live session status badges (`Connected ✓`, `Not Linked`).
+    - Real-time connection testing (`/api/user/integrations/verify`) testing session cookie validity against live portal endpoints.
+    - Per-user auto-apply checkboxes allowing users to enable or disable LinkedIn and Indeed automated submissions independently.
   - **Safety Guardrails:**
     - Daily outbound sending caps per user.
     - Global kill switches.

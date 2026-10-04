@@ -675,7 +675,8 @@ def apply_via_browser(job_record: dict, session=None, profile: dict | None = Non
                                     "value": cookie_val,
                                     "domain": ".indeed.com",
                                     "path": "/",
-                                novoProduto: True,
+                                    "httpOnly": True,
+                                    "secure": True,
                                 }])
                             logger.info("Injected Indeed session cookie for browser session.")
                         except Exception as c_err:
