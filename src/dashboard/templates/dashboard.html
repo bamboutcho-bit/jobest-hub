@@ -1233,18 +1233,76 @@
 
       <!-- TAB 3: INBOX & REPLIES -->
       <div id="jInboxSection" class="panel" style="display:none">
-        <div class="filter-bar">
-          <select id="inboxStatusFilter" onchange="loadInbox()">
-            <option value="">All Statuses</option>
+        <!-- Inbox KPI Cards -->
+        <div class="kpi-grid" style="grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));margin-bottom:16px">
+          <div class="kpi-card">
+            <div class="kpi-label">Total Inbound</div>
+            <div class="kpi-value" id="inboxKpiTotal" style="color:var(--cyan-light)">0</div>
+            <div class="kpi-sub">Recruiter responses detected</div>
+          </div>
+          <div class="kpi-card" style="border-color:rgba(16,185,129,0.3)">
+            <div class="kpi-label">🎯 Interviews & Offers</div>
+            <div class="kpi-value" id="inboxKpiInterviews" style="color:var(--good)">0</div>
+            <div class="kpi-sub">High-intent invitations</div>
+          </div>
+          <div class="kpi-card" style="border-color:rgba(245,158,11,0.3)">
+            <div class="kpi-label">📝 Action Needed</div>
+            <div class="kpi-value" id="inboxKpiAction" style="color:var(--warn)">0</div>
+            <div class="kpi-sub">Questions / Screening calls</div>
+          </div>
+          <div class="kpi-card" style="border-color:rgba(239,68,68,0.3)">
+            <div class="kpi-label">⛔ Rejections</div>
+            <div class="kpi-value" id="inboxKpiRejections" style="color:var(--bad)">0</div>
+            <div class="kpi-sub">Auto-classified & filed</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">⚠️ Bounces</div>
+            <div class="kpi-value" id="inboxKpiBounces" style="color:var(--text-muted)">0</div>
+            <div class="kpi-sub">Delivery failures handled</div>
+          </div>
+        </div>
+
+        <!-- Filter & Search Toolbar -->
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px">Filter:</span>
+            <button id="inboxChipAll" class="btn btn-sm btn-cyan" onclick="setInboxFilter('')">All Replies</button>
+            <button id="inboxChipInterview" class="btn btn-sm" onclick="setInboxFilter('interview')">🎯 Interviews</button>
+            <button id="inboxChipMatched" class="btn btn-sm" onclick="setInboxFilter('matched')">💼 Job Matched</button>
+            <button id="inboxChipRejection" class="btn btn-sm" onclick="setInboxFilter('rejection')">⛔ Rejections</button>
+            <button id="inboxChipBounce" class="btn btn-sm" onclick="setInboxFilter('bounce')">⚠️ Delivery Bounces</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <button class="btn btn-sm" onclick="triggerCheckInbox()" style="border-color:rgba(56,189,248,0.4);color:var(--cyan-light)">
+              <span>📬</span> Check Mailbox Now
+            </button>
+          </div>
+        </div>
+
+        <div class="filter-bar" style="margin-bottom:12px">
+          <input type="text" id="inboxSearchInput" class="grow" placeholder="🔍 Search replies by company, role, sender, or email content..." oninput="debounce(loadInbox, 250)()">
+          <select id="inboxStatusFilter" onchange="loadInbox()" style="min-width:160px">
+            <option value="">All Categories</option>
             <option value="matched">Matched to Job</option>
+            <option value="interview">Interviews & Offers</option>
+            <option value="rejection">Rejections</option>
+            <option value="bounced">Delivery Bounces</option>
             <option value="unmatched">Unmatched</option>
-            <option value="duplicate">Duplicate</option>
           </select>
         </div>
+
+        <!-- Rich Data Table -->
         <div class="data-table-wrap">
           <table class="data-table">
             <thead>
-              <tr><th>Received At</th><th>Status</th><th>Sender</th><th>Subject</th><th>Classification Reason</th><th>Message ID</th></tr>
+              <tr>
+                <th style="width:130px">Received</th>
+                <th style="width:220px">Company & Role</th>
+                <th style="width:160px">Sender</th>
+                <th style="width:140px">Classification</th>
+                <th>Subject & Snippet</th>
+                <th style="width:120px;text-align:right">Actions</th>
+              </tr>
             </thead>
             <tbody id="inboxTableBody"></tbody>
           </table>
@@ -1253,30 +1311,99 @@
 
       <!-- TAB 4: OUTBOUND LEDGER -->
       <div id="jOutboundSection" class="panel" style="display:none">
-        <div class="filter-bar">
-          <select id="outboundStatusFilter" onchange="loadOutbound()">
+        <!-- Outreach KPI Cards -->
+        <div class="kpi-grid" style="grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));margin-bottom:16px">
+          <div class="kpi-card">
+            <div class="kpi-label">Total Outbound</div>
+            <div class="kpi-value" id="outboundKpiTotal" style="color:var(--cyan-light)">0</div>
+            <div class="kpi-sub">Applications tracked</div>
+          </div>
+          <div class="kpi-card" style="border-color:rgba(16,185,129,0.3)">
+            <div class="kpi-label">✉️ Emails Sent</div>
+            <div class="kpi-value" id="outboundKpiSent" style="color:var(--good)">0</div>
+            <div class="kpi-sub">Direct recruiter outreach</div>
+          </div>
+          <div class="kpi-card" style="border-color:rgba(168,85,247,0.3)">
+            <div class="kpi-label">🌐 Web Submissions</div>
+            <div class="kpi-value" id="outboundKpiWeb" style="color:var(--purple-light)">0</div>
+            <div class="kpi-sub">LinkedIn, Indeed & ATS</div>
+          </div>
+          <div class="kpi-card" style="border-color:rgba(56,189,248,0.3)">
+            <div class="kpi-label">📝 Drafts Ready</div>
+            <div class="kpi-value" id="outboundKpiDrafts" style="color:var(--cyan)">0</div>
+            <div class="kpi-sub">Tailored CV & Letter ready</div>
+          </div>
+          <div class="kpi-card" style="border-color:rgba(245,158,11,0.3)">
+            <div class="kpi-label">⚠️ Blocked / Failed</div>
+            <div class="kpi-value" id="outboundKpiBlocked" style="color:var(--warn)">0</div>
+            <div class="kpi-sub">Quota or safety holds</div>
+          </div>
+        </div>
+
+        <!-- Filter & Search Toolbar -->
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px">Filter:</span>
+            <button id="outboundChipAll" class="btn btn-sm btn-cyan" onclick="setOutboundFilter('')">All Outreach</button>
+            <button id="outboundChipSent" class="btn btn-sm" onclick="setOutboundFilter('sent')">✓ Sent & Submitted</button>
+            <button id="outboundChipDraft" class="btn btn-sm" onclick="setOutboundFilter('draft')">📝 Drafts Ready</button>
+            <button id="outboundChipEmail" class="btn btn-sm" onclick="setOutboundFilter('email')">✉️ Email Channel</button>
+            <button id="outboundChipPortal" class="btn btn-sm" onclick="setOutboundFilter('portal')">🌐 Web Portals</button>
+            <button id="outboundChipBlocked" class="btn btn-sm" onclick="setOutboundFilter('blocked')">⚠️ Blocked / Failed</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <button class="btn btn-sm btn-cyan" onclick="triggerBatchApply()" title="Run batch application on all eligible matches">
+              <span>⚡</span> Apply Pending Matches
+            </button>
+          </div>
+        </div>
+
+        <div class="filter-bar" style="margin-bottom:12px">
+          <input type="text" id="outboundSearchInput" class="grow" placeholder="🔍 Search outreach by company, role, recipient, subject, or channel..." oninput="debounce(loadOutbound, 250)()">
+          <select id="outboundStatusFilter" onchange="loadOutbound()" style="min-width:160px">
             <option value="">All Statuses</option>
-            <option value="sent">Sent</option>
-            <option value="pending">Pending</option>
+            <option value="sent">Sent / Submitted</option>
+            <option value="draft">Drafts Pending</option>
             <option value="failed">Failed</option>
+            <option value="blocked">Blocked / Suppressed</option>
+            <option value="email">Email Channel</option>
+            <option value="portal">Web Portals</option>
           </select>
         </div>
+
+        <!-- Rich Data Table -->
         <div class="data-table-wrap">
           <table class="data-table">
             <thead>
-              <tr><th>Sent At</th><th>Type</th><th>Recipient</th><th>Subject</th><th>Status</th><th>Failure Reason</th><th>Job ID</th></tr>
+              <tr>
+                <th style="width:130px">Date / Time</th>
+                <th style="width:230px">Target Job & Company</th>
+                <th style="width:150px">Channel</th>
+                <th style="width:180px">Recipient / Target</th>
+                <th style="width:120px">Status</th>
+                <th style="width:120px">Attachments</th>
+                <th>Application Details</th>
+                <th style="width:130px;text-align:right">Actions</th>
+              </tr>
             </thead>
             <tbody id="outboundTableBody"></tbody>
           </table>
         </div>
-        <h4 style="margin:24px 0 10px">Email Suppressions</h4>
-        <div class="filter-bar">
-          <input type="text" id="supEmailInput" placeholder="Email address">
-          <input type="text" id="supDomainInput" placeholder="Domain (e.g. example.com)">
-          <input type="text" id="supReasonInput" placeholder="Reason" value="manual">
-          <button class="btn btn-sm btn-primary" onclick="addSuppression()">Add Suppression</button>
+
+        <!-- Email Suppressions Card -->
+        <div class="panel" style="margin-top:24px;background:rgba(15,23,42,0.6);border:1px solid var(--border);border-radius:var(--radius-md);padding:16px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+            <div style="font-weight:700;font-size:14px;color:var(--text)">🛡️ Outbound Email Suppressions & Safety List</div>
+            <span style="font-size:12px;color:var(--text-muted)">Recipients and domains excluded from automated emailing</span>
+          </div>
+          <div class="filter-bar" style="gap:8px">
+            <input type="text" id="supEmailInput" placeholder="Recipient email address (e.g. hr@block.com)">
+            <input type="text" id="supDomainInput" placeholder="Domain (e.g. spamcompany.com)">
+            <input type="text" id="supReasonInput" placeholder="Reason" value="manual">
+            <button class="btn btn-sm btn-primary" onclick="addSuppression()">+ Add Suppression</button>
+          </div>
+          <div id="suppressionList" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px"></div>
         </div>
-        <div id="suppressionList" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px"></div>
       </div>
 
       <!-- TAB: USER SETTINGS & ENVIRONMENT -->
@@ -2283,6 +2410,98 @@
         <div class="code-block" id="mJobDesc" style="max-height:240px"></div>
         <h4 style="font-size:13px;text-transform:uppercase;color:var(--text-muted);margin:16px 0 6px">Email Conversation History</h4>
         <div id="mJobEmails" class="timeline"></div>
+      </div>
+  </div>
+
+  <!-- MODAL: INBOX THREAD & REPLY READER -->
+  <div id="inboxMessageModal" class="modal-backdrop" style="display:none;z-index:9998" onclick="if(event.target===this)closeInboxModal()">
+    <div class="modal-card" style="max-width:760px;width:95%;max-height:90vh;overflow-y:auto">
+      <div class="modal-header">
+        <div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+            <span id="inboxModalIntentBadge" class="pill pill-stage-deal_won">🎯 Interview Request</span>
+            <span id="inboxModalDate" style="font-size:12px;color:var(--text-muted)">Just now</span>
+          </div>
+          <h3 id="inboxModalSubject" style="font-size:18px;margin:0 0 4px;font-weight:700">Subject Line</h3>
+          <div id="inboxModalMeta" style="font-size:12px;color:var(--text-muted)">From: <strong id="inboxModalSender" style="color:var(--cyan-light)">sender@example.com</strong> · <span id="inboxModalTargetJob">Company - Role</span></div>
+        </div>
+        <button class="btn btn-sm btn-icon" onclick="closeInboxModal()">✕</button>
+      </div>
+      <div class="modal-body" style="padding:20px">
+        <!-- AI Intent & Summary Banner -->
+        <div id="inboxModalSummaryCard" class="panel" style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.3);border-radius:var(--radius-md);padding:14px;margin-bottom:16px">
+          <div style="font-size:11px;font-weight:700;color:var(--good);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">✨ AI Analysis & Next Action:</div>
+          <div id="inboxModalSummaryText" style="font-size:13px;color:var(--text)">Candidate has been invited for an interview.</div>
+        </div>
+
+        <div style="margin-bottom:8px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px">Original Email Message</div>
+        <div id="inboxModalBodyText" class="code-block" style="white-space:pre-wrap;font-family:inherit;font-size:13px;line-height:1.6;padding:16px;background:rgba(2,6,23,0.7);border:1px solid var(--border);border-radius:var(--radius-md);max-height:360px;overflow-y:auto"></div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:20px;flex-wrap:wrap;gap:12px;border-top:1px solid var(--border);padding-top:16px">
+          <div style="display:flex;gap:8px">
+            <a id="inboxModalReplyMailto" href="#" class="btn btn-cyan" style="display:inline-flex;align-items:center;gap:6px">
+              <span>✉️</span> Reply via Default Email Client
+            </a>
+            <button class="btn" onclick="copyInboxSender()" style="display:inline-flex;align-items:center;gap:6px">
+              <span>📋</span> Copy Sender Email
+            </button>
+          </div>
+          <button class="btn" onclick="closeInboxModal()">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: OUTREACH APPLICATION & COVER LETTER DETAIL -->
+  <div id="outboundDetailModal" class="modal-backdrop" style="display:none;z-index:9998" onclick="if(event.target===this)closeOutboundModal()">
+    <div class="modal-card" style="max-width:820px;width:95%;max-height:92vh;overflow-y:auto">
+      <div class="modal-header">
+        <div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+            <span id="outboundModalStatusBadge" class="pill pill-stage-deal_won">✓ Sent</span>
+            <span id="outboundModalChannelBadge" class="pill">✉️ Direct Recruiter Email</span>
+            <span id="outboundModalMatchBadge" class="pill" style="background:rgba(168,85,247,0.2);color:var(--purple-light)">71% Match</span>
+          </div>
+          <h3 id="outboundModalRoleTitle" style="font-size:18px;margin:0 0 4px;font-weight:700">Role Title at Company</h3>
+          <div id="outboundModalRecipientMeta" style="font-size:12px;color:var(--text-muted)">Target: <strong id="outboundModalRecipient" style="color:var(--cyan-light)">hr@example.com</strong> · <span id="outboundModalTimestamp">—</span></div>
+        </div>
+        <button class="btn btn-sm btn-icon" onclick="closeOutboundModal()">✕</button>
+      </div>
+      <div class="modal-body" style="padding:20px">
+        <!-- Attachments and Transmission Status -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));gap:10px;margin-bottom:16px">
+          <div class="panel" style="background:rgba(15,23,42,0.8);border:1px solid var(--border);padding:10px 14px;border-radius:var(--radius-md)">
+            <div style="font-size:11px;color:var(--text-muted)">📄 Candidate Resume (PDF):</div>
+            <strong id="outboundModalResumeStatus" style="font-size:13px;color:var(--good)">✓ Automatically Attached</strong>
+          </div>
+          <div class="panel" style="background:rgba(15,23,42,0.8);border:1px solid var(--border);padding:10px 14px;border-radius:var(--radius-md)">
+            <div style="font-size:11px;color:var(--text-muted)">📎 Tailored Motivation Letter:</div>
+            <strong style="font-size:13px;color:var(--cyan-light)">✓ Generated & Dedicated (.docx)</strong>
+          </div>
+        </div>
+
+        <div id="outboundModalErrorBanner" class="panel" style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:var(--radius-md);padding:12px;margin-bottom:16px;display:none">
+          <div style="font-size:11px;font-weight:700;color:var(--bad);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">⚠️ Hold / Delivery Reason:</div>
+          <div id="outboundModalErrorText" style="font-size:12px;color:#fca5a5"></div>
+        </div>
+
+        <div style="margin-bottom:8px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px">Subject</div>
+        <div id="outboundModalSubject" style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:14px">Application for ...</div>
+
+        <div style="margin-bottom:8px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px">Tailored Pitch & Motivation Letter Text</div>
+        <div id="outboundModalBodyText" class="code-block" style="white-space:pre-wrap;font-family:inherit;font-size:13px;line-height:1.6;padding:16px;background:rgba(2,6,23,0.7);border:1px solid var(--border);border-radius:var(--radius-md);max-height:360px;overflow-y:auto"></div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:20px;flex-wrap:wrap;gap:12px;border-top:1px solid var(--border);padding-top:16px">
+          <div style="display:flex;gap:8px">
+            <button id="btnOutboundModalResend" class="btn btn-cyan" onclick="retryOutboundModalApplication()" style="display:inline-flex;align-items:center;gap:6px">
+              <span>⚡</span> Send / Resend Application Now
+            </button>
+            <a id="btnOutboundModalOpenJob" href="#" target="_blank" class="btn" style="display:inline-flex;align-items:center;gap:6px">
+              <span>💼</span> View Original Posting
+            </a>
+          </div>
+          <button class="btn" onclick="closeOutboundModal()">Close</button>
+        </div>
       </div>
     </div>
   </div>

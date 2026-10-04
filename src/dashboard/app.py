@@ -748,8 +748,9 @@ def update_stage(job_id: int, payload: StageUpdate, _: bool = Depends(_auth)):
 
 
 @app.get("/api/inbox")
-def api_inbox(request: Request, limit: int = 100, status_filter: str | None = None, _: bool = Depends(_auth)):
+def api_inbox(request: Request, limit: int = 250, status_filter: str | None = None, search: str | None = None, _: bool = Depends(_auth)):
     from src.auth.service import get_current_user_optional
+    from src.storage.models import EmailEvent
     user = get_current_user_optional(request)
     user_id = user.id if user else None
     is_admin = user and user.role == "admin"
@@ -762,16 +763,85 @@ def api_inbox(request: Request, limit: int = 100, status_filter: str | None = No
                 or_(InboxMessage.user_id == user_id, JobPosting.user_id == user_id)
             )
         if status_filter:
-            query = query.where(InboxMessage.status == status_filter)
+            if status_filter in ("matched", "unmatched", "duplicate", "bounced", "bounced_unmatched"):
+                query = query.where(InboxMessage.status == status_filter)
         rows = session.scalars(query.order_by(desc(InboxMessage.created_at)).limit(max(1, min(limit, 500)))).all()
-        return [{
-            "id": x.id, "message_id": x.message_id, "imap_uid": x.imap_uid, "status": x.status,
-            "subject": x.subject, "sender_email": x.sender_email, "reason": x.reason, "created_at": _aware(x.created_at),
-        } for x in rows]
+
+        results = []
+        for x in rows:
+            job = session.get(JobPosting, x.job_id) if x.job_id else None
+            event = None
+            if x.message_id or x.imap_uid or x.job_id:
+                conditions = []
+                if x.message_id:
+                    conditions.append(EmailEvent.message_id == x.message_id)
+                if x.imap_uid:
+                    conditions.append(EmailEvent.imap_uid == x.imap_uid)
+                if conditions:
+                    event = session.scalar(select(EmailEvent).where(or_(*conditions)).order_by(desc(EmailEvent.id)))
+                if not event and x.job_id:
+                    event = session.scalar(select(EmailEvent).where(EmailEvent.job_id == x.job_id, EmailEvent.direction == "inbound").order_by(desc(EmailEvent.id)))
+
+            intent = "reply"
+            if event and event.classified_intent:
+                intent = event.classified_intent
+            elif x.status in ("bounced", "bounced_unmatched"):
+                intent = "bounce"
+            elif job and getattr(job, "pipeline_stage", None) in (PipelineStage.INTERVIEW_REQUESTED, PipelineStage.INTERVIEW_SCHEDULED):
+                intent = "interview_request"
+            elif job and getattr(job, "pipeline_stage", None) == PipelineStage.OFFER_RECEIVED:
+                intent = "offer"
+            elif job and getattr(job, "pipeline_stage", None) == PipelineStage.REJECTED:
+                intent = "rejection"
+            elif x.status == "unmatched":
+                intent = "unmatched"
+
+            full_body = (event.body if event and event.body else "") or (x.reason or "")
+            body_clean = " ".join(full_body.split())
+            snippet = (body_clean[:180] + "...") if len(body_clean) > 180 else body_clean
+
+            company_name = job.company if job else ("Mailer-Daemon (Delivery Alert)" if "bounced" in (x.status or "") else "External Recruiter")
+            title_name = job.title if job else "Recruiter Response"
+
+            if search:
+                s_lower = search.lower()
+                text_to_search = f"{company_name} {title_name} {x.subject or ''} {x.sender_email or ''} {full_body}".lower()
+                if s_lower not in text_to_search:
+                    continue
+
+            if status_filter and status_filter not in ("matched", "unmatched", "duplicate", "bounced", "bounced_unmatched"):
+                if status_filter == "interview" and intent not in ("interview_request", "offer"):
+                    continue
+                elif status_filter == "rejection" and intent != "rejection":
+                    continue
+                elif status_filter == "bounce" and intent != "bounce":
+                    continue
+
+            results.append({
+                "id": x.id,
+                "job_id": x.job_id,
+                "message_id": x.message_id,
+                "imap_uid": x.imap_uid,
+                "status": x.status,
+                "intent": intent,
+                "company": company_name,
+                "job_title": title_name,
+                "match_score": getattr(job, "match_score", None),
+                "location": getattr(job, "location", None),
+                "job_url": getattr(job, "job_url", None) or getattr(job, "application_url", None),
+                "sender_email": x.sender_email,
+                "subject": x.subject or f"Update: {title_name}",
+                "snippet": snippet,
+                "body": full_body,
+                "reason": x.reason,
+                "interview_notes": getattr(job, "interview_notes", None),
+                "created_at": _aware(x.created_at),
+            })
+        return results
 
 
-@app.get("/api/outbound")
-def api_outbound(request: Request, limit: int = 100, status_filter: str | None = None, _: bool = Depends(_auth)):
+@app.get("/api/inbox/stats")
+def api_inbox_stats(request: Request, _: bool = Depends(_auth)):
     from src.auth.service import get_current_user_optional
     user = get_current_user_optional(request)
     user_id = user.id if user else None
@@ -779,19 +849,292 @@ def api_outbound(request: Request, limit: int = 100, status_filter: str | None =
     all_users = bool(request.query_params.get("all_users"))
 
     with get_session() as session:
-        query = select(OutboundMessage)
+        query = select(InboxMessage)
         if not (is_admin and all_users) and user_id is not None:
-            query = query.outerjoin(JobPosting, OutboundMessage.job_id == JobPosting.id).where(
+            query = query.outerjoin(JobPosting, InboxMessage.job_id == JobPosting.id).where(
+                or_(InboxMessage.user_id == user_id, JobPosting.user_id == user_id)
+            )
+        rows = session.scalars(query).all()
+        interviews = session.scalar(
+            select(func.count(JobPosting.id)).where(
+                JobPosting.pipeline_stage.in_([PipelineStage.INTERVIEW_REQUESTED, PipelineStage.INTERVIEW_SCHEDULED, PipelineStage.OFFER_RECEIVED])
+            )
+        ) or 0
+        rejections = session.scalar(
+            select(func.count(JobPosting.id)).where(JobPosting.pipeline_stage == PipelineStage.REJECTED)
+        ) or 0
+        bounces = sum(1 for x in rows if "bounced" in (x.status or ""))
+        return {
+            "total_replies": len(rows),
+            "interviews": interviews,
+            "rejections": rejections,
+            "bounces": bounces,
+            "action_required": max(0, len(rows) - rejections - bounces),
+        }
+
+
+@app.get("/api/outbound")
+def api_outbound(request: Request, limit: int = 250, status_filter: str | None = None, search: str | None = None, _: bool = Depends(_auth)):
+    from src.auth.service import get_current_user_optional
+    from src.storage.models import UserJobApplication
+    user = get_current_user_optional(request)
+    user_id = user.id if user else None
+    is_admin = user and user.role == "admin"
+    all_users = bool(request.query_params.get("all_users"))
+
+    with get_session() as session:
+        q_out = select(OutboundMessage)
+        if not (is_admin and all_users) and user_id is not None:
+            q_out = q_out.outerjoin(JobPosting, OutboundMessage.job_id == JobPosting.id).where(
                 or_(OutboundMessage.user_id == user_id, JobPosting.user_id == user_id)
             )
-        if status_filter:
-            query = query.where(OutboundMessage.status == status_filter)
-        rows = session.scalars(query.order_by(desc(OutboundMessage.created_at)).limit(max(1, min(limit, 500)))).all()
-        return [{
-            "id": x.id, "job_id": x.job_id, "idempotency_key": x.idempotency_key, "email_type": x.email_type,
-            "recipient_email": x.recipient_email, "subject": x.subject, "message_id": x.message_id,
-            "status": x.status, "failure_reason": x.failure_reason, "created_at": _aware(x.created_at), "sent_at": _aware(x.sent_at),
-        } for x in rows]
+        out_rows = session.scalars(q_out.order_by(desc(OutboundMessage.created_at)).limit(max(1, min(limit, 500)))).all()
+
+        q_apps = select(UserJobApplication)
+        if not (is_admin and all_users) and user_id is not None:
+            q_apps = q_apps.where(UserJobApplication.user_id == user_id)
+        app_rows = session.scalars(q_apps.order_by(desc(UserJobApplication.applied_at)).limit(max(1, min(limit, 500)))).all()
+
+        q_jobs = select(JobPosting).where(
+            or_(
+                JobPosting.pipeline_stage == PipelineStage.APPLIED,
+                JobPosting.applied_at.isnot(None),
+                JobPosting.application_status.in_(["sent", "submitted", "draft", "recruiter_email_draft", "blocked", "recruiter_email_blocked", "daily_quota_reached"]),
+            )
+        )
+        if not (is_admin and all_users) and user_id is not None:
+            q_jobs = q_jobs.where(or_(JobPosting.user_id == user_id, JobPosting.user_id.is_(None)))
+        job_rows = session.scalars(q_jobs.order_by(desc(JobPosting.applied_at), desc(JobPosting.id)).limit(max(1, min(limit, 500)))).all()
+
+        seen_jobs = set()
+        items = []
+
+        for om in out_rows:
+            job = session.get(JobPosting, om.job_id) if om.job_id else None
+            if job:
+                seen_jobs.add(job.id)
+            st = om.status or "sent"
+            pitch = (job.application_email_body or job.recruiter_pitch_fr or job.recruiter_pitch_en or "") if job else ""
+            clean_pitch = " ".join(pitch.split())
+            items.append({
+                "id": f"email_{om.id}",
+                "job_id": om.job_id,
+                "email_id": om.id,
+                "company": job.company if job else "Hiring Company",
+                "job_title": job.title if job else (om.subject or "Direct Application"),
+                "match_score": getattr(job, "match_score", None),
+                "channel": "email",
+                "channel_label": "✉️ Direct Recruiter Email",
+                "recipient": om.recipient_email,
+                "subject": om.subject or (job.application_subject if job else "Application"),
+                "status": st,
+                "failure_reason": om.failure_reason,
+                "resume_attached": bool(job.resume_attached) if job else True,
+                "motivation_letter_attached": True,
+                "snippet": (clean_pitch[:180] + "...") if len(clean_pitch) > 180 else clean_pitch,
+                "full_body": pitch,
+                "job_url": getattr(job, "job_url", None) or getattr(job, "application_url", None),
+                "application_url": getattr(job, "application_url", None) or getattr(job, "job_url", None),
+                "created_at": _aware(om.created_at),
+                "sent_at": _aware(om.sent_at or om.created_at),
+            })
+
+        for ua in app_rows:
+            if ua.job_id in seen_jobs and ua.application_method == "recruiter_email":
+                continue
+            seen_jobs.add(ua.job_id)
+            job = session.get(JobPosting, ua.job_id) if ua.job_id else None
+            method = (ua.application_method or "").lower()
+            if "linkedin" in method:
+                chan = "linkedin"
+                chan_lbl = "💼 LinkedIn Quick Apply"
+            elif "indeed" in method:
+                chan = "indeed"
+                chan_lbl = "🔵 Indeed Easy Apply"
+            elif "ats" in method or "greenhouse" in method or "lever" in method:
+                chan = "ats"
+                chan_lbl = "🌐 Web ATS Portal"
+            else:
+                chan = "web_portal"
+                chan_lbl = "🌐 Online Career Portal"
+
+            pitch = (job.application_email_body or job.recruiter_pitch_fr or job.recruiter_pitch_en or "") if job else ""
+            clean_pitch = " ".join(pitch.split())
+            recip = (job.application_url if job and job.application_url else (job.job_url if job else "Web Application Form"))
+            items.append({
+                "id": f"app_{ua.id}",
+                "job_id": ua.job_id,
+                "email_id": None,
+                "company": job.company if job else "Company Career Portal",
+                "job_title": job.title if job else "Application",
+                "match_score": getattr(job, "match_score", None),
+                "channel": chan,
+                "channel_label": chan_lbl,
+                "recipient": recip,
+                "subject": getattr(job, "application_subject", None) or f"Application for {job.title if job else 'Position'}",
+                "status": ua.status or "submitted",
+                "failure_reason": getattr(job, "application_error", None),
+                "resume_attached": bool(getattr(job, "resume_attached", True)),
+                "motivation_letter_attached": True,
+                "snippet": (clean_pitch[:180] + "...") if len(clean_pitch) > 180 else clean_pitch,
+                "full_body": pitch,
+                "job_url": getattr(job, "job_url", None) or getattr(job, "application_url", None),
+                "application_url": getattr(job, "application_url", None) or getattr(job, "job_url", None),
+                "created_at": _aware(ua.applied_at),
+                "sent_at": _aware(ua.applied_at),
+            })
+
+        for job in job_rows:
+            if job.id in seen_jobs:
+                continue
+            seen_jobs.add(job.id)
+            app_st = job.application_status or "pending"
+            if job.pipeline_stage == PipelineStage.APPLIED or app_st in ("sent", "submitted"):
+                st = "sent"
+            elif "draft" in app_st:
+                st = "draft"
+            elif "blocked" in app_st or app_st == "daily_quota_reached":
+                st = "blocked"
+            else:
+                st = app_st
+
+            recip = job.application_email or job.application_url or job.job_url or "Company Portal"
+            chan = "email" if job.application_email else "web_portal"
+            chan_lbl = "✉️ Direct Recruiter Email" if job.application_email else "🌐 Online Career Portal"
+            pitch = (job.application_email_body or job.recruiter_pitch_fr or job.recruiter_pitch_en or "")
+            clean_pitch = " ".join(pitch.split())
+            items.append({
+                "id": f"job_{job.id}",
+                "job_id": job.id,
+                "email_id": None,
+                "company": job.company or "Direct Hiring Team",
+                "job_title": job.title,
+                "match_score": job.match_score,
+                "channel": chan,
+                "channel_label": chan_lbl,
+                "recipient": recip,
+                "subject": job.application_subject or f"Application for {job.title}",
+                "status": st,
+                "failure_reason": job.application_error,
+                "resume_attached": bool(job.resume_attached),
+                "motivation_letter_attached": True,
+                "snippet": (clean_pitch[:180] + "...") if len(clean_pitch) > 180 else clean_pitch,
+                "full_body": pitch,
+                "job_url": job.job_url or job.application_url,
+                "application_url": job.application_url or job.job_url,
+                "created_at": _aware(job.applied_at or job.application_attempted_at or job.created_at),
+                "sent_at": _aware(job.applied_at or job.application_attempted_at),
+            })
+
+        filtered = []
+        for x in items:
+            if status_filter:
+                sf = status_filter.lower()
+                if sf == "sent" and x["status"] not in ("sent", "submitted"):
+                    continue
+                elif sf == "draft" and x["status"] != "draft":
+                    continue
+                elif sf in ("failed", "blocked") and x["status"] not in ("failed", "blocked", "recruiter_email_blocked"):
+                    continue
+                elif sf in ("email", "portal", "linkedin", "indeed"):
+                    if sf not in x["channel"]:
+                        continue
+                elif x["status"] != sf:
+                    continue
+
+            if search:
+                s_lower = search.lower()
+                text_to_search = f"{x['company']} {x['job_title']} {x['recipient']} {x['subject']} {x['channel']} {x['status']} {x['full_body']}".lower()
+                if s_lower not in text_to_search:
+                    continue
+
+            filtered.append(x)
+
+        return filtered[:limit]
+
+
+@app.get("/api/outbound/stats")
+def api_outbound_stats(request: Request, _: bool = Depends(_auth)):
+    from src.auth.service import get_current_user_optional
+    from src.storage.models import UserJobApplication
+    user = get_current_user_optional(request)
+    user_id = user.id if user else None
+    is_admin = user and user.role == "admin"
+    all_users = bool(request.query_params.get("all_users"))
+
+    with get_session() as session:
+        sent_emails = session.scalar(
+            select(func.count(OutboundMessage.id)).where(OutboundMessage.status == "sent")
+        ) or 0
+        web_submitted = session.scalar(
+            select(func.count(UserJobApplication.id)).where(UserJobApplication.status.in_(["submitted", "sent"]))
+        ) or 0
+        drafts_ready = session.scalar(
+            select(func.count(JobPosting.id)).where(JobPosting.application_status.in_(["draft", "recruiter_email_draft"]))
+        ) or 0
+        blocked_count = session.scalar(
+            select(func.count(JobPosting.id)).where(JobPosting.application_status.in_(["blocked", "recruiter_email_blocked", "daily_quota_reached"]))
+        ) or 0
+
+        total_apps = max(sent_emails + web_submitted, session.scalar(select(func.count(JobPosting.id)).where(JobPosting.pipeline_stage == PipelineStage.APPLIED)) or 0)
+        return {
+            "total_applications": total_apps,
+            "sent_emails": sent_emails,
+            "web_submitted": web_submitted,
+            "drafts_ready": drafts_ready,
+            "blocked": blocked_count,
+        }
+
+
+@app.post("/api/actions/resend_application")
+def api_resend_application(request: Request, payload: dict, _: bool = Depends(_auth)):
+    job_id = payload.get("job_id")
+    if not job_id:
+        raise HTTPException(400, "job_id is required")
+
+    from src.auth.service import get_current_user_optional
+    from src.application.auto_apply import apply_to_job
+    from src.candidate.profile_manager import get_active_profile
+
+    user = get_current_user_optional(request)
+    with get_session() as session:
+        job = session.get(JobPosting, job_id)
+        if not job:
+            raise HTTPException(404, f"Job {job_id} not found")
+
+        active_profile = get_active_profile(user_id=getattr(job, "user_id", None) or getattr(user, "id", None), session=session)
+        job_dict = {
+            "id": job.id,
+            "user_id": job.user_id or (user.id if user else None),
+            "title": job.title,
+            "company": job.company,
+            "location": job.location,
+            "source_site": job.source_site,
+            "is_remote": job.is_remote,
+            "raw_description": job.raw_description,
+            "job_url": job.job_url,
+            "application_url": job.application_url,
+            "application_emails": job.application_emails,
+            "company_url": job.company_url,
+            "continent": job.continent,
+            "recruiter_pitch_en": job.recruiter_pitch_en,
+            "recruiter_pitch_fr": job.recruiter_pitch_fr,
+            "application_subject": job.application_subject,
+            "application_email_body": job.application_email_body,
+        }
+        res = apply_to_job(job_dict, session=session, profile=active_profile)
+        job.application_method = res.get("application_method")
+        job.application_email = res.get("application_email")
+        job.application_url = res.get("application_url") or job.application_url
+        job.application_status = res.get("application_status")
+        job.application_error = res.get("application_error")
+        job.application_attempted_at = datetime.now(timezone.utc)
+        job.resume_attached = bool(res.get("resume_attached"))
+        if res.get("applied"):
+            job.pipeline_stage = PipelineStage.APPLIED
+            job.applied_at = res.get("applied_at") or datetime.now(timezone.utc)
+        session.commit()
+        return {"ok": True, "result": res}
 
 
 @app.get("/api/suppressions")
@@ -4601,13 +4944,7 @@ def api_action_apply_pending_matches(request: Request, _: bool = Depends(_auth))
                             UserJobApplication.applied_at >= today_start,
                         )
                     ) or 0
-                    if user.role == "admin":
-                        total_platform_today = session.scalar(
-                            select(func.count(JobPosting.id)).where(JobPosting.applied_at >= today_start)
-                        ) or 0
-                        sent_today = max(user_apps_today, total_platform_today)
-                    else:
-                        sent_today = user_apps_today
+                    sent_today = user_apps_today
 
                 remaining_quota = max(0, daily_limit - sent_today)
                 if user and remaining_quota <= 0:
@@ -4640,8 +4977,18 @@ def api_action_apply_pending_matches(request: Request, _: bool = Depends(_auth))
                     "manual_required_fields",
                     "manual_unconfirmed_submission",
                 ]
+
+                user_cfg = {}
+                if effective_uid:
+                    try:
+                        from src.storage.user_settings import get_user_effective_settings
+                        user_cfg = get_user_effective_settings(user_id=effective_uid)
+                    except Exception:
+                        user_cfg = {}
+                min_apply_score = user_cfg.get("min_match_score") or user_cfg.get("auto_apply_min_score") or getattr(settings, "auto_apply_min_score", 65)
+
                 apply_q = select(JobPosting).where(
-                    JobPosting.match_score >= settings.auto_apply_min_score,
+                    JobPosting.match_score >= min_apply_score,
                     JobPosting.applied_at.is_(None),
                     JobPosting.pipeline_stage != PipelineStage.APPLIED,
                     or_(
@@ -4691,13 +5038,13 @@ def api_action_apply_pending_matches(request: Request, _: bool = Depends(_auth))
                     # Verify that this job aligns with the currently active candidate profile
                     eval_check = evaluate_job_heuristic(job, profile=active_profile)
                     profile_score = eval_check.get("match_score", 0)
-                    if (job.match_score is None or job.match_score < settings.auto_apply_min_score) and profile_score < settings.auto_apply_min_score:
+                    if (job.match_score is None or job.match_score < min_apply_score) and profile_score < min_apply_score:
                         job.match_score = profile_score
-                        clears_eval = profile_score >= settings.min_match_score
+                        clears_eval = profile_score >= min_apply_score
                         job.pipeline_stage = PipelineStage.EVALUATED_MATCH if clears_eval else PipelineStage.EVALUATED_LOW
                         logger.info(
                             "Skipping job %s (%s): scores %s (< %s) against active profile '%s'",
-                            job.id, job.title, profile_score, settings.auto_apply_min_score,
+                            job.id, job.title, profile_score, min_apply_score,
                             active_profile.get("headline") or active_profile.get("name")
                         )
                         continue

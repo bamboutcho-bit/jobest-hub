@@ -203,7 +203,20 @@ def _evaluate_and_act(job_id: int, *, run_id: int | None = None, index: int = 0,
         job.application_subject = (result.get("application_subject_fr") if is_fr else result.get("application_subject")) or result.get("application_subject")
         job.application_email_body = (result.get("application_email_fr") if is_fr else result.get("application_email_en")) or result.get("application_email_en")
 
-        clears_threshold = job.match_score >= settings.min_match_score and (
+        target_uid = getattr(job, "user_id", None)
+        from src.storage.models import User, UserJobApplication
+        user = session.get(User, target_uid) if target_uid else (session.scalar(select(User).where(User.role == "user").order_by(User.id)) or session.scalar(select(User).order_by(User.id)))
+        user_cfg = {}
+        if user or target_uid:
+            try:
+                from src.storage.user_settings import get_user_effective_settings
+                user_cfg = get_user_effective_settings(user_id=getattr(user, "id", None) or target_uid)
+            except Exception:
+                user_cfg = {}
+
+        effective_min_score = user_cfg.get("min_match_score") or user_cfg.get("auto_apply_min_score") or getattr(settings, "min_match_score", 65)
+
+        clears_threshold = job.match_score >= effective_min_score and (
             job.visa_sponsorship_detected or not settings.min_visa_confidence
         )
         job.pipeline_stage = PipelineStage.EVALUATED_MATCH if clears_threshold else PipelineStage.EVALUATED_LOW
@@ -225,9 +238,6 @@ def _evaluate_and_act(job_id: int, *, run_id: int | None = None, index: int = 0,
 
         if clears_threshold:
             # Check user plan tier and application quota
-            from src.storage.models import User, UserJobApplication
-            target_uid = getattr(job, "user_id", None)
-            user = session.get(User, target_uid) if target_uid else (session.scalar(select(User).where(User.role == "user").order_by(User.id)) or session.scalar(select(User).order_by(User.id)))
             is_pro = bool(user and (user.role == "admin" or getattr(user, "current_plan", None) in ("pro", "pro_499", "ultra")))
 
             # HR & Talent Acquisition Email Enrichment (Pro feature)
@@ -248,7 +258,8 @@ def _evaluate_and_act(job_id: int, *, run_id: int | None = None, index: int = 0,
                 except Exception as enrich_err:
                     logger.debug("HR enrichment skipped for job %s: %s", job.id, enrich_err)
 
-            auto_apply_eligible = job.match_score >= settings.auto_apply_min_score and (
+            auto_apply_min = user_cfg.get("auto_apply_min_score") or user_cfg.get("min_match_score") or getattr(settings, "auto_apply_min_score", 65)
+            auto_apply_eligible = job.match_score >= auto_apply_min and (
                 not settings.auto_apply_require_visa_or_remote or job.visa_sponsorship_detected or job.is_remote
             )
             can_auto_apply = True
@@ -261,12 +272,7 @@ def _evaluate_and_act(job_id: int, *, run_id: int | None = None, index: int = 0,
                         UserJobApplication.applied_at >= today_start,
                     )
                 ) or 0
-                total_platform_today = session.scalar(
-                    select(func.count(JobPosting.id)).where(
-                        JobPosting.applied_at >= today_start,
-                    )
-                ) or 0
-                sent_today = max(user_apps_today, total_platform_today) if user.role == "admin" else user_apps_today
+                sent_today = user_apps_today
                 effective_limit = user.daily_apply_limit or (200 if user.role == "admin" else 50)
                 if sent_today >= effective_limit:
                     can_auto_apply = False

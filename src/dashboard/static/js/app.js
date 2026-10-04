@@ -2422,37 +2422,323 @@
       if (drop) {
         drop.style.display = drop.style.display === 'block' ? 'none' : 'block';
       }
+    function triggerBatchApply() {
+      return triggerApplyPendingMatches();
+    }
+
+    let _cachedInbox = [];
+    let _cachedOutbound = [];
+    let _activeInboxModalItem = null;
+    let _activeOutboundModalItem = null;
+
+    function setInboxFilter(filter) {
+      const select = document.getElementById('inboxStatusFilter');
+      if (select) select.value = filter;
+      const chips = [
+        { id: 'inboxChipAll', val: '' },
+        { id: 'inboxChipInterview', val: 'interview' },
+        { id: 'inboxChipMatched', val: 'matched' },
+        { id: 'inboxChipRejection', val: 'rejection' },
+        { id: 'inboxChipBounce', val: 'bounce' },
+      ];
+      chips.forEach(c => {
+        const btn = document.getElementById(c.id);
+        if (btn) {
+          if (c.val === filter) {
+            btn.classList.add('btn-cyan');
+          } else {
+            btn.classList.remove('btn-cyan');
+          }
+        }
+      });
+      loadInbox();
     }
 
     async function loadInbox() {
       const st = encodeURIComponent(document.getElementById('inboxStatusFilter')?.value || '');
-      const rows = await apiGet(`/api/inbox?limit=250${st ? '&status_filter=' + st : ''}`);
-      document.getElementById('inboxTableBody').innerHTML = rows.map(x => `
-        <tr>
-          <td>${fmt(x.created_at)}</td>
-          <td><span class="pill pill-stage-discovered">${esc(x.status)}</span></td>
-          <td>${esc(x.sender_email || '—')}</td>
-          <td style="font-weight:600">${esc(x.subject || '—')}</td>
-          <td>${esc(x.reason || '')}</td>
-          <td style="font-family:'JetBrains Mono';font-size:11px">${esc(x.message_id || '')}</td>
-        </tr>
-      `).join('') || '<tr><td colspan="6" style="color:var(--text-faint);text-align:center">No inbox records.</td></tr>';
+      const search = encodeURIComponent(document.getElementById('inboxSearchInput')?.value || '');
+      let url = `/api/inbox?limit=250`;
+      if (st) url += `&status_filter=${st}`;
+      if (search) url += `&search=${search}`;
+
+      apiGet('/api/inbox/stats').then(stats => {
+        if (!stats) return;
+        if (document.getElementById('inboxKpiTotal')) document.getElementById('inboxKpiTotal').textContent = stats.total_replies ?? 0;
+        if (document.getElementById('inboxKpiInterviews')) document.getElementById('inboxKpiInterviews').textContent = stats.interviews ?? 0;
+        if (document.getElementById('inboxKpiAction')) document.getElementById('inboxKpiAction').textContent = stats.action_required ?? 0;
+        if (document.getElementById('inboxKpiRejections')) document.getElementById('inboxKpiRejections').textContent = stats.rejections ?? 0;
+        if (document.getElementById('inboxKpiBounces')) document.getElementById('inboxKpiBounces').textContent = stats.bounces ?? 0;
+      }).catch(() => {});
+
+      const rows = await apiGet(url);
+      _cachedInbox = Array.isArray(rows) ? rows : [];
+      
+      const tbody = document.getElementById('inboxTableBody');
+      if (!tbody) return;
+
+      if (!_cachedInbox.length) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="6" style="padding:32px 16px;text-align:center;color:var(--text-faint)">
+              <div style="font-size:24px;margin-bottom:6px">📬</div>
+              <div style="font-size:14px;font-weight:600;color:var(--text)">No replies found matching this filter</div>
+              <div style="font-size:12px;margin-top:4px">When hiring managers or recruiters respond to your applications, their emails appear here in real-time.</div>
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = _cachedInbox.map((x, idx) => {
+        const intent = x.intent || 'reply';
+        let intentPill = `<span class="pill pill-stage-discovered">💬 Recruiter Reply</span>`;
+        if (intent === 'interview_request') {
+          intentPill = `<span class="pill pill-stage-deal_won" style="font-weight:700">🎯 Interview Request</span>`;
+        } else if (intent === 'offer') {
+          intentPill = `<span class="pill pill-stage-deal_won" style="background:rgba(234,179,8,0.2);color:#fde047;font-weight:700">🏆 Job Offer!</span>`;
+        } else if (intent === 'rejection') {
+          intentPill = `<span class="pill pill-stage-lost">⛔ Rejection</span>`;
+        } else if (intent === 'bounce' || x.status === 'bounced') {
+          intentPill = `<span class="pill" style="background:rgba(245,158,11,0.2);color:#fbbf24">⚠️ Mailer Bounce</span>`;
+        } else if (intent === 'screening' || intent === 'info_request') {
+          intentPill = `<span class="pill" style="background:rgba(56,189,248,0.2);color:#38bdf8">📝 Info Needed</span>`;
+        }
+
+        const scoreBadge = x.match_score ? `<span class="pill" style="font-size:10px;padding:1px 6px;background:rgba(168,85,247,0.15);color:var(--purple-light)">${x.match_score}%</span>` : '';
+        const jobLink = x.job_id ? `<a href="javascript:void(0)" onclick="openJobModal(${x.job_id})" style="font-weight:600;color:var(--text);text-decoration:none" title="Open Job Posting Details">${esc(x.job_title || 'View Role')}</a>` : `<span style="font-weight:600">${esc(x.job_title || 'General Inbound')}</span>`;
+
+        return `
+          <tr>
+            <td style="font-size:12px;white-space:nowrap;color:var(--text-muted)">
+              <div>${fmt(x.created_at)}</div>
+            </td>
+            <td>
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
+                <strong style="color:var(--cyan-light);font-size:13px">${esc(x.company || 'Direct Contact')}</strong>
+                ${scoreBadge}
+              </div>
+              <div style="font-size:12px">${jobLink}</div>
+            </td>
+            <td style="font-size:12px">
+              <span style="font-family:'JetBrains Mono';font-size:11px;color:var(--text)" title="${esc(x.sender_email || '')}">${esc(x.sender_email || '—')}</span>
+            </td>
+            <td>${intentPill}</td>
+            <td>
+              <div style="font-weight:600;font-size:13px;color:var(--text);margin-bottom:2px">${esc(x.subject || 'No Subject')}</div>
+              <div style="font-size:12px;color:var(--text-muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${esc(x.snippet || x.reason || '')}</div>
+            </td>
+            <td style="text-align:right;white-space:nowrap">
+              <div style="display:inline-flex;gap:6px">
+                <button class="btn btn-sm btn-cyan" onclick="openInboxModal(${idx})" title="Read incoming email and AI action points">
+                  <span>👁️</span> Read
+                </button>
+                ${x.job_id ? `<button class="btn btn-sm" onclick="openJobModal(${x.job_id})" title="View original job posting"><span>💼</span></button>` : ''}
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function openInboxModal(idx) {
+      const item = _cachedInbox[idx];
+      if (!item) return;
+      _activeInboxModalItem = item;
+
+      const intent = item.intent || 'reply';
+      const badge = document.getElementById('inboxModalIntentBadge');
+      if (badge) {
+        badge.className = intent === 'interview_request' || intent === 'offer' ? 'pill pill-stage-deal_won' : (intent === 'rejection' ? 'pill pill-stage-lost' : 'pill pill-stage-discovered');
+        badge.textContent = intent === 'interview_request' ? '🎯 Interview Request' : (intent === 'offer' ? '🏆 Job Offer!' : (intent === 'rejection' ? '⛔ Rejection' : (intent === 'bounce' ? '⚠️ Delivery Failure' : '💬 Recruiter Reply')));
+      }
+
+      if (document.getElementById('inboxModalDate')) document.getElementById('inboxModalDate').textContent = fmt(item.created_at);
+      if (document.getElementById('inboxModalSubject')) document.getElementById('inboxModalSubject').textContent = item.subject || 'Recruiter Response';
+      if (document.getElementById('inboxModalSender')) document.getElementById('inboxModalSender').textContent = item.sender_email || 'Direct Recruiter';
+      if (document.getElementById('inboxModalTargetJob')) document.getElementById('inboxModalTargetJob').textContent = `${item.company} · ${item.job_title}`;
+
+      const summaryCard = document.getElementById('inboxModalSummaryCard');
+      const summaryText = document.getElementById('inboxModalSummaryText');
+      if (summaryCard && summaryText) {
+        if (intent === 'interview_request' || item.interview_notes) {
+          summaryCard.style.display = 'block';
+          summaryCard.style.background = 'rgba(16,185,129,0.1)';
+          summaryCard.style.borderColor = 'rgba(16,185,129,0.3)';
+          summaryText.innerHTML = `<strong>Great news!</strong> The employer wants to schedule a discussion. Check their message below and reply promptly.`;
+        } else if (intent === 'rejection') {
+          summaryCard.style.display = 'block';
+          summaryCard.style.background = 'rgba(239,68,68,0.1)';
+          summaryCard.style.borderColor = 'rgba(239,68,68,0.3)';
+          summaryText.innerHTML = `The employer has decided not to proceed with this role. Your stage has been updated automatically.`;
+        } else if (intent === 'bounce') {
+          summaryCard.style.display = 'block';
+          summaryCard.style.background = 'rgba(245,158,11,0.1)';
+          summaryCard.style.borderColor = 'rgba(245,158,11,0.3)';
+          summaryText.innerHTML = `Delivery failure from mail server. Recruiter email has been automatically suppressed to protect sender reputation.`;
+        } else {
+          summaryCard.style.display = 'none';
+        }
+      }
+
+      if (document.getElementById('inboxModalBodyText')) {
+        document.getElementById('inboxModalBodyText').textContent = item.body || item.snippet || item.reason || 'No email body text available.';
+      }
+
+      const mailtoBtn = document.getElementById('inboxModalReplyMailto');
+      if (mailtoBtn && item.sender_email) {
+        const replySub = encodeURIComponent(item.subject?.startsWith('Re:') ? item.subject : `Re: ${item.subject || ''}`);
+        mailtoBtn.href = `mailto:${encodeURIComponent(item.sender_email)}?subject=${replySub}`;
+      }
+
+      const modal = document.getElementById('inboxMessageModal');
+      if (modal) modal.style.display = 'flex';
+    }
+
+    function closeInboxModal() {
+      const modal = document.getElementById('inboxMessageModal');
+      if (modal) modal.style.display = 'none';
+      _activeInboxModalItem = null;
+    }
+
+    function copyInboxSender() {
+      if (_activeInboxModalItem && _activeInboxModalItem.sender_email) {
+        navigator.clipboard.writeText(_activeInboxModalItem.sender_email);
+        showToast(`Copied ${_activeInboxModalItem.sender_email} to clipboard!`, 'success');
+      }
+    }
+
+    function setOutboundFilter(filter) {
+      const select = document.getElementById('outboundStatusFilter');
+      if (select) select.value = filter;
+      const chips = [
+        { id: 'outboundChipAll', val: '' },
+        { id: 'outboundChipSent', val: 'sent' },
+        { id: 'outboundChipDraft', val: 'draft' },
+        { id: 'outboundChipEmail', val: 'email' },
+        { id: 'outboundChipPortal', val: 'portal' },
+        { id: 'outboundChipBlocked', val: 'blocked' },
+      ];
+      chips.forEach(c => {
+        const btn = document.getElementById(c.id);
+        if (btn) {
+          if (c.val === filter) {
+            btn.classList.add('btn-cyan');
+          } else {
+            btn.classList.remove('btn-cyan');
+          }
+        }
+      });
+      loadOutbound();
     }
 
     async function loadOutbound() {
       const st = encodeURIComponent(document.getElementById('outboundStatusFilter')?.value || '');
-      const rows = await apiGet(`/api/outbound?limit=250${st ? '&status_filter=' + st : ''}`);
-      document.getElementById('outboundTableBody').innerHTML = rows.map(x => `
-        <tr>
-          <td>${fmt(x.created_at)}</td>
-          <td>${esc(x.email_type)}</td>
-          <td>${esc(x.recipient_email)}</td>
-          <td style="font-weight:600">${esc(x.subject || '')}</td>
-          <td><span class="pill ${x.status === 'sent' ? 'pill-stage-deal_won' : x.status === 'failed' ? 'pill-stage-lost' : 'pill-stage-discovered'}">${esc(x.status)}</span></td>
-          <td style="color:var(--bad);font-size:11px">${esc(x.failure_reason || '')}</td>
-          <td style="font-family:'JetBrains Mono'">${x.job_id ?? '—'}</td>
-        </tr>
-      `).join('') || '<tr><td colspan="7" style="color:var(--text-faint);text-align:center">No outbound records.</td></tr>';
+      const search = encodeURIComponent(document.getElementById('outboundSearchInput')?.value || '');
+      let url = `/api/outbound?limit=250`;
+      if (st) url += `&status_filter=${st}`;
+      if (search) url += `&search=${search}`;
+
+      apiGet('/api/outbound/stats').then(stats => {
+        if (!stats) return;
+        if (document.getElementById('outboundKpiTotal')) document.getElementById('outboundKpiTotal').textContent = stats.total_applications ?? 0;
+        if (document.getElementById('outboundKpiSent')) document.getElementById('outboundKpiSent').textContent = stats.sent_emails ?? 0;
+        if (document.getElementById('outboundKpiWeb')) document.getElementById('outboundKpiWeb').textContent = stats.web_submitted ?? 0;
+        if (document.getElementById('outboundKpiDrafts')) document.getElementById('outboundKpiDrafts').textContent = stats.drafts_ready ?? 0;
+        if (document.getElementById('outboundKpiBlocked')) document.getElementById('outboundKpiBlocked').textContent = stats.blocked ?? 0;
+      }).catch(() => {});
+
+      const rows = await apiGet(url);
+      _cachedOutbound = Array.isArray(rows) ? rows : [];
+
+      const tbody = document.getElementById('outboundTableBody');
+      if (!tbody) return;
+
+      if (!_cachedOutbound.length) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="8" style="padding:32px 16px;text-align:center;color:var(--text-faint)">
+              <div style="font-size:24px;margin-bottom:6px">📤</div>
+              <div style="font-size:14px;font-weight:600;color:var(--text)">No outreach records found</div>
+              <div style="font-size:12px;margin-top:4px">When applications and pitches are dispatched by email or browser automation, they appear here with full audit evidence.</div>
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = _cachedOutbound.map((x, idx) => {
+        let stBadge = `<span class="pill pill-stage-discovered">${esc(x.status)}</span>`;
+        if (x.status === 'sent' || x.status === 'submitted') {
+          stBadge = `<span class="pill pill-stage-deal_won" style="font-weight:700">✓ ${x.status === 'submitted' ? 'Submitted' : 'Sent'}</span>`;
+        } else if (x.status === 'draft') {
+          stBadge = `<span class="pill" style="background:rgba(56,189,248,0.15);color:var(--cyan-light);font-weight:600">📝 Draft Ready</span>`;
+        } else if (x.status === 'blocked' || x.status === 'recruiter_email_blocked') {
+          stBadge = `<span class="pill" style="background:rgba(245,158,11,0.2);color:#fbbf24">⚠️ Blocked</span>`;
+        } else if (x.status === 'failed') {
+          stBadge = `<span class="pill pill-stage-lost">❌ Failed</span>`;
+        }
+
+        let chanBadge = `<span class="pill" style="background:#1e293b;border:1px solid var(--border)">${esc(x.channel_label || x.channel || 'Outbound')}</span>`;
+        if (x.channel === 'email') {
+          chanBadge = `<span class="pill" style="background:rgba(56,189,248,0.15);color:var(--cyan-light);border:1px solid rgba(56,189,248,0.3)">✉️ Direct Email</span>`;
+        } else if (x.channel === 'linkedin') {
+          chanBadge = `<span class="pill" style="background:rgba(10,102,194,0.2);color:#60a5fa;border:1px solid rgba(10,102,194,0.4)">💼 LinkedIn</span>`;
+        } else if (x.channel === 'indeed') {
+          chanBadge = `<span class="pill" style="background:rgba(37,99,235,0.2);color:#93c5fd;border:1px solid rgba(37,99,235,0.4)">🔵 Indeed</span>`;
+        } else if (x.channel === 'ats' || x.channel === 'web_portal') {
+          chanBadge = `<span class="pill" style="background:rgba(168,85,247,0.15);color:var(--purple-light);border:1px solid rgba(168,85,247,0.3)">🌐 Web Portal</span>`;
+        }
+
+        const scoreBadge = x.match_score ? `<span class="pill" style="font-size:10px;padding:1px 6px;background:rgba(168,85,247,0.15);color:var(--purple-light)">${x.match_score}%</span>` : '';
+        const jobLink = x.job_id ? `<a href="javascript:void(0)" onclick="openJobModal(${x.job_id})" style="font-weight:600;color:var(--text);text-decoration:none" title="Open Job Details">${esc(x.job_title || 'Position')}</a>` : `<span style="font-weight:600">${esc(x.job_title || 'Position')}</span>`;
+
+        const isUrl = x.recipient && (x.recipient.startsWith('http://') || x.recipient.startsWith('https://'));
+        const recipRender = isUrl
+          ? `<a href="${esc(x.recipient)}" target="_blank" style="color:var(--cyan-light);text-decoration:none;font-size:11px" title="${esc(x.recipient)}">${esc(x.recipient.length > 25 ? x.recipient.substring(0, 25) + '...' : x.recipient)} ↗</a>`
+          : `<span style="font-family:'JetBrains Mono';font-size:11px;color:var(--text)" title="${esc(x.recipient || '')}">${esc(x.recipient || '—')}</span>`;
+
+        const attachHtml = `
+          <div style="display:flex;align-items:center;gap:4px">
+            <span class="pill" style="font-size:10px;padding:1px 5px;background:rgba(16,185,129,0.15);color:var(--good)" title="CV PDF Attached">📄 CV</span>
+            <span class="pill" style="font-size:10px;padding:1px 5px;background:rgba(59,130,246,0.15);color:#93c5fd" title="Tailored Motivation Letter (.docx) Generated">📎 Letter</span>
+          </div>
+        `;
+
+        return `
+          <tr>
+            <td style="font-size:12px;white-space:nowrap;color:var(--text-muted)">
+              <div>${fmt(x.sent_at || x.created_at)}</div>
+            </td>
+            <td>
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
+                <strong style="color:var(--cyan-light);font-size:13px">${esc(x.company || 'Hiring Company')}</strong>
+                ${scoreBadge}
+              </div>
+              <div style="font-size:12px">${jobLink}</div>
+            </td>
+            <td>${chanBadge}</td>
+            <td>${recipRender}</td>
+            <td>${stBadge}</td>
+            <td>${attachHtml}</td>
+            <td>
+              <div style="font-weight:600;font-size:12px;color:var(--text);margin-bottom:2px">${esc(x.subject || 'Application')}</div>
+              <div style="font-size:11px;color:var(--text-muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${esc(x.failure_reason || x.snippet || '')}</div>
+            </td>
+            <td style="text-align:right;white-space:nowrap">
+              <div style="display:inline-flex;gap:6px">
+                <button class="btn btn-sm btn-cyan" onclick="openOutboundModal(${idx})" title="Preview full application and motivation letter">
+                  <span>👁️</span> View
+                </button>
+                ${x.job_id && (x.status === 'draft' || x.status === 'failed' || x.status === 'blocked') ? `
+                  <button class="btn btn-sm" onclick="resendJobApplication(${x.job_id})" title="Dispatch application now">
+                    <span>⚡</span>
+                  </button>
+                ` : ''}
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
 
       // Load suppressions
       const sups = await apiGet('/api/suppressions');
@@ -2490,6 +2776,101 @@
         loadOutbound();
       } catch (e) {
         showToast('Failed to remove: ' + e.message, 'error');
+      }
+    }
+
+    function openOutboundModal(idx) {
+      const item = _cachedOutbound[idx];
+      if (!item) return;
+      _activeOutboundModalItem = item;
+
+      const stBadge = document.getElementById('outboundModalStatusBadge');
+      if (stBadge) {
+        stBadge.className = (item.status === 'sent' || item.status === 'submitted') ? 'pill pill-stage-deal_won' : (item.status === 'failed' ? 'pill pill-stage-lost' : 'pill pill-stage-discovered');
+        stBadge.textContent = item.status === 'sent' ? '✓ Sent' : (item.status === 'submitted' ? '✓ Submitted' : (item.status === 'draft' ? '📝 Draft Ready' : item.status));
+      }
+
+      if (document.getElementById('outboundModalChannelBadge')) {
+        document.getElementById('outboundModalChannelBadge').textContent = item.channel_label || item.channel || 'Outbound';
+      }
+      if (document.getElementById('outboundModalMatchBadge')) {
+        document.getElementById('outboundModalMatchBadge').textContent = item.match_score ? `${item.match_score}% Match` : 'Evaluated Match';
+      }
+      if (document.getElementById('outboundModalRoleTitle')) {
+        document.getElementById('outboundModalRoleTitle').textContent = `${item.job_title} at ${item.company}`;
+      }
+      if (document.getElementById('outboundModalRecipient')) {
+        document.getElementById('outboundModalRecipient').textContent = item.recipient || 'Direct Hiring Team';
+      }
+      if (document.getElementById('outboundModalTimestamp')) {
+        document.getElementById('outboundModalTimestamp').textContent = fmt(item.sent_at || item.created_at);
+      }
+
+      const errBanner = document.getElementById('outboundModalErrorBanner');
+      const errText = document.getElementById('outboundModalErrorText');
+      if (errBanner && errText) {
+        if (item.failure_reason) {
+          errBanner.style.display = 'block';
+          errText.textContent = item.failure_reason;
+        } else {
+          errBanner.style.display = 'none';
+        }
+      }
+
+      if (document.getElementById('outboundModalSubject')) {
+        document.getElementById('outboundModalSubject').textContent = item.subject || 'Application';
+      }
+      if (document.getElementById('outboundModalBodyText')) {
+        document.getElementById('outboundModalBodyText').textContent = item.full_body || item.snippet || 'No application body text was generated.';
+      }
+
+      const openJobBtn = document.getElementById('btnOutboundModalOpenJob');
+      if (openJobBtn) {
+        if (item.job_url || item.application_url) {
+          openJobBtn.style.display = 'inline-flex';
+          openJobBtn.href = item.application_url || item.job_url;
+        } else {
+          openJobBtn.style.display = 'none';
+        }
+      }
+
+      const resendBtn = document.getElementById('btnOutboundModalResend');
+      if (resendBtn) {
+        resendBtn.style.display = (item.status === 'draft' || item.status === 'failed' || item.status === 'blocked') ? 'inline-flex' : 'none';
+      }
+
+      const modal = document.getElementById('outboundDetailModal');
+      if (modal) modal.style.display = 'flex';
+    }
+
+    function closeOutboundModal() {
+      const modal = document.getElementById('outboundDetailModal');
+      if (modal) modal.style.display = 'none';
+      _activeOutboundModalItem = null;
+    }
+
+    async function retryOutboundModalApplication() {
+      if (!_activeOutboundModalItem || !_activeOutboundModalItem.job_id) {
+        showToast('No job associated with this record', 'error');
+        return;
+      }
+      await resendJobApplication(_activeOutboundModalItem.job_id);
+      closeOutboundModal();
+    }
+
+    async function resendJobApplication(jobId) {
+      showToast('Dispatching application...', 'normal');
+      try {
+        const res = await apiSend('/api/actions/resend_application', 'POST', { job_id: jobId });
+        if (res.ok) {
+          showToast('Application dispatched successfully!', 'success');
+          loadOutbound();
+          if (typeof loadJobs === 'function') loadJobs();
+        } else {
+          showToast(res.error || 'Failed to dispatch application', 'error');
+        }
+      } catch (err) {
+        showToast('Application error: ' + err.message, 'error');
       }
     }
 

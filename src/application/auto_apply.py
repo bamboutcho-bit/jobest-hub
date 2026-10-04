@@ -445,7 +445,7 @@ def _build_application_message(
 
 
 def _send_email(msg: EmailMessage, to_addr: str, session, *, job_id: int | None, idempotency_key: str, allow_personal_domain: bool = False, user_id: int | None = None) -> tuple[bool, str | None]:
-    if not settings.outbound_send_enabled or settings.outbound_send_kill_switch:
+    if getattr(settings, "outbound_send_kill_switch", False):
         return False, "Outbound email sending is disabled or kill-switched."
 
     user_cfg = {}
@@ -542,6 +542,21 @@ def _candidate_application_url(
 
 def apply_to_job(job_record: dict, session=None, profile: dict | None = None) -> dict:
     uid = job_record.get("user_id")
+    u_cfg = {}
+    if uid:
+        try:
+            from src.storage.user_settings import get_user_effective_settings
+            u_cfg = get_user_effective_settings(user_id=uid)
+        except Exception:
+            u_cfg = {}
+
+    apply_mode = u_cfg.get("auto_apply_mode") or getattr(settings, "auto_apply_mode", "send")
+    web_enabled = u_cfg.get("auto_apply_web_enabled") if "auto_apply_web_enabled" in u_cfg else getattr(settings, "auto_apply_web_enabled", True)
+    has_smtp = bool(u_cfg.get("smtp_password") or getattr(settings, "sender_smtp_password", None))
+    outbound_send_enabled = u_cfg.get("outbound_send_enabled") if "outbound_send_enabled" in u_cfg else (
+        getattr(settings, "outbound_send_enabled", False) or (apply_mode == "send" and has_smtp)
+    )
+
     if profile is None:
         try:
             from src.candidate.profile_manager import get_active_profile
@@ -585,11 +600,11 @@ def apply_to_job(job_record: dict, session=None, profile: dict | None = None) ->
         )
         draft_path = _save_eml_draft(msg, job_record.get("id"), job_record.get("company"), job_record.get("title"))
         
-        if settings.auto_apply_mode == "send" and settings.outbound_send_enabled and not resume_attached and not settings.auto_apply_allow_missing_resume:
+        if apply_mode == "send" and outbound_send_enabled and not resume_attached and not settings.auto_apply_allow_missing_resume:
             resume_display_path = (profile.get("resume_path") if profile else None) or settings.candidate_resume_path
             return {"application_method": "recruiter_email", "application_email": primary_email, "application_url": app_url, "application_status": "resume_missing", "application_error": f"Resume not found at {resume_display_path}", "resume_attached": False, "draft_path": draft_path, "applied": False, "thread_subject": subject, "message_id": None}
         
-        if settings.auto_apply_mode == "send" and session is not None and settings.outbound_send_enabled:
+        if apply_mode == "send" and session is not None and outbound_send_enabled:
             allow_personal = primary_email in explicit_emails and settings.allow_personal_application_recipient_domains
             idempotency_key = f"application:{job_record.get('id')}:{primary_email}:{job_record.get('title')}"
             sent, error = _send_email(msg, primary_email, session, job_id=job_record.get("id"), idempotency_key=idempotency_key, allow_personal_domain=allow_personal, user_id=uid)
@@ -608,18 +623,8 @@ def apply_to_job(job_record: dict, session=None, profile: dict | None = None) ->
                 "applied_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc) if sent else None,
                 "application_body": body,
             }
-        return {"application_method": "recruiter_email_draft", "application_email": primary_email, "application_url": app_url, "application_status": "draft", "resume_attached": resume_attached, "draft_path": draft_path, "applied": False, "thread_subject": subject, "application_body": body, "message_id": None}
-
-    u_cfg = {}
-    if uid:
-        try:
-            from src.storage.user_settings import get_user_effective_settings
-            u_cfg = get_user_effective_settings(user_id=uid)
-        except Exception:
-            pass
-
-    apply_mode = u_cfg.get("auto_apply_mode") or getattr(settings, "auto_apply_mode", "send")
-    web_enabled = u_cfg.get("auto_apply_web_enabled") if "auto_apply_web_enabled" in u_cfg else getattr(settings, "auto_apply_web_enabled", True)
+        draft_reason = "SMTP credentials not configured in Settings — application saved as draft ready to send" if not has_smtp else "Auto-apply mode set to draft"
+        return {"application_method": "recruiter_email_draft", "application_email": primary_email, "application_url": app_url, "application_status": "draft", "application_error": draft_reason, "resume_attached": resume_attached, "draft_path": draft_path, "applied": False, "thread_subject": subject, "application_body": body, "message_id": None}
 
     if session is not None and app_url and apply_mode == "send" and web_enabled:
         body = _application_body(job_record, profile=profile)
