@@ -336,11 +336,11 @@ def api_summary(request: Request, _: bool = Depends(_auth)):
             run_query = run_query.where(PipelineRun.user_id == user_id)
         latest_run = session.scalar(run_query.order_by(desc(PipelineRun.started_at)).limit(1))
 
-        counts = _stage_counts(session, user_id=user_id)
+        counts = _stage_counts(session, user_id=None if is_admin else user_id)
 
         def _scope_q(stmt):
-            if user_id is not None:
-                return stmt.where(JobPosting.user_id == user_id)
+            if not is_admin and user_id is not None:
+                return stmt.where(or_(JobPosting.user_id == user_id, JobPosting.user_id.is_(None)))
             return stmt
 
         jobs_total = session.scalar(_scope_q(select(func.count(JobPosting.id)))) or 0
@@ -351,13 +351,18 @@ def api_summary(request: Request, _: bool = Depends(_auth)):
         # Scope replies and follow-ups to this specific user's jobs
         replies_q = select(func.count(EmailEvent.id)).where(EmailEvent.direction == "inbound", EmailEvent.created_at >= day_start)
         followups_q = select(func.count(EmailEvent.id)).where(EmailEvent.direction == "outbound", EmailEvent.email_type == "follow_up", EmailEvent.created_at >= day_start)
-        if user_id is not None:
+        if not is_admin and user_id is not None:
             replies_q = replies_q.join(JobPosting, EmailEvent.job_id == JobPosting.id).where(JobPosting.user_id == user_id)
             followups_q = followups_q.join(JobPosting, EmailEvent.job_id == JobPosting.id).where(JobPosting.user_id == user_id)
         replies_today = session.scalar(replies_q) or 0
         followups_today = session.scalar(followups_q) or 0
 
-        applications_today = session.scalar(_scope_q(select(func.count(JobPosting.id)).where(JobPosting.applied_at >= day_start))) or 0
+        if is_admin:
+            total_job_apps = session.scalar(select(func.count(JobPosting.id)).where(JobPosting.applied_at >= day_start)) or 0
+            total_user_apps = session.scalar(select(func.count(UserJobApplication.id)).where(UserJobApplication.applied_at >= day_start)) or 0
+            applications_today = max(total_job_apps, total_user_apps)
+        else:
+            applications_today = session.scalar(_scope_q(select(func.count(JobPosting.id)).where(JobPosting.applied_at >= day_start))) or 0
         application_failures_today = session.scalar(_scope_q(select(func.count(JobPosting.id)).where(JobPosting.application_attempted_at >= day_start, JobPosting.application_status.in_(["error", "blocked", "application_error"])))) or 0
         application_manual_today = session.scalar(_scope_q(select(func.count(JobPosting.id)).where(JobPosting.application_attempted_at >= day_start, JobPosting.application_status.like("manual%")))) or 0
         if not is_admin and user_id is not None:
@@ -519,7 +524,7 @@ def api_summary(request: Request, _: bool = Depends(_auth)):
             "action_count": sum(counts.get(x, 0) for x in ("applied", "interview_requested", "offer_negotiating", "response_received", "offer_received")),
             "replies_today": int(replies_today),
             "follow_ups_today": int(followups_today),
-            "applications_today": int(user_sent_today if not is_admin else applications_today),
+            "applications_today": int(applications_today if is_admin else max(user_sent_today, applications_today)),
             "application_failures_today": int(application_failures_today),
             "application_manual_today": int(application_manual_today),
             "outbound_hour": int(outbound_hour),
