@@ -880,6 +880,104 @@
               </div>
             </div>
 
+            <!-- Job Portals Automation in Candidate Profile: LinkedIn & Indeed -->
+            <div style="background:linear-gradient(180deg, rgba(10,102,194,0.08) 0%, rgba(13,21,39,0.7) 100%);border:1px solid rgba(10,102,194,0.3);border-radius:var(--radius-md);padding:14px;margin-bottom:14px">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:12px">
+                <div>
+                  <div style="font-size:11px;font-weight:700;color:var(--cyan-light);text-transform:uppercase;letter-spacing:0.5px;display:flex;align-items:center;gap:6px">
+                    <span>🔗</span> Connected Job Accounts (Auto-Apply)
+                  </div>
+                  <div style="font-size:13px;font-weight:800;color:#fff;margin-top:2px">LinkedIn Easy Apply & Indeed Apply</div>
+                  <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Connect your personal accounts so AutoHunt can automatically submit applications on your behalf using your active CV.</div>
+                </div>
+                <button type="button" class="btn btn-sm" onclick="loadIntegrationsStatus(true)" title="Refresh status" style="border:1px solid var(--border);font-size:11px;padding:3px 8px">
+                  ↻ Refresh
+                </button>
+              </div>
+
+              <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(260px, 1fr));gap:12px">
+                <!-- LinkedIn Box -->
+                <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(10,102,194,0.25);border-radius:8px;padding:12px">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                    <div style="display:flex;align-items:center;gap:8px">
+                      <div style="width:24px;height:24px;border-radius:5px;background:#0A66C2;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:13px">in</div>
+                      <span style="font-size:12px;font-weight:700;color:#fff">LinkedIn</span>
+                    </div>
+                    <span id="profLiStatusBadge" class="badge" style="background:rgba(255,255,255,0.08);color:var(--text-muted);padding:2px 8px;border-radius:12px;font-size:10px">Checking...</span>
+                  </div>
+                  <div style="margin-bottom:8px">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                      <label style="font-size:10px;color:var(--text-muted)">li_at Session Cookie</label>
+                      <a href="javascript:void(0)" onclick="toggleGuide('profLiGuide')" style="font-size:10px;color:var(--cyan);text-decoration:none">ℹ️ Help</a>
+                    </div>
+                    <div style="position:relative">
+                      <input type="password" id="profLinkedinCookie" class="form-control" placeholder="Paste li_at cookie..." style="font-size:11px;padding:4px 30px 4px 8px;font-family:monospace">
+                      <button type="button" onclick="togglePasswordVisibility('profLinkedinCookie', this)" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:12px">👁️</button>
+                    </div>
+                    <div id="profLiGuide" style="display:none;background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.1);border-radius:4px;padding:6px;margin-top:6px;font-size:10px;color:var(--text-muted);line-height:1.4">
+                      1. Open <strong>linkedin.com</strong> &amp; log in.<br>
+                      2. Press <code>F12</code> &gt; <strong>Application/Storage</strong> &gt; <strong>Cookies</strong> &gt; <code>linkedin.com</code>.<br>
+                      3. Copy <code>li_at</code> value.
+                    </div>
+                  </div>
+                  <div style="display:flex;align-items:center;justify-content:space-between;font-size:10px;color:var(--text-muted);margin-bottom:8px">
+                    <span>Verified: <span id="profLiVerifiedAt" style="color:#fff">Never</span></span>
+                    <span id="profLiCookiePreview" style="color:var(--cyan-light);font-family:monospace">None</span>
+                  </div>
+                  <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#fff;cursor:pointer;margin-bottom:8px">
+                    <input type="checkbox" id="profAutoApplyLinkedin" checked style="accent-color:var(--cyan)">
+                    <span>Auto-apply via Easy Apply</span>
+                  </label>
+                  <div style="display:flex;gap:6px">
+                    <button type="button" class="btn btn-sm btn-cyan" id="profBtnConnectLi" onclick="connectPortal('linkedin', 'prof')" style="flex:1;font-size:11px;padding:3px 6px">🔗 Connect</button>
+                    <button type="button" class="btn btn-sm" id="profBtnTestLi" onclick="testPortalConnection('linkedin', 'prof')" style="border:1px solid rgba(255,255,255,0.2);font-size:11px;padding:3px 6px">⚡ Test</button>
+                    <button type="button" class="btn btn-sm" id="profBtnDisconnectLi" onclick="disconnectPortal('linkedin')" style="border:1px solid #ef4444;color:#ef4444;display:none;font-size:11px;padding:3px 6px">Unlink</button>
+                  </div>
+                  <div id="profLiFeedbackBox" style="display:none;margin-top:6px;padding:4px 8px;border-radius:4px;font-size:10px"></div>
+                </div>
+
+                <!-- Indeed Box -->
+                <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(33,100,243,0.25);border-radius:8px;padding:12px">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                    <div style="display:flex;align-items:center;gap:8px">
+                      <div style="width:24px;height:24px;border-radius:5px;background:#2164f3;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:12px">ind</div>
+                      <span style="font-size:12px;font-weight:700;color:#fff">Indeed</span>
+                    </div>
+                    <span id="profIndStatusBadge" class="badge" style="background:rgba(255,255,255,0.08);color:var(--text-muted);padding:2px 8px;border-radius:12px;font-size:10px">Checking...</span>
+                  </div>
+                  <div style="margin-bottom:8px">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                      <label style="font-size:10px;color:var(--text-muted)">Indeed Session Cookie</label>
+                      <a href="javascript:void(0)" onclick="toggleGuide('profIndGuide')" style="font-size:10px;color:var(--cyan);text-decoration:none">ℹ️ Help</a>
+                    </div>
+                    <div style="position:relative">
+                      <input type="password" id="profIndeedCookie" class="form-control" placeholder="Paste session cookie..." style="font-size:11px;padding:4px 30px 4px 8px;font-family:monospace">
+                      <button type="button" onclick="togglePasswordVisibility('profIndeedCookie', this)" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:12px">👁️</button>
+                    </div>
+                    <div id="profIndGuide" style="display:none;background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.1);border-radius:4px;padding:6px;margin-top:6px;font-size:10px;color:var(--text-muted);line-height:1.4">
+                      1. Open <strong>indeed.com</strong> &amp; log in.<br>
+                      2. Press <code>F12</code> &gt; <strong>Application/Storage</strong> &gt; <strong>Cookies</strong>.<br>
+                      3. Copy <code>SHARED_SESSION_ID</code> or cookie header.
+                    </div>
+                  </div>
+                  <div style="display:flex;align-items:center;justify-content:space-between;font-size:10px;color:var(--text-muted);margin-bottom:8px">
+                    <span>Verified: <span id="profIndVerifiedAt" style="color:#fff">Never</span></span>
+                    <span id="profIndCookiePreview" style="color:var(--cyan-light);font-family:monospace">None</span>
+                  </div>
+                  <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#fff;cursor:pointer;margin-bottom:8px">
+                    <input type="checkbox" id="profAutoApplyIndeed" checked style="accent-color:var(--cyan)">
+                    <span>Auto-apply via Indeed Apply</span>
+                  </label>
+                  <div style="display:flex;gap:6px">
+                    <button type="button" class="btn btn-sm btn-cyan" id="profBtnConnectInd" onclick="connectPortal('indeed', 'prof')" style="flex:1;font-size:11px;padding:3px 6px">🔗 Connect</button>
+                    <button type="button" class="btn btn-sm" id="profBtnTestInd" onclick="testPortalConnection('indeed', 'prof')" style="border:1px solid rgba(255,255,255,0.2);font-size:11px;padding:3px 6px">⚡ Test</button>
+                    <button type="button" class="btn btn-sm" id="profBtnDisconnectInd" onclick="disconnectPortal('indeed')" style="border:1px solid #ef4444;color:#ef4444;display:none;font-size:11px;padding:3px 6px">Unlink</button>
+                  </div>
+                  <div id="profIndFeedbackBox" style="display:none;margin-top:6px;padding:4px 8px;border-radius:4px;font-size:10px"></div>
+                </div>
+              </div>
+            </div>
+
             <!-- Custom Resume Text Studio -->
             <div style="margin-bottom:14px">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">

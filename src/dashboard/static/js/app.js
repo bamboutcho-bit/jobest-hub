@@ -1108,7 +1108,7 @@
 
       if (tab === 'postings') loadJobs();
       else if (tab === 'hr_finder') { loadHrStats(); updateHrDiscoveryAccess(); }
-      else if (tab === 'profiles') { loadProfiles(); loadActiveMatrixPreview(); }
+      else if (tab === 'profiles') { loadProfiles(); loadActiveMatrixPreview(); loadIntegrationsStatus(); }
       else if (tab === 'live') loadLivePipelineMonitor();
       else if (tab === 'inbox') loadInbox();
       else if (tab === 'outbound') loadOutbound();
@@ -4693,107 +4693,94 @@
         const res = await apiGet('/api/user/integrations');
         if (!res || !res.ok) return;
 
-        // 1. LinkedIn Card UI
+        const updateBadges = (ids, isConnected) => {
+          ids.forEach(id => {
+            const b = document.getElementById(id);
+            if (!b) return;
+            if (isConnected) {
+              b.textContent = 'Connected ✓';
+              b.style.background = 'rgba(16,185,129,0.15)';
+              b.style.color = '#10b981';
+              b.style.border = '1px solid rgba(16,185,129,0.3)';
+            } else {
+              b.textContent = 'Not Linked';
+              b.style.background = 'rgba(239,68,68,0.1)';
+              b.style.color = '#ef4444';
+              b.style.border = '1px solid rgba(239,68,68,0.2)';
+            }
+          });
+        };
+
+        const updateVisibility = (ids, show) => {
+          ids.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = show ? 'inline-block' : 'none';
+          });
+        };
+
+        const updateTexts = (ids, text) => {
+          ids.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = text;
+          });
+        };
+
+        const updateChecks = (ids, checked) => {
+          ids.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.checked = checked;
+          });
+        };
+
+        // 1. LinkedIn UI Sync (Settings & Candidate Profile)
         const li = res.linkedin || {};
-        const liBadge = document.getElementById('liStatusBadge');
-        const btnDisconnectLi = document.getElementById('btnDisconnectLi');
-        const liVerifiedAt = document.getElementById('liVerifiedAt');
-        const liPreview = document.getElementById('liCookiePreview');
-        const liInput = document.getElementById('usLinkedinCookie');
-        const liAuto = document.getElementById('usAutoApplyLinkedin');
+        updateBadges(['liStatusBadge', 'profLiStatusBadge'], li.connected);
+        updateVisibility(['btnDisconnectLi', 'profBtnDisconnectLi'], li.connected);
 
-        if (liBadge) {
-          if (li.connected) {
-            liBadge.textContent = 'Connected ✓';
-            liBadge.style.background = 'rgba(16,185,129,0.15)';
-            liBadge.style.color = '#10b981';
-            liBadge.style.border = '1px solid rgba(16,185,129,0.3)';
-          } else {
-            liBadge.textContent = 'Not Linked';
-            liBadge.style.background = 'rgba(239,68,68,0.1)';
-            liBadge.style.color = '#ef4444';
-            liBadge.style.border = '1px solid rgba(239,68,68,0.2)';
+        let liVer = li.connected ? 'Active' : 'Never';
+        if (li.verified_at) {
+          try {
+            liVer = new Date(li.verified_at).toLocaleDateString() + ' ' + new Date(li.verified_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+          } catch (_) { liVer = li.verified_at; }
+        }
+        updateTexts(['liVerifiedAt', 'profLiVerifiedAt'], liVer);
+        updateTexts(['liCookiePreview', 'profLiCookiePreview'], li.cookie_preview || (li.connected ? '••••••••' : 'None'));
+
+        if (li.auto_apply_enabled !== undefined) {
+          updateChecks(['usAutoApplyLinkedin', 'profAutoApplyLinkedin'], li.auto_apply_enabled !== false);
+        }
+
+        ['usLinkedinCookie', 'profLinkedinCookie'].forEach(id => {
+          const inp = document.getElementById(id);
+          if (inp && li.connected && !inp.value) {
+            inp.placeholder = 'Connected (enter new li_at to overwrite)';
           }
-        }
+        });
 
-        if (btnDisconnectLi) {
-          btnDisconnectLi.style.display = li.connected ? 'inline-block' : 'none';
-        }
-
-        if (liVerifiedAt) {
-          if (li.verified_at) {
-            try {
-              liVerifiedAt.textContent = new Date(li.verified_at).toLocaleDateString() + ' ' + new Date(li.verified_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-            } catch (_) {
-              liVerifiedAt.textContent = li.verified_at;
-            }
-          } else {
-            liVerifiedAt.textContent = li.connected ? 'Active' : 'Never';
-          }
-        }
-
-        if (liPreview) {
-          liPreview.textContent = li.cookie_preview || (li.connected ? '••••••••' : 'None');
-        }
-
-        if (liInput && li.connected && !liInput.value) {
-          liInput.placeholder = 'Connected (enter new li_at to overwrite)';
-        }
-
-        if (liAuto && li.auto_apply_enabled !== undefined) {
-          liAuto.checked = li.auto_apply_enabled !== false;
-        }
-
-        // 2. Indeed Card UI
+        // 2. Indeed UI Sync (Settings & Candidate Profile)
         const ind = res.indeed || {};
-        const indBadge = document.getElementById('indStatusBadge');
-        const btnDisconnectInd = document.getElementById('btnDisconnectInd');
-        const indVerifiedAt = document.getElementById('indVerifiedAt');
-        const indPreview = document.getElementById('indCookiePreview');
-        const indInput = document.getElementById('usIndeedCookie');
-        const indAuto = document.getElementById('usAutoApplyIndeed');
+        updateBadges(['indStatusBadge', 'profIndStatusBadge'], ind.connected);
+        updateVisibility(['btnDisconnectInd', 'profBtnDisconnectInd'], ind.connected);
 
-        if (indBadge) {
-          if (ind.connected) {
-            indBadge.textContent = 'Connected ✓';
-            indBadge.style.background = 'rgba(16,185,129,0.15)';
-            indBadge.style.color = '#10b981';
-            indBadge.style.border = '1px solid rgba(16,185,129,0.3)';
-          } else {
-            indBadge.textContent = 'Not Linked';
-            indBadge.style.background = 'rgba(239,68,68,0.1)';
-            indBadge.style.color = '#ef4444';
-            indBadge.style.border = '1px solid rgba(239,68,68,0.2)';
+        let indVer = ind.connected ? 'Active' : 'Never';
+        if (ind.verified_at) {
+          try {
+            indVer = new Date(ind.verified_at).toLocaleDateString() + ' ' + new Date(ind.verified_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+          } catch (_) { indVer = ind.verified_at; }
+        }
+        updateTexts(['indVerifiedAt', 'profIndVerifiedAt'], indVer);
+        updateTexts(['indCookiePreview', 'profIndCookiePreview'], ind.cookie_preview || (ind.connected ? '••••••••' : 'None'));
+
+        if (ind.auto_apply_enabled !== undefined) {
+          updateChecks(['usAutoApplyIndeed', 'profAutoApplyIndeed'], ind.auto_apply_enabled !== false);
+        }
+
+        ['usIndeedCookie', 'profIndeedCookie'].forEach(id => {
+          const inp = document.getElementById(id);
+          if (inp && ind.connected && !inp.value) {
+            inp.placeholder = 'Connected (enter new cookie to overwrite)';
           }
-        }
-
-        if (btnDisconnectInd) {
-          btnDisconnectInd.style.display = ind.connected ? 'inline-block' : 'none';
-        }
-
-        if (indVerifiedAt) {
-          if (ind.verified_at) {
-            try {
-              indVerifiedAt.textContent = new Date(ind.verified_at).toLocaleDateString() + ' ' + new Date(ind.verified_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-            } catch (_) {
-              indVerifiedAt.textContent = ind.verified_at;
-            }
-          } else {
-            indVerifiedAt.textContent = ind.connected ? 'Active' : 'Never';
-          }
-        }
-
-        if (indPreview) {
-          indPreview.textContent = ind.cookie_preview || (ind.connected ? '••••••••' : 'None');
-        }
-
-        if (indInput && ind.connected && !indInput.value) {
-          indInput.placeholder = 'Connected (enter new cookie to overwrite)';
-        }
-
-        if (indAuto && ind.auto_apply_enabled !== undefined) {
-          indAuto.checked = ind.auto_apply_enabled !== false;
-        }
+        });
 
         if (notify) {
           showToast('Portal connection status updated ✓', 'success');
@@ -4803,15 +4790,31 @@
       }
     }
 
-    async function connectPortal(platform) {
+    async function connectPortal(platform, scope = '') {
       platform = (platform || '').toLowerCase().trim();
       const isLi = platform === 'linkedin';
-      const inputId = isLi ? 'usLinkedinCookie' : 'usIndeedCookie';
-      const autoId = isLi ? 'usAutoApplyLinkedin' : 'usAutoApplyIndeed';
-      const btnId = isLi ? 'btnConnectLi' : 'btnConnectInd';
-      const feedbackId = isLi ? 'liFeedbackBox' : 'indFeedbackBox';
+      const isProf = scope === 'prof';
 
-      const cookieVal = (document.getElementById(inputId)?.value || '').trim();
+      const inputId = isProf 
+        ? (isLi ? 'profLinkedinCookie' : 'profIndeedCookie') 
+        : (isLi ? 'usLinkedinCookie' : 'usIndeedCookie');
+      const fallbackInputId = isProf 
+        ? (isLi ? 'usLinkedinCookie' : 'usIndeedCookie')
+        : (isLi ? 'profLinkedinCookie' : 'profIndeedCookie');
+
+      const autoId = isProf
+        ? (isLi ? 'profAutoApplyLinkedin' : 'profAutoApplyIndeed')
+        : (isLi ? 'usAutoApplyLinkedin' : 'usAutoApplyIndeed');
+
+      const btnId = isProf
+        ? (isLi ? 'profBtnConnectLi' : 'profBtnConnectInd')
+        : (isLi ? 'btnConnectLi' : 'btnConnectInd');
+
+      const feedbackId = isProf
+        ? (isLi ? 'profLiFeedbackBox' : 'profIndFeedbackBox')
+        : (isLi ? 'liFeedbackBox' : 'indFeedbackBox');
+
+      const cookieVal = (document.getElementById(inputId)?.value || document.getElementById(fallbackInputId)?.value || '').trim();
       const autoVal = document.getElementById(autoId)?.checked !== false;
       const btn = document.getElementById(btnId);
       const feedback = document.getElementById(feedbackId);
@@ -4838,17 +4841,28 @@
         const res = await apiSend(`/api/user/integrations/${platform}/connect`, 'POST', payload);
         showToast(res.message || `${platform.toUpperCase()} connected successfully! ✓`, 'success');
 
-        if (feedback) {
-          feedback.style.display = 'block';
-          feedback.style.background = 'rgba(16,185,129,0.15)';
-          feedback.style.color = '#10b981';
-          feedback.style.border = '1px solid rgba(16,185,129,0.3)';
-          feedback.textContent = res.message || 'Connected successfully! Ready for auto-apply.';
-        }
+        const allFeedbacks = isLi 
+          ? [document.getElementById('liFeedbackBox'), document.getElementById('profLiFeedbackBox')]
+          : [document.getElementById('indFeedbackBox'), document.getElementById('profIndFeedbackBox')];
+
+        allFeedbacks.forEach(fb => {
+          if (fb) {
+            fb.style.display = 'block';
+            fb.style.background = 'rgba(16,185,129,0.15)';
+            fb.style.color = '#10b981';
+            fb.style.border = '1px solid rgba(16,185,129,0.3)';
+            fb.textContent = res.message || 'Connected successfully! Ready for auto-apply.';
+          }
+        });
 
         // Clear input to not show raw cookie
-        const inp = document.getElementById(inputId);
-        if (inp) inp.value = '';
+        const inputIds = isLi 
+          ? ['usLinkedinCookie', 'profLinkedinCookie'] 
+          : ['usIndeedCookie', 'profIndeedCookie'];
+        inputIds.forEach(id => {
+          const inp = document.getElementById(id);
+          if (inp) inp.value = '';
+        });
 
         await loadIntegrationsStatus();
       } catch (err) {
@@ -4879,13 +4893,22 @@
       try {
         const res = await apiSend(`/api/user/integrations/${platform}/disconnect`, 'POST', {});
         showToast(res.message || `${name} account disconnected.`, 'info');
-        const inputId = isLi ? 'usLinkedinCookie' : 'usIndeedCookie';
-        const inp = document.getElementById(inputId);
-        if (inp) inp.value = '';
 
-        const feedbackId = isLi ? 'liFeedbackBox' : 'indFeedbackBox';
-        const feedback = document.getElementById(feedbackId);
-        if (feedback) feedback.style.display = 'none';
+        const inputIds = isLi 
+          ? ['usLinkedinCookie', 'profLinkedinCookie'] 
+          : ['usIndeedCookie', 'profIndeedCookie'];
+        inputIds.forEach(id => {
+          const inp = document.getElementById(id);
+          if (inp) inp.value = '';
+        });
+
+        const feedbackIds = isLi 
+          ? ['liFeedbackBox', 'profLiFeedbackBox'] 
+          : ['indFeedbackBox', 'profIndFeedbackBox'];
+        feedbackIds.forEach(id => {
+          const fb = document.getElementById(id);
+          if (fb) fb.style.display = 'none';
+        });
 
         await loadIntegrationsStatus();
       } catch (err) {
@@ -4893,14 +4916,27 @@
       }
     }
 
-    async function testPortalConnection(platform) {
+    async function testPortalConnection(platform, scope = '') {
       platform = (platform || '').toLowerCase().trim();
       const isLi = platform === 'linkedin';
-      const inputId = isLi ? 'usLinkedinCookie' : 'usIndeedCookie';
-      const btnId = isLi ? 'btnTestLi' : 'btnTestInd';
-      const feedbackId = isLi ? 'liFeedbackBox' : 'indFeedbackBox';
+      const isProf = scope === 'prof';
 
-      const cookieVal = (document.getElementById(inputId)?.value || '').trim();
+      const inputId = isProf 
+        ? (isLi ? 'profLinkedinCookie' : 'profIndeedCookie') 
+        : (isLi ? 'usLinkedinCookie' : 'usIndeedCookie');
+      const fallbackInputId = isProf 
+        ? (isLi ? 'usLinkedinCookie' : 'usIndeedCookie')
+        : (isLi ? 'profLinkedinCookie' : 'profIndeedCookie');
+
+      const btnId = isProf
+        ? (isLi ? 'profBtnTestLi' : 'profBtnTestInd')
+        : (isLi ? 'btnTestLi' : 'btnTestInd');
+
+      const feedbackId = isProf
+        ? (isLi ? 'profLiFeedbackBox' : 'profIndFeedbackBox')
+        : (isLi ? 'liFeedbackBox' : 'indFeedbackBox');
+
+      const cookieVal = (document.getElementById(inputId)?.value || document.getElementById(fallbackInputId)?.value || '').trim();
       const btn = document.getElementById(btnId);
       const feedback = document.getElementById(feedbackId);
 
@@ -4922,22 +4958,32 @@
           cookie: cookieVal || undefined,
         });
 
+        const allFeedbacks = isLi 
+          ? [document.getElementById('liFeedbackBox'), document.getElementById('profLiFeedbackBox')]
+          : [document.getElementById('indFeedbackBox'), document.getElementById('profIndFeedbackBox')];
+
         if (res.connected && res.ok) {
           showToast(res.message, 'success');
-          if (feedback) {
-            feedback.style.background = 'rgba(16,185,129,0.15)';
-            feedback.style.color = '#10b981';
-            feedback.style.border = '1px solid rgba(16,185,129,0.3)';
-            feedback.textContent = res.message;
-          }
+          allFeedbacks.forEach(fb => {
+            if (fb) {
+              fb.style.display = 'block';
+              fb.style.background = 'rgba(16,185,129,0.15)';
+              fb.style.color = '#10b981';
+              fb.style.border = '1px solid rgba(16,185,129,0.3)';
+              fb.textContent = res.message;
+            }
+          });
         } else {
           showToast(res.message, 'warning');
-          if (feedback) {
-            feedback.style.background = 'rgba(239,68,68,0.15)';
-            feedback.style.color = '#ef4444';
-            feedback.style.border = '1px solid rgba(239,68,68,0.3)';
-            feedback.textContent = res.message;
-          }
+          allFeedbacks.forEach(fb => {
+            if (fb) {
+              fb.style.display = 'block';
+              fb.style.background = 'rgba(239,68,68,0.15)';
+              fb.style.color = '#ef4444';
+              fb.style.border = '1px solid rgba(239,68,68,0.3)';
+              fb.textContent = res.message;
+            }
+          });
         }
       } catch (err) {
         showToast('Verification check error: ' + err.message, 'error');
