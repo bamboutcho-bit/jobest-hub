@@ -2422,6 +2422,8 @@
       if (drop) {
         drop.style.display = drop.style.display === 'block' ? 'none' : 'block';
       }
+    }
+
     function triggerBatchApply() {
       return triggerApplyPendingMatches();
     }

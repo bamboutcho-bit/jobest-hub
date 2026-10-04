@@ -1,5 +1,6 @@
 """Tests for enhanced Inbox & Replies, unified Outreach Ledger, and auto-apply threshold handling."""
 import pytest
+import uuid
 from datetime import datetime, timezone
 from starlette.datastructures import Headers
 from starlette.requests import Request
@@ -41,20 +42,21 @@ def _make_dummy_request(path: str = "/api/inbox", query_string: str = "", user_i
 
 
 def test_inbox_enriched_and_stats():
+    u_id = uuid.uuid4().hex[:8]
     with get_session() as session:
         # Create test user
-        user = User(email="inbox_tester@example.com", full_name="Inbox Tester", role="user", is_active=True)
+        user = User(email=f"inbox_{u_id}@example.com", full_name="Inbox Tester", role="user", is_active=True)
         session.add(user)
         session.flush()
 
         # Create test job
         job = JobPosting(
-            dedup_hash="stripe_backend_test_hash",
+            dedup_hash=f"stripe_backend_{u_id}",
             title="Senior Backend Engineer",
             company="Stripe",
             location="Paris, France",
             source_site="linkedin",
-            job_url="https://stripe.com/jobs/123",
+            job_url=f"https://stripe.com/jobs/{u_id}",
             user_id=user.id,
             match_score=85,
             pipeline_stage=PipelineStage.INTERVIEW_REQUESTED,
@@ -106,14 +108,15 @@ def test_inbox_enriched_and_stats():
 
 
 def test_outbound_unified_ledger_and_stats():
+    u_id = uuid.uuid4().hex[:8]
     with get_session() as session:
-        user = User(email="outreach_tester@example.com", full_name="Outreach Tester", role="user", is_active=True)
+        user = User(email=f"outreach_{u_id}@example.com", full_name="Outreach Tester", role="user", is_active=True)
         session.add(user)
         session.flush()
 
         # 1. Job with email outbound
         job1 = JobPosting(
-            dedup_hash="doctolib_arch_test_hash",
+            dedup_hash=f"doctolib_arch_{u_id}",
             title="Lead Python Architect",
             company="Doctolib",
             location="Remote",
@@ -131,7 +134,7 @@ def test_outbound_unified_ledger_and_stats():
         out_msg = OutboundMessage(
             user_id=user.id,
             job_id=job1.id,
-            idempotency_key=f"test:out:{job1.id}",
+            idempotency_key=f"test:out:{job1.id}:{u_id}",
             email_type="application",
             recipient_email="talent@doctolib.com",
             subject="Application for Lead Python Architect",
@@ -141,12 +144,12 @@ def test_outbound_unified_ledger_and_stats():
 
         # 2. Job with Web Portal application
         job2 = JobPosting(
-            dedup_hash="datadog_fs_test_hash",
+            dedup_hash=f"datadog_fs_{u_id}",
             title="Full Stack Developer",
             company="Datadog",
             location="Paris",
             source_site="indeed",
-            application_url="https://careers.datadog.com/apply/456",
+            application_url=f"https://careers.datadog.com/apply/{u_id}",
             user_id=user.id,
             match_score=78,
             pipeline_stage=PipelineStage.APPLIED,
@@ -191,8 +194,9 @@ def test_outbound_unified_ledger_and_stats():
 
 def test_auto_apply_min_score_respects_custom_threshold():
     """Verify that candidate profile customized match threshold is respected without hardcoding 75."""
+    u_id = uuid.uuid4().hex[:8]
     with get_session() as session:
-        user = User(email="threshold_user@example.com", full_name="Threshold Tester", role="user", is_active=True)
+        user = User(email=f"threshold_{u_id}@example.com", full_name="Threshold Tester", role="user", is_active=True)
         session.add(user)
         session.flush()
 
@@ -202,7 +206,7 @@ def test_auto_apply_min_score_respects_custom_threshold():
 
         # Job scoring 68 (previously blocked by 75 gate)
         job = JobPosting(
-            dedup_hash="techcorp_se_test_hash",
+            dedup_hash=f"techcorp_se_{u_id}",
             title="Software Engineer",
             company="TechCorp",
             user_id=user.id,
