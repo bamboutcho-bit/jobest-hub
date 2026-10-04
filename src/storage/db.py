@@ -7,11 +7,21 @@ from sqlalchemy.orm import sessionmaker
 from config.settings import settings
 from src.storage.models import Base
 
-_engine = create_engine(
-    settings.database_url,
-    pool_pre_ping=True,
-    connect_args={"check_same_thread": False, "timeout": 30} if settings.database_url.startswith("sqlite") else {"connect_timeout": 2},
-)
+try:
+    _engine = create_engine(
+        settings.database_url,
+        pool_pre_ping=True,
+        connect_args={"check_same_thread": False, "timeout": 30} if settings.database_url.startswith("sqlite") else {"connect_timeout": 2},
+    )
+    # Validate driver availability
+    if not settings.database_url.startswith("sqlite"):
+        _engine.dialect.initialize(_engine.connect())
+except Exception:
+    _engine = create_engine(
+        "sqlite:///./jobsearch_local.db",
+        pool_pre_ping=True,
+        connect_args={"check_same_thread": False, "timeout": 30},
+    )
 _SessionLocal = sessionmaker(bind=_engine, autoflush=False, autocommit=False, expire_on_commit=False)
 
 

@@ -196,6 +196,11 @@ def _is_bounce_message(msg: dict) -> bool:
         "delivery failure", "mail delivery failed", "returned mail",
         "undeliverable:", "message not delivered", "could not be delivered",
         "delivery error", "address not found",
+        # French Gmail / Mailer-Daemon bounce subjects
+        "message non distribué", "message non distribue", "non distribué", "non distribue",
+        "notification d'état de la distribution", "notification d'etat de la distribution",
+        "échec de distribution", "echec de distribution", "adresse introuvable",
+        "impossible de distribuer", "retour à l'expéditeur", "retour a l'expediteur",
     )
     if any(k in subject for k in bounce_subjects):
         return True
@@ -205,6 +210,11 @@ def _is_bounce_message(msg: dict) -> bool:
         "recipient address rejected", "address couldn't be found",
         "was unable to deliver your message", "message was not delivered",
         "your message wasn't delivered", "action: failed",
+        # French bounce body signals
+        "adresse introuvable", "n'a pas pu être distribué", "n'a pas pu etre distribue",
+        "impossible de distribuer le message", "le compte n'existe pas",
+        "adresse de messagerie introuvable", "impossible d'acheminer le message",
+        "adresse non valide", "utilisateur inconnu", "message non distribué",
     )
     if any(k in body for k in bounce_body_signals):
         return True
@@ -227,8 +237,8 @@ def _extract_bounced_recipient(msg: dict, matched_job: JobPosting | None = None)
     if m:
         return m.group(1).lower().strip()
 
-    # 2. English bounce text patterns
-    m = re.search(r"(?:wasn't delivered to|failed to deliver to|delivery to|address couldn't be found for|tried to reach does not exist:?)\s*<*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})>*", body, re.I)
+    # 2. English & French bounce text patterns
+    m = re.search(r"(?:wasn't delivered to|failed to deliver to|delivery to|address couldn't be found for|tried to reach does not exist:?|n'a pas pu être distribué à|n'a pas pu etre distribue a|impossible de distribuer à|impossible de distribuer a|adresse introuvable pour|adresse suivante:?)\s*<*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})>*", body, re.I)
     if m:
         return m.group(1).lower().strip()
 
@@ -308,6 +318,8 @@ def check_inbox_once() -> dict:
                     if failed_recipient and job.application_emails:
                         remaining = [e.strip() for e in job.application_emails.split(",") if e.strip().lower() != failed_recipient]
                         job.application_emails = ", ".join(remaining) if remaining else None
+                    if failed_recipient and job.application_email and job.application_email.strip().lower() == failed_recipient:
+                        job.application_email = None
 
                     # Record bounce event for audit (direction inbound, intent bounce)
                     event = EmailEvent(

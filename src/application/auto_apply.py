@@ -104,7 +104,8 @@ def _default_french_application(company: str, title: str, sender: str, profile: 
         f"Fort d'une solide expertise technique en {headline.lower()} et maîtrisant notamment {stack_desc}, "
         f"je conçois et déploie des solutions fiables, performantes et évolutives. "
         f"La lecture de votre offre confirme que mon profil et ma rigueur correspondent aux enjeux de votre équipe.\n\n"
-        f"Vous trouverez ci-joint mon CV détaillé retraçant mes réalisations. Je serais ravi de convenir d'un entretien pour échanger plus en détail sur vos projets.\n\n"
+        f"Vous trouverez ci-joint mon CV détaillé ainsi que ma lettre de motivation dédiée au format Word (.docx) retraçant mes réalisations. "
+        f"Je serais ravi de convenir d'un entretien pour échanger plus en détail sur vos projets.\n\n"
         f"En vous remerciant pour l'attention portée à ma candidature.\n\n"
         f"Bien cordialement,\n{sender}"
     ).strip()
@@ -121,7 +122,7 @@ def _default_english_application(company: str, title: str, sender: str, profile:
         f"I am writing to submit my application for the {role_name} position at {company_name}.\n\n"
         f"With hands-on experience in {headline.lower()} and expertise spanning {stack_desc}, "
         f"I deliver maintainable, high-performance solutions. Having reviewed your job opening, I am confident that my technical skillset and problem-solving approach align closely with your team's goals.\n\n"
-        f"Please find attached my resume detailing my past projects and engineering accomplishments. "
+        f"Please find attached my resume alongside my dedicated motivation letter (.docx) detailing my past projects and engineering accomplishments. "
         f"I would welcome the opportunity to speak with you regarding how I can contribute to your initiatives.\n\n"
         f"Thank you for your time and consideration.\n\n"
         f"Best regards,\n{sender}"
@@ -260,12 +261,8 @@ def extract_application_emails(raw_description: str, emails=None) -> list[str]:
         cleaned = clean_email(addr)
         if not cleaned or cleaned in seen:
             continue
-        local = cleaned.split("@", 1)[0].lower()
-        if local in GENERIC_BAD:
-            continue
-        if any(local.startswith(p) for p in ("noreply", "no-reply", "donotreply", "do-not-reply", "mailer-daemon")):
-            continue
-        if any(k in local for k in ("privacy", "accommodation", "accessibility", "gdpr", "compliance", "copyright", "dmca")):
+        safety_check = validate_external_email(cleaned, allow_personal_domain=True, check_mx=False)
+        if not safety_check.allowed:
             continue
         seen.add(cleaned)
         out.append(cleaned)
@@ -337,9 +334,12 @@ def _discover_public_contact_emails(job: dict) -> list[str]:
                 continue
             for addr in EMAIL_RE.findall(content):
                 addr = normalize_email(addr)
-                local = addr.split("@", 1)[0]
-                if addr in seen_emails or local in GENERIC_BAD or local.startswith(("noreply", "no-reply")):
+                if not addr or addr in seen_emails:
                     continue
+                safety_check = validate_external_email(addr, allow_personal_domain=False, check_mx=True)
+                if not safety_check.allowed:
+                    continue
+                local = addr.split("@", 1)[0]
                 # Only keep addresses that look like professional/hiring mailboxes here.
                 if local not in GENERIC_LOCAL_SCORES and not any(t in local for t in ("recruit", "talent", "hiring", "career", "hr", "job")):
                     continue
@@ -379,23 +379,51 @@ def _save_eml_draft(msg: EmailMessage, job_id, company, title) -> str | None:
         return None
 
 
-def _attach_documents(msg: EmailMessage, profile: dict | None = None) -> bool:
-    resume_target = None
-    if profile and profile.get("resume_path"):
-        cand_p = Path(profile["resume_path"])
-        if cand_p.is_file():
-            resume_target = cand_p
-    if not resume_target:
-        fallback = Path(settings.candidate_resume_path)
-        if fallback.is_file():
-            resume_target = fallback
-    if not resume_target or not resume_target.is_file():
-        return False
-    msg.add_attachment(resume_target.read_bytes(), maintype="application", subtype="pdf", filename=resume_target.name)
-    return True
+def _attach_documents(msg: EmailMessage, profile: dict | None = None, user_id: int | None = None, job: Any = None) -> bool:
+    from src.candidate.profile_manager import resolve_user_resume_path
+    resume_target = resolve_user_resume_path(user_id=user_id, profile=profile, auto_generate=True)
+    has_resume = False
+    
+    sender_name = _clean_sender_name(profile).replace(" ", "_")
+    if resume_target and resume_target.is_file():
+        filename = f"{sender_name}_Resume.pdf" if not resume_target.name.endswith(".pdf") else resume_target.name
+        msg.add_attachment(resume_target.read_bytes(), maintype="application", subtype="pdf", filename=filename)
+        has_resume = True
+
+    # Dedicated company motivation letter generated as .docx
+    if job:
+        try:
+            from src.candidate.cover_letter_generator import generate_cover_letter_docx
+            from src.evaluation.language import is_french_job
+            is_fr = is_french_job(job)
+            company_raw = (_get_job_val(job, "company") or "Company").strip()
+            safe_company = re.sub(r"[^A-Za-z0-9_-]", "_", company_raw)[:30].strip("_") or "Company"
+            prefix = "Lettre_Motivation" if is_fr else "Motivation_Letter"
+            docx_filename = f"{sender_name}_{prefix}_{safe_company}.docx"
+
+            letter_docx = generate_cover_letter_docx(job, profile=profile, is_french=is_fr)
+            if letter_docx:
+                msg.add_attachment(
+                    letter_docx,
+                    maintype="application",
+                    subtype="vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    filename=docx_filename
+                )
+                logger.info("Attached dedicated company motivation letter (.docx) for %s: %s", company_raw, docx_filename)
+        except Exception as err:
+            logger.warning("Could not attach company motivation letter docx: %s", err)
+
+    return has_resume
 
 
-def _build_application_message(to_addr: str, subject: str, body: str, profile: dict | None = None, user_id: int | None = None) -> tuple[EmailMessage, bool]:
+def _build_application_message(
+    to_addr: str,
+    subject: str,
+    body: str,
+    profile: dict | None = None,
+    user_id: int | None = None,
+    job: Any = None,
+) -> tuple[EmailMessage, bool]:
     msg = EmailMessage()
     msg["Message-ID"] = make_msgid()
     msg["Subject"] = subject
@@ -412,7 +440,7 @@ def _build_application_message(to_addr: str, subject: str, body: str, profile: d
     msg["To"] = to_addr
     msg["Reply-To"] = from_email
     msg.set_content(body)
-    return msg, _attach_documents(msg, profile=profile)
+    return msg, _attach_documents(msg, profile=profile, user_id=user_id, job=job)
 
 
 
@@ -427,10 +455,17 @@ def _send_email(msg: EmailMessage, to_addr: str, session, *, job_id: int | None,
     except Exception:
         pass
 
-    s_email = user_cfg.get("sender_email") or settings.sender_email
-    s_host = user_cfg.get("smtp_host") or settings.sender_smtp_host
-    s_port = user_cfg.get("smtp_port") or settings.sender_smtp_port
-    s_pass = user_cfg.get("smtp_password") or settings.sender_smtp_password
+    user_pass = user_cfg.get("smtp_password")
+    if user_pass:
+        s_email = user_cfg.get("sender_email") or settings.sender_email
+        s_host = user_cfg.get("smtp_host") or settings.sender_smtp_host
+        s_port = user_cfg.get("smtp_port") or settings.sender_smtp_port
+        s_pass = user_pass
+    else:
+        s_email = settings.sender_email
+        s_host = settings.sender_smtp_host
+        s_port = settings.sender_smtp_port
+        s_pass = settings.sender_smtp_password
 
     if not all([s_email, s_host, s_pass]):
         return False, "Sender SMTP configuration is incomplete."
@@ -518,7 +553,14 @@ def apply_to_job(job_record: dict, session=None, profile: dict | None = None) ->
         
         # Save a single draft
         uid = job_record.get("user_id")
-        msg, resume_attached = _build_application_message(primary_email, subject, body, profile=profile, user_id=uid)
+        msg, resume_attached = _build_application_message(
+            primary_email,
+            subject,
+            body,
+            profile=profile,
+            user_id=uid,
+            job=job_record,
+        )
         draft_path = _save_eml_draft(msg, job_record.get("id"), job_record.get("company"), job_record.get("title"))
         
         if settings.auto_apply_mode == "send" and settings.outbound_send_enabled and not resume_attached and not settings.auto_apply_allow_missing_resume:
@@ -551,7 +593,8 @@ def apply_to_job(job_record: dict, session=None, profile: dict | None = None) ->
         subject = _application_subject(job_record, profile=profile)
         result = apply_via_browser({**job_record, "application_url": app_url, "application_body": body, "application_subject": subject}, session, profile=profile)
         result.setdefault("application_email", None); result.setdefault("thread_subject", None); result.setdefault("message_id", None)
-        has_resume = (profile and profile.get("resume_path") and Path(profile["resume_path"]).is_file()) or Path(settings.candidate_resume_path).is_file()
+        from src.candidate.profile_manager import resolve_user_resume_path
+        has_resume = bool(resolve_user_resume_path(user_id=uid, profile=profile, auto_generate=True))
         result.setdefault("resume_attached", has_resume)
         return result
 

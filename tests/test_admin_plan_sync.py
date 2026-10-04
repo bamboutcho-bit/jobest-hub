@@ -36,9 +36,9 @@ def test_seed_and_effective_limit(session):
     assert "ultra" in slugs
 
     assert get_effective_daily_limit(session, "free") == 5
-    assert get_effective_daily_limit(session, "starter") == 50
-    assert get_effective_daily_limit(session, "pro") == 150
-    assert get_effective_daily_limit(session, "ultra") == 9999
+    assert get_effective_daily_limit(session, "starter") == 25
+    assert get_effective_daily_limit(session, "pro") == 50
+    assert get_effective_daily_limit(session, "ultra") == 100
 
 
 def test_add_new_plan_dynamically_syncs_limit(session):
@@ -100,7 +100,7 @@ def test_sync_individual_user_and_all_users(session):
     synced_count = sync_all_users_quotas(session)
     assert synced_count >= 1
     session.refresh(u2)
-    assert u2.daily_apply_limit == 150  # Pro plan default
+    assert u2.daily_apply_limit == 50  # Pro plan default
 
 
 def test_payment_approval_and_edit_syncs_user_plan_and_quota(session):

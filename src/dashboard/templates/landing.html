@@ -537,20 +537,23 @@
       <div class="pricing-grid" id="landingPricingGrid">
         <!-- Free Tier -->
         <div class="pricing-card">
-          <h3>Free Trial</h3>
-          <div class="desc">Ideal for testing the ML matching engine.</div>
+          <div class="card-badge" style="background:rgba(16,185,129,0.15);color:#10b981;border:1px solid rgba(16,185,129,0.3)">Trial / Basic</div>
+          <h3>Free Tier</h3>
+          <div class="desc">100% Free entry-level automated job search. Includes daily discovery, resume match scoring, and safe automated applications.</div>
           <div class="price-amount">
-            <span class="num">0</span>
-            <span class="currency">MAD</span>
-            <span class="period">/ month</span>
+            <span class="num" style="color:#10b981;font-weight:900">Free</span>
+            <span class="period" style="margin-left:4px">Forever</span>
           </div>
           <ul class="pricing-features">
-            <li><span class="check">✓</span> <strong>5 applications / day</strong></li>
-            <li><span class="check">✓</span> Machine Learning CV Parser</li>
-            <li><span class="check">✓</span> Vector Cosine Similarity Score</li>
-            <li><span class="check">✓</span> Basic job discovery</li>
+            <li><span class="check">✓</span> <strong>5 Automated Applications / Day</strong> (100% Free Forever)</li>
+            <li><span class="check">✓</span> Multi-Continent Discovery (Europe, US, Global Remote)</li>
+            <li><span class="check">✓</span> Pure ML CV Vector Similarity Scoring</li>
+            <li><span class="check">✓</span> Direct Matching (0-2y, Degree, Visa & Relocation)</li>
+            <li><span class="check">✓</span> Email & Telegram Notifications</li>
+            <li><span class="check">✓</span> Application History & ATS Status Tracking</li>
+            <li><span class="check">✓</span> Zero Credit Card or Payment Required</li>
           </ul>
-          <button class="btn btn-outline" onclick="openAuthModal('register', 'free')">Start for Free</button>
+          <button class="btn btn-outline" onclick="openAuthModal('register', 'free')">Start for Free (No Card)</button>
         </div>
 
         <!-- Starter Plan (150 MAD) -->
@@ -834,11 +837,32 @@
         const limitTxt = p.daily_limit >= 9999 ? 'Unlimited' : p.daily_limit;
         const features = Array.isArray(p.features) ? p.features : [];
 
+        const isFree = (p.slug === 'free') || (Number(p.price_mad || 0) === 0 && Number(p.price_usd || 0) === 0);
+        let period = isFree ? 'Forever' : (p.billing || '/ month');
+        const hasLimitInFeat = features.some(f => f.toLowerCase().includes('application'));
+        const limitLi = hasLimitInFeat ? '' : `<li><span class="check">✓</span> <strong>${limitTxt} applications / day</strong></li>`;
+
         let badgeHtml = '';
         if (p.badge) {
           badgeHtml = `<div class="card-badge" style="${p.slug === 'ultra' ? 'background:linear-gradient(135deg,#f59e0b,#ea580c)' : ''}">${p.badge}</div>`;
         } else if (isRec) {
           badgeHtml = '<div class="card-badge">Most Popular ⭐</div>';
+        }
+
+        let priceHtml = '';
+        if (isFree) {
+          priceHtml = `
+            <span class="num" style="color:#10b981;font-weight:900">Free</span>
+            <span class="period" style="margin-left:4px">Forever</span>
+          `;
+        } else {
+          priceHtml = `
+            ${landingActiveCurrency === 'USD' ? '<span class="currency">$</span>' : ''}
+            ${landingActiveCurrency === 'EUR' ? '<span class="currency">€</span>' : ''}
+            <span class="num">${priceNum}</span>
+            ${landingActiveCurrency === 'MAD' ? '<span class="currency">MAD</span>' : ''}
+            <span class="period">${period}</span>
+          `;
         }
 
         return `
@@ -847,18 +871,14 @@
             <h3>${p.name}</h3>
             <div class="desc">${p.description || ''}</div>
             <div class="price-amount">
-              ${landingActiveCurrency === 'USD' ? '<span class="currency">$</span>' : ''}
-              ${landingActiveCurrency === 'EUR' ? '<span class="currency">€</span>' : ''}
-              <span class="num">${priceNum}</span>
-              ${landingActiveCurrency === 'MAD' ? '<span class="currency">MAD</span>' : ''}
-              <span class="period">${period}</span>
+              ${priceHtml}
             </div>
             <ul class="pricing-features">
-              <li><span class="check">✓</span> <strong>${limitTxt} applications / day</strong></li>
+              ${limitLi}
               ${features.map(f => `<li><span class="check">✓</span> ${f}</li>`).join('')}
             </ul>
-            <button class="btn ${isRec ? 'btn-primary' : 'btn-outline'}" onclick="openAuthModal('register', '${p.slug}')">
-              ${p.price_mad === 0 && p.price_usd === 0 ? 'Start for Free' : `Choose ${p.name}`}
+            <button class="btn ${isRec ? 'btn-primary' : (isFree ? 'btn-outline' : 'btn-outline')}" onclick="openAuthModal('register', '${p.slug}')">
+              ${isFree ? 'Start for Free (No Card)' : `Choose ${p.name}`}
             </button>
           </div>
         `;

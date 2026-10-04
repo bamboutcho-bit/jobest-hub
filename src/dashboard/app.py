@@ -244,11 +244,39 @@ class JobResponse(BaseModel):
     relocation_detected: bool | None = False
 
 
+def _cleanup_stale_runs() -> int:
+    """Find and mark any PipelineRun rows stuck in 'running' for more than 45 minutes as 'interrupted'."""
+    try:
+        with get_session() as session:
+            from datetime import timedelta
+            threshold = datetime.now(timezone.utc) - timedelta(minutes=45)
+            stale_runs = session.scalars(
+                select(PipelineRun).where(
+                    PipelineRun.status == "running",
+                    PipelineRun.started_at < threshold,
+                )
+            ).all()
+            count = len(stale_runs)
+            for r in stale_runs:
+                r.status = "interrupted"
+                r.phase = "interrupted"
+                r.error = "Interrupted by container restart or timeout"
+                r.finished_at = datetime.now(timezone.utc)
+            if count:
+                session.commit()
+                logger.info("Cleaned up %d stale/zombie pipeline runs.", count)
+            return count
+    except Exception as exc:
+        logger.warning("Failed to clean up stale runs: %s", exc)
+        return 0
+
+
 @app.on_event("startup")
 def startup():
     if settings.startup_require_dashboard_password and not settings.dashboard_password and settings.app_environment.lower() == "production":
         raise RuntimeError("DASHBOARD_PASSWORD must be configured in production")
     init_db()
+    _cleanup_stale_runs()
     root = logging.getLogger()
     root.setLevel(logging.INFO)
     logger.setLevel(logging.INFO)
@@ -1074,22 +1102,34 @@ def api_preview_active_matrix(request: Request, _: bool = Depends(_auth)):
 
 
 # ---------------------------------------------------------------------------
-# Candidate CV Download & Machine Learning Analysis Endpoints
+# ---------------------------------------------------------------------------
+# Candidate CV Download, Upload, Generation & Machine Learning Analysis Endpoints
 # ---------------------------------------------------------------------------
 
-@app.get("/api/candidate/cv/download")
-def api_download_candidate_cv(_: bool = Depends(_auth)):
-    """Download the candidate's CV/Resume PDF directly from the platform."""
-    resume_path = Path(settings.candidate_resume_path)
-    if not resume_path.is_file():
-        resume_path = Path("candidate_data/resume.pdf")
-    if not resume_path.is_file():
-        raise HTTPException(404, "Candidate CV / resume PDF not found on server")
+class CvUploadRequest(BaseModel):
+    file_base64: str | None = None
+    filename: str = "resume.pdf"
+    profile_id: int | None = None
+    resume_text: str | None = None
 
-    from src.candidate.profile_manager import get_active_profile
-    profile = get_active_profile()
-    name = (profile.get("name") or "Candidate").split(" - ")[0].strip().replace(" ", "_")
-    filename = f"{name}_Resume.pdf"
+
+@app.get("/api/candidate/cv/download")
+def api_download_candidate_cv(request: Request, _: bool = Depends(_auth)):
+    """Download the current user's CV/Resume PDF directly from the platform."""
+    from src.auth.service import get_current_user_optional
+    from src.candidate.profile_manager import get_active_profile, resolve_user_resume_path
+    
+    user = get_current_user_optional(request)
+    uid = user.id if user else None
+    profile = get_active_profile(user_id=uid)
+    
+    resume_path = resolve_user_resume_path(user_id=uid, profile=profile, auto_generate=True)
+    if not resume_path or not resume_path.is_file():
+        raise HTTPException(404, "Candidate CV / resume PDF not found. Please upload or generate your CV in Profile Studio.")
+
+    name = (profile.get("name") or (user.full_name if user else None) or "Candidate").split(" - ")[0].strip()
+    clean_name = re.sub(r'[^a-zA-Z0-9_-]', '_', name)
+    filename = f"{clean_name}_Resume.pdf"
 
     return FileResponse(
         str(resume_path),
@@ -1100,50 +1140,107 @@ def api_download_candidate_cv(_: bool = Depends(_auth)):
 
 
 @app.get("/api/candidate/cv/analyze")
-def api_analyze_candidate_cv(_: bool = Depends(_auth)):
+def api_analyze_candidate_cv(request: Request, _: bool = Depends(_auth)):
     """Analyze the candidate's CV using machine learning and NLP feature extraction."""
+    from src.auth.service import get_current_user_optional
     from src.candidate.cv_ml_engine import extract_text_from_pdf, analyze_cv_content
-    resume_path = Path(settings.candidate_resume_path)
-    if not resume_path.is_file():
-        resume_path = Path("candidate_data/resume.pdf")
-    if not resume_path.is_file():
-        raise HTTPException(404, "Candidate CV / resume PDF not found on server")
+    from src.candidate.profile_manager import get_active_profile, resolve_user_resume_path
 
-    text = extract_text_from_pdf(resume_path)
+    user = get_current_user_optional(request)
+    uid = user.id if user else None
+    profile = get_active_profile(user_id=uid)
+
+    resume_path = resolve_user_resume_path(user_id=uid, profile=profile, auto_generate=True)
+    text = ""
+    if resume_path and resume_path.is_file():
+        text = extract_text_from_pdf(resume_path)
+    if not text and profile and profile.get("resume_text"):
+        text = profile["resume_text"]
+
     if not text:
-        raise HTTPException(500, "Could not extract readable text from candidate CV PDF")
+        raise HTTPException(404, "No readable CV text found. Please upload or generate a CV in Candidate Profile Studio.")
 
     analysis = analyze_cv_content(text)
     return {
         "ok": True,
-        "resume_path": str(resume_path),
+        "resume_path": str(resume_path) if resume_path else None,
         "text_length": len(text),
         "analysis": analysis,
     }
 
 
+@app.post("/api/candidate/cv/upload")
+def api_upload_candidate_cv(req: CvUploadRequest, request: Request, _: bool = Depends(_auth)):
+    """Upload a custom CV file (PDF or text) directly from the dashboard."""
+    from src.auth.service import get_current_user_optional
+    from src.candidate.profile_manager import save_user_uploaded_cv, generate_and_save_profile_cv, update_profile, get_active_profile
+
+    user = get_current_user_optional(request)
+    uid = user.id if user else 1
+
+    if req.file_base64:
+        b64_data = req.file_base64
+        if "," in b64_data:
+            b64_data = b64_data.split(",", 1)[1]
+        try:
+            file_bytes = base64.b64decode(b64_data)
+        except Exception as e:
+            raise HTTPException(400, f"Invalid base64 payload: {e}")
+        
+        return save_user_uploaded_cv(
+            user_id=uid,
+            file_bytes=file_bytes,
+            original_filename=req.filename,
+        )
+
+    if req.resume_text:
+        # Save resume text to active profile and auto-generate PDF
+        active = get_active_profile(user_id=uid)
+        if active.get("id"):
+            update_profile(active["id"], {"resume_text": req.resume_text}, user_id=uid)
+        return generate_and_save_profile_cv(profile_id=req.profile_id or active.get("id"), user_id=uid)
+
+    raise HTTPException(400, "Either file_base64 or resume_text must be provided")
+
+
+@app.post("/api/candidate/cv/generate")
+def api_generate_candidate_cv(req: Optional[CvUploadRequest] = None, request: Request = None, _: bool = Depends(_auth)):
+    """Generate a clean ATS-friendly PDF resume directly from Candidate Profile details."""
+    from src.auth.service import get_current_user_optional
+    from src.candidate.profile_manager import generate_and_save_profile_cv, get_active_profile
+
+    user = get_current_user_optional(request) if request else None
+    uid = user.id if user else 1
+
+    profile_id = req.profile_id if req else None
+    return generate_and_save_profile_cv(profile_id=profile_id, user_id=uid)
+
+
 @app.post("/api/candidate/cv/sync_profile")
-def api_sync_cv_to_profile(profile_id: Optional[int] = None, _: bool = Depends(_auth)):
+def api_sync_cv_to_profile(profile_id: Optional[int] = None, request: Request = None, _: bool = Depends(_auth)):
     """Synchronize ML-extracted CV features into the candidate profile database."""
+    from src.auth.service import get_current_user_optional
     from src.candidate.cv_ml_engine import extract_text_from_pdf, analyze_cv_content
-    from src.candidate.profile_manager import get_active_profile, update_profile
+    from src.candidate.profile_manager import get_active_profile, update_profile, resolve_user_resume_path
 
-    resume_path = Path(settings.candidate_resume_path)
-    if not resume_path.is_file():
-        resume_path = Path("candidate_data/resume.pdf")
-    if not resume_path.is_file():
-        raise HTTPException(404, "Candidate CV / resume PDF not found on server")
+    user = get_current_user_optional(request) if request else None
+    uid = user.id if user else None
+    active = get_active_profile(user_id=uid)
 
-    text = extract_text_from_pdf(resume_path)
+    resume_path = resolve_user_resume_path(user_id=uid, profile=active, auto_generate=True)
+    text = ""
+    if resume_path and resume_path.is_file():
+        text = extract_text_from_pdf(resume_path)
+    if not text and active and active.get("resume_text"):
+        text = active["resume_text"]
+
+    if not text:
+        raise HTTPException(404, "No CV text available to analyze. Please upload or generate a CV first.")
+
     analysis = analyze_cv_content(text)
-
-    target_id = profile_id
+    target_id = profile_id or active.get("id")
     if not target_id:
-        active = get_active_profile()
-        target_id = active.get("id")
-
-    if not target_id:
-        raise HTTPException(404, "No active profile to sync with")
+        raise HTTPException(404, "No active profile found to sync with")
 
     update_data = {
         "name": analysis.get("name") or active.get("name") or "Candidate",
@@ -1157,33 +1254,102 @@ def api_sync_cv_to_profile(profile_id: Optional[int] = None, _: bool = Depends(_
         "resume_text": text[:5000],
     }
 
-    updated = update_profile(target_id, update_data)
+    updated = update_profile(target_id, update_data, user_id=uid)
     return {
         "ok": True,
-        "message": "Active candidate profile successfully updated from CV ML analysis! ✓",
+        "message": "Active candidate profile successfully updated from CV analysis! ✓",
         "profile": updated
     }
 
 
 @app.get("/api/jobs/{job_id}/ml_match")
-def api_job_ml_match(job_id: int, _: bool = Depends(_auth)):
-    """Calculate Vector Cosine Similarity and skill-fit breakdown between CV and job posting."""
+def api_job_ml_match(job_id: int, request: Request, _: bool = Depends(_auth)):
+    """Calculate Vector Cosine Similarity and skill-fit breakdown between user's CV and job posting."""
+    from src.auth.service import get_current_user_optional
+    from src.candidate.cv_ml_engine import extract_text_from_pdf, analyze_cv_content, compute_job_cv_match
+    from src.candidate.profile_manager import get_active_profile, resolve_user_resume_path
+
+    user = get_current_user_optional(request)
+    uid = user.id if user else None
+    profile = get_active_profile(user_id=uid)
+
     with get_session() as session:
         job = session.get(JobPosting, job_id)
         if not job:
             raise HTTPException(404, "Job not found")
         job_dict = _job_dict(job)
 
-    from src.candidate.cv_ml_engine import extract_text_from_pdf, analyze_cv_content, compute_job_cv_match
-    resume_path = Path(settings.candidate_resume_path)
-    if not resume_path.is_file():
-        resume_path = Path("candidate_data/resume.pdf")
+    resume_path = resolve_user_resume_path(user_id=uid, profile=profile, auto_generate=True)
+    cv_text = ""
+    if resume_path and resume_path.is_file():
+        cv_text = extract_text_from_pdf(resume_path)
+    if not cv_text and profile and profile.get("resume_text"):
+        cv_text = profile["resume_text"]
 
-    cv_text = extract_text_from_pdf(resume_path) if resume_path.is_file() else ""
     cand_features = analyze_cv_content(cv_text) if cv_text else {}
+    if profile.get("core_stack") and not cand_features.get("top_skills"):
+        cand_features["top_skills"] = profile["core_stack"]
 
     match_result = compute_job_cv_match(job_dict, cand_features)
     return {"ok": True, "job_id": job_id, "ml_match": match_result}
+
+
+@app.get("/api/jobs/{job_id}/motivation_letter/preview")
+def api_preview_job_motivation_letter(job_id: int, request: Request, _: bool = Depends(_auth)):
+    """Preview dedicated motivation letter for a specific company job posting."""
+    from src.auth.service import get_current_user_optional
+    from src.candidate.cover_letter_generator import build_company_motivation_letter_text
+    from src.candidate.profile_manager import get_active_profile
+
+    user = get_current_user_optional(request)
+    uid = user.id if user else None
+    profile = get_active_profile(user_id=uid)
+
+    with get_session() as session:
+        job = session.get(JobPosting, job_id)
+        if not job:
+            raise HTTPException(404, "Job posting not found")
+        job_dict = _job_dict(job)
+
+    letter_data = build_company_motivation_letter_text(job_dict, profile=profile)
+    return {"ok": True, "job_id": job_id, "letter": letter_data}
+
+
+@app.get("/api/jobs/{job_id}/motivation_letter/download")
+def api_download_job_motivation_letter(job_id: int, request: Request, _: bool = Depends(_auth)):
+    """Generate and download the dedicated company motivation letter as a Microsoft Word (.docx) document."""
+    from src.auth.service import get_current_user_optional
+    from src.candidate.cover_letter_generator import generate_cover_letter_docx
+    from src.candidate.profile_manager import get_active_profile
+    from src.evaluation.language import is_french_job
+
+    user = get_current_user_optional(request)
+    uid = user.id if user else None
+    profile = get_active_profile(user_id=uid)
+
+    with get_session() as session:
+        job = session.get(JobPosting, job_id)
+        if not job:
+            raise HTTPException(404, "Job posting not found")
+        job_dict = _job_dict(job)
+
+    is_fr = is_french_job(job_dict)
+    docx_bytes = generate_cover_letter_docx(job_dict, profile=profile, is_french=is_fr)
+
+    candidate_name = (profile.get("name") or (user.full_name if user else None) or "Candidate").split(" - ")[0].strip()
+    safe_candidate = re.sub(r'[^a-zA-Z0-9_-]', '_', candidate_name)
+    company = job.company or "Company"
+    safe_company = re.sub(r'[^a-zA-Z0-9_-]', '_', company)[:30].strip("_") or "Company"
+
+    prefix = "Lettre_Motivation" if is_fr else "Motivation_Letter"
+    filename = f"{safe_candidate}_{prefix}_{safe_company}.docx"
+
+    return Response(
+        content=docx_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )
+
 
 
 # ---------------------------------------------------------------------------
@@ -1287,8 +1453,26 @@ AdminGatewayUpdate.model_rebuild()
 StripeSessionRequest.model_rebuild()
 
 
+def _set_auth_cookie(response: Response, token: str, request: Request | None = None) -> None:
+    is_secure = False
+    if request:
+        proto = request.headers.get("x-forwarded-proto", request.url.scheme)
+        is_secure = proto == "https" or settings.app_environment.lower() == "production"
+    else:
+        is_secure = settings.app_environment.lower() == "production"
+    response.set_cookie(
+        key="session_token",
+        value=token,
+        max_age=7 * 24 * 3600,
+        httponly=True,
+        samesite="lax",
+        secure=is_secure,
+    )
+
+
 @app.post("/api/auth/register")
-def api_auth_register(req: RegisterRequest, response: Response):
+@limiter.limit("10/minute")
+def api_auth_register(request: Request, req: RegisterRequest, response: Response):
     email = req.email.strip().lower()
     if "@" not in email or "." not in email:
         raise HTTPException(400, "Invalid email address")
@@ -1342,13 +1526,7 @@ def api_auth_register(req: RegisterRequest, response: Response):
         session.commit()
 
         token = create_session_token(user.id, user.email, user.role)
-        response.set_cookie(
-            key="session_token",
-            value=token,
-            max_age=7 * 24 * 3600,
-            httponly=True,
-            samesite="lax",
-        )
+        _set_auth_cookie(response, token, request)
 
         logger.info("New candidate registered: %s (Plan: %s, Limit: %s/day)", user.email, user.current_plan, user.daily_apply_limit)
 
@@ -1389,10 +1567,14 @@ def api_auth_register(req: RegisterRequest, response: Response):
 
 
 @app.post("/api/auth/login")
-def api_auth_login(req: LoginRequest, response: Response):
+@limiter.limit("15/minute")
+def api_auth_login(request: Request, req: LoginRequest, response: Response):
     ident = req.email.strip().lower()
-    from src.auth.service import verify_password, create_session_token, hash_password
+    from src.auth.service import verify_password, create_session_token, hash_password, check_login_rate_limit, record_failed_login, clear_failed_login
     from src.storage.models import User, UserRole
+
+    client_ip = (request.client.host if request.client else "unknown")
+    check_login_rate_limit(ident, client_ip)
 
     with get_session() as session:
         # Look up user by email (try both plain email and @autohunt.internal variant)
@@ -1424,6 +1606,7 @@ def api_auth_login(req: LoginRequest, response: Response):
                 session.commit()
 
         if not user:
+            record_failed_login(ident, client_ip)
             raise HTTPException(401, "Invalid email or password")
 
         pwd_valid = False
@@ -1437,19 +1620,16 @@ def api_auth_login(req: LoginRequest, response: Response):
             pwd_valid = True
 
         if not pwd_valid:
+            record_failed_login(ident, client_ip)
             raise HTTPException(401, "Invalid email or password")
 
         if not user.is_active:
             raise HTTPException(403, "Account is disabled. Contact support.")
 
+        clear_failed_login(ident, client_ip)
+
         token = create_session_token(user.id, user.email, user.role)
-        response.set_cookie(
-            key="session_token",
-            value=token,
-            max_age=7 * 24 * 3600,
-            httponly=True,
-            samesite="lax",
-        )
+        _set_auth_cookie(response, token, request)
 
         logger.info("User login successful: %s (Role: %s)", user.email, user.role)
 
@@ -1468,7 +1648,8 @@ def api_auth_login(req: LoginRequest, response: Response):
 
 
 @app.post("/api/auth/google")
-def api_auth_google(req: GoogleAuthRequest, response: Response):
+@limiter.limit("20/minute")
+def api_auth_google(request: Request, req: GoogleAuthRequest, response: Response):
     from src.auth.service import verify_google_id_token, create_session_token
     from src.storage.models import User, UserRole, CandidateProfile
 
@@ -1558,13 +1739,7 @@ def api_auth_google(req: GoogleAuthRequest, response: Response):
             session.commit()
 
         token = create_session_token(user.id, user.email, user.role)
-        response.set_cookie(
-            key="session_token",
-            value=token,
-            max_age=7 * 24 * 3600,
-            httponly=True,
-            samesite="lax",
-        )
+        _set_auth_cookie(response, token, request)
 
         return {
             "ok": True,
@@ -1832,22 +2007,41 @@ def api_get_payment_methods(request: Request):
                 features = json.loads(p.features_json or "[]")
             except Exception:
                 features = []
+            is_free = (p.slug == "free") or (p.price_usd == 0 and p.price_mad == 0)
+            if is_free:
+                if not features:
+                    features = [
+                        "5 Automated Applications / Day (100% Free Forever)",
+                        "Multi-Continent Discovery (Europe, US, Global Remote)",
+                        "Pure ML CV Vector Similarity Scoring",
+                        "Direct Matching (0-2y, Degree, Visa & Relocation)",
+                        "Email & Telegram Notifications",
+                        "Application History & ATS Status Tracking",
+                        "Zero Credit Card or Payment Required",
+                    ]
+                desc = p.description or "100% Free entry-level automated job search. Includes daily discovery, resume match scoring, and safe automated applications."
+                billing_str = p.billing_interval if (p.billing_interval and p.billing_interval != "/ month") else "Forever"
+            else:
+                desc = p.description or ""
+                billing_str = p.billing_interval or "/ month"
+
             plans_data.append({
                 "id": p.id,
                 "slug": p.slug,
                 "name": p.name,
                 "badge": p.badge or "",
-                "price_usd": p.price_usd,
-                "price_mad": p.price_mad,
-                "price_eur": p.price_eur,
-                "price_usdt": p.price_usdt,
-                "billing": p.billing_interval or "/ month",
+                "price_usd": 0.0 if is_free else p.price_usd,
+                "price_mad": 0 if is_free else p.price_mad,
+                "price_eur": 0.0 if is_free else p.price_eur,
+                "price_usdt": 0.0 if is_free else p.price_usdt,
+                "billing": billing_str,
                 "daily_limit": p.daily_apply_limit,
                 "max_ai_calls": p.max_ai_calls_per_day,
                 "can_access_freelance": p.can_access_freelance,
-                "description": p.description or "",
+                "description": desc,
                 "features": features,
                 "recommended": bool(p.is_recommended),
+                "is_free": is_free,
             })
 
         methods_data = get_payment_gateways_dict(session, include_secrets=False)
@@ -1877,6 +2071,22 @@ def api_payments_checkout(req: PaymentCheckoutRequest, request: Request):
     from src.auth.service import get_current_user
     user = get_current_user(request)
     from src.storage.models import SubscriptionPayment
+
+    if (req.plan_name or "").strip().lower() == "free":
+        from src.storage.plans import get_effective_daily_limit
+        with get_session() as session:
+            db_user = session.get(User, user.id)
+            if db_user:
+                db_user.current_plan = "free"
+                db_user.daily_apply_limit = get_effective_daily_limit(session, "free", fallback_limit=5)
+                session.commit()
+        return {
+            "ok": True,
+            "message": "Switched to Free Tier (5 applications/day).",
+            "current_plan": "free",
+            "daily_apply_limit": 5,
+            "status": "approved",
+        }
 
     ref = (req.reference_code or "").strip()
     if not ref:
@@ -1949,6 +2159,28 @@ def api_payments_checkout(req: PaymentCheckoutRequest, request: Request):
             "message": "Payment reference submitted successfully! Your account will be upgraded immediately upon verification.",
             "payment_id": payment.id,
             "status": "pending"
+        }
+
+
+@app.post("/api/user/switch-free")
+def api_user_switch_free(request: Request):
+    """Switch or downgrade current user to Free Tier without payment."""
+    from src.auth.service import get_current_user
+    user = get_current_user(request)
+    from src.storage.plans import get_effective_daily_limit
+    with get_session() as session:
+        db_user = session.get(User, user.id)
+        if not db_user:
+            raise HTTPException(status_code=404, detail="User not found")
+        db_user.current_plan = "free"
+        db_user.daily_apply_limit = get_effective_daily_limit(session, "free", fallback_limit=5)
+        session.commit()
+        session.refresh(db_user)
+        return {
+            "ok": True,
+            "message": "Switched to Free Tier (5 applications/day).",
+            "current_plan": db_user.current_plan,
+            "daily_apply_limit": db_user.daily_apply_limit,
         }
 
 
@@ -2756,10 +2988,37 @@ def api_payments_stripe_verify_session(session_id: str, request: Request):
 
 @app.post("/api/payments/stripe/webhook")
 async def api_payments_stripe_webhook(request: Request):
-    """Handle incoming Stripe webhooks (checkout.session.completed)."""
-    from src.billing.stripe_service import process_stripe_session_completed
+    """Handle incoming Stripe webhooks with cryptographic HMAC signature verification."""
+    from src.billing.stripe_service import get_stripe_config, process_stripe_session_completed
+    raw_body = await request.body()
+    cfg = get_stripe_config()
+    webhook_secret = (cfg.get("webhook_secret") or "").strip()
+
+    if webhook_secret:
+        sig_header = request.headers.get("stripe-signature", "")
+        if not sig_header:
+            raise HTTPException(400, "Missing Stripe signature header")
+        
+        # Parse timestamp and v1 signature from Stripe header
+        sig_dict = dict(item.strip().split("=", 1) for item in sig_header.split(",") if "=" in item)
+        timestamp = sig_dict.get("t")
+        expected_sig = sig_dict.get("v1")
+        if not timestamp or not expected_sig:
+            raise HTTPException(400, "Invalid Stripe signature format")
+        
+        # Verify tolerance (prevent replay attacks, 5 minutes tolerance)
+        import time
+        if abs(time.time() - int(timestamp)) > 300:
+            raise HTTPException(400, "Stripe webhook timestamp expired (replay attack protection)")
+        
+        signed_payload = f"{timestamp}.".encode("utf-8") + raw_body
+        computed_sig = hmac.new(webhook_secret.encode("utf-8"), signed_payload, hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(computed_sig, expected_sig):
+            logger.warning("Stripe webhook signature mismatch from IP %s", request.client.host if request.client else "unknown")
+            raise HTTPException(400, "Stripe webhook signature verification failed")
+
     try:
-        body = await request.json()
+        body = json.loads(raw_body.decode("utf-8"))
         event_type = body.get("type")
         if event_type == "checkout.session.completed":
             session_obj = body.get("data", {}).get("object", {})
@@ -2767,6 +3026,8 @@ async def api_payments_stripe_webhook(request: Request):
             if session_id:
                 process_stripe_session_completed(session_id)
         return {"status": "success"}
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.warning("Stripe webhook processing exception: %s", exc)
         return {"status": "ignored"}
@@ -3209,37 +3470,61 @@ def api_user_quick_onboard(req: QuickOnboardRequest, request: Request):
 def api_candidate_quick_parse(req: CvQuickParseRequest, request: Request):
     """Extract and analyze CV from uploaded base64 PDF or pasted text in real time."""
     from src.candidate.cv_ml_engine import analyze_cv_content, extract_text_from_pdf
+    from src.candidate.profile_manager import save_user_uploaded_cv, get_active_profile, update_profile
+    from src.auth.service import get_current_user_optional
     import base64
     from pathlib import Path
 
+    user = get_current_user_optional(request)
+    uid = user.id if user else None
+
     extracted_text = ""
-    if req.raw_text and len(req.raw_text.strip()) > 10:
-        extracted_text = req.raw_text.strip()
-    elif req.file_base64:
+    saved_path = None
+
+    if req.file_base64:
         try:
             raw_b64 = req.file_base64.split(",")[-1]
             content = base64.b64decode(raw_b64)
-            filename = (req.filename or "cv.pdf").lower()
-            if filename.endswith(".pdf"):
-                temp_dir = Path("candidate_data/temp_uploads")
-                temp_dir.mkdir(parents=True, exist_ok=True)
-                temp_path = temp_dir / f"temp_{int(datetime.now().timestamp())}.pdf"
-                temp_path.write_bytes(content)
-                extracted_text = extract_text_from_pdf(temp_path)
-                try:
-                    temp_path.unlink()
-                except Exception:
-                    pass
+            filename = (req.filename or "cv.pdf")
+            if uid:
+                res = save_user_uploaded_cv(uid, content, filename)
+                saved_path = res.get("resume_path")
+                extracted_text = res.get("text_length") and res.get("profile", {}).get("resume_text") or ""
+                analysis = res.get("analysis", {})
+                return {
+                    "ok": True,
+                    "extracted_text": extracted_text,
+                    "analysis": analysis,
+                    "resume_path": saved_path,
+                }
             else:
-                extracted_text = content.decode("utf-8", errors="ignore")
+                if filename.lower().endswith(".pdf"):
+                    temp_dir = Path("candidate_data/temp_uploads")
+                    temp_dir.mkdir(parents=True, exist_ok=True)
+                    temp_path = temp_dir / f"temp_{int(datetime.now().timestamp())}.pdf"
+                    temp_path.write_bytes(content)
+                    extracted_text = extract_text_from_pdf(temp_path)
+                    try:
+                        temp_path.unlink()
+                    except Exception:
+                        pass
+                else:
+                    extracted_text = content.decode("utf-8", errors="ignore")
         except Exception as e:
             logger.warning("Error parsing CV base64 upload: %s", e)
+    elif req.raw_text and len(req.raw_text.strip()) > 10:
+        extracted_text = req.raw_text.strip()
+        if uid:
+            active = get_active_profile(user_id=uid)
+            if active.get("id"):
+                update_profile(active["id"], {"resume_text": extracted_text}, user_id=uid)
 
     analysis = analyze_cv_content(extracted_text) if extracted_text else {}
     return {
         "ok": True,
         "extracted_text": extracted_text,
         "analysis": analysis,
+        "resume_path": saved_path,
     }
 
 
@@ -3936,7 +4221,8 @@ def api_evaluate_backlog(request: Request, limit: int = 50, _: bool = Depends(_a
                                 if clears:
                                     # HR enrichment to find real recruiter emails (Pro / Admin check)
                                     target_u = (session.get(User, target_user_id) if target_user_id else None) or session.scalar(select(User).order_by(User.id))
-                                    is_pro = target_u and (target_u.role == "admin" or getattr(target_u, "current_plan", None) == "pro_499")
+                                    user_plan = (getattr(target_u, "current_plan", "") or "").lower()
+                                    is_pro = target_u and (target_u.role == "admin" or user_plan in ("pro", "pro_499", "ultra"))
                                     if settings.enable_hr_enrichment and not job.application_emails and is_pro:
                                         try:
                                             from src.ingestion.hr_enrichment import enrich_job_hr_contacts
@@ -4040,14 +4326,26 @@ def api_action_apply_pending_matches(request: Request, _: bool = Depends(_auth))
             with get_session() as session:
                 from src.application.auto_apply import apply_to_job
                 from src.ingestion.hr_enrichment import enrich_job_hr_contacts
-                from src.storage.models import User, UserJobApplication
+                from src.storage.models import CandidateProfile, User, UserJobApplication
                 from src.candidate.profile_manager import get_active_profile
                 from src.evaluation.heuristic_scorer import evaluate_job_heuristic
                 from src.evaluation.language import is_french_job
 
                 user = session.get(User, target_user_id) if target_user_id else None
                 if not user:
-                    user = session.scalar(select(User).where(User.role == "user").order_by(User.id))
+                    user = (
+                        session.scalar(
+                            select(User).join(CandidateProfile, CandidateProfile.user_id == User.id)
+                            .where(
+                                User.is_active.is_(True),
+                                CandidateProfile.is_active.is_(True),
+                                CandidateProfile.resume_text.isnot(None),
+                                CandidateProfile.resume_text != "",
+                            ).order_by(User.id)
+                        )
+                        or session.scalar(select(User).where(User.role == "admin").order_by(User.id))
+                        or session.scalar(select(User).order_by(User.id))
+                    )
 
                 effective_uid = user.id if user else target_user_id
                 active_profile = get_active_profile(user_id=effective_uid, session=session)
@@ -4089,26 +4387,35 @@ def api_action_apply_pending_matches(request: Request, _: bool = Depends(_auth))
                         logger.debug("Failed to dispatch limit reached notification: %s", nerr)
                     return
 
-                # Exclude known un-appliable dead ends from wasting time in batch apply
-                blocked_statuses = [
-                    "manual_linkedin", "manual_job_board", "manual_security_challenge",
-                    "blocked", "invalid_recipient", "recruiter_email_blocked"
+                # Exclude job statuses that are fundamentally non-viable or permanently blocked
+                permanently_blocked_statuses = [
+                    "blocked",
+                    "invalid_recipient",
+                    "recruiter_email_blocked",
+                    "bounced",
+                    "manual_security_challenge",
+                    "manual_auth_required",
+                    "manual_submit_button_not_found",
+                    "manual_apply_button_not_found",
+                    "manual_required_fields",
+                    "manual_unconfirmed_submission",
                 ]
                 apply_q = select(JobPosting).where(
                     JobPosting.match_score >= settings.auto_apply_min_score,
                     JobPosting.applied_at.is_(None),
                     JobPosting.pipeline_stage != PipelineStage.APPLIED,
                     or_(
-                        JobPosting.application_status.in_(["not_attempted", "daily_quota_reached", None]),
-                        (JobPosting.application_emails.isnot(None) & (JobPosting.application_emails != ""))
+                        JobPosting.application_status.is_(None),
+                        JobPosting.application_status.in_(["not_attempted", "draft", "daily_quota_reached", "manual_non_ats", "manual_portal", "no_application_channel", ""]),
+                        (JobPosting.application_emails.isnot(None) & (JobPosting.application_emails != "")),
                     ),
-                    ~JobPosting.application_status.in_(blocked_statuses)
+                    ~JobPosting.application_status.in_(permanently_blocked_statuses)
                 )
                 if target_user_id is not None and user and user.role != "admin":
                     apply_q = apply_q.where(or_(JobPosting.user_id == target_user_id, JobPosting.user_id.is_(None)))
 
-                # Bounded query: inspect top candidates up to remaining quota (avoids churning through 100s of jobs)
-                max_to_inspect = min(max(remaining_quota * 3, 15), 60)
+                # Bounded query: inspect enough candidates to fulfill the remaining quota
+                max_to_inspect = min(max(remaining_quota * 4, 100), 1000)
                 pending_matches = session.scalars(
                     apply_q.order_by(
                         case((JobPosting.application_emails.isnot(None) & (JobPosting.application_emails != ""), 0), else_=1),
@@ -4136,9 +4443,9 @@ def api_action_apply_pending_matches(request: Request, _: bool = Depends(_auth))
                             logger.debug("Failed to dispatch applications_done notification: %s", nerr)
                         break
 
-                    # Circuit breaker: if many consecutive jobs lack automated channels, don't stall the dashboard
-                    if consecutive_unactionable >= 12 and _apply_status["applied"] == 0:
-                        _apply_status["message"] = f"Checked {i-1} matches with no automated apply channel available. Remaining jobs require manual application."
+                    # Circuit breaker: break only after very long sequence of non-actionable jobs
+                    if consecutive_unactionable >= 100:
+                        _apply_status["message"] = f"Checked {i-1} matches without actionable channels. Stopping batch."
                         break
 
                     # Verify that this job aligns with the currently active candidate profile

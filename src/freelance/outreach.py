@@ -57,14 +57,16 @@ def _send_email(*, to: str, subject: str, body: str, lead_id: int, user_id: int 
         msg.set_content(body)
 
         # Attach resume if available
-        resume_path = Path(settings.candidate_resume_path)
-        if resume_path.is_file():
+        from src.candidate.profile_manager import resolve_user_resume_path
+        resume_path = resolve_user_resume_path(user_id=user_id, auto_generate=True)
+        if resume_path and resume_path.is_file():
             with open(resume_path, "rb") as f:
+                filename = f"{s_name.replace(' ', '_')}_Resume.pdf" if not resume_path.name.endswith(".pdf") else resume_path.name
                 msg.add_attachment(
                     f.read(),
                     maintype="application",
                     subtype="pdf",
-                    filename=resume_path.name,
+                    filename=filename,
                 )
 
         with smtplib.SMTP(s_host, s_port) as server:

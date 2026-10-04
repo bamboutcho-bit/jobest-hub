@@ -47,6 +47,8 @@ candidate_data/*.doc
 candidate_data/*.odt
 candidate_data/*.rtf
 !candidate_data/profile.json
+uploads/
+
 
 # -----------------------------------------------------------------------------
 # Markdown Documentation (ignore all .md files except main README.md)

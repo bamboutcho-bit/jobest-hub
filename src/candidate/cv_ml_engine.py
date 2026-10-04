@@ -17,7 +17,10 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, Optional
 
-import numpy as np
+try:
+    import numpy as np
+except ImportError:
+    np = None
 
 logger = logging.getLogger(__name__)
 
@@ -332,8 +335,12 @@ def compute_job_cv_match(job_data: dict[str, Any], candidate_features: dict[str,
 
     # 1. Vector Space Model across taxonomy vocabulary
     vocab = list(TECH_TAXONOMY.keys()) + FLATTENED_SKILLS
-    cand_vector = np.zeros(len(vocab))
-    job_vector = np.zeros(len(vocab))
+    if np is not None:
+        cand_vector = np.zeros(len(vocab))
+        job_vector = np.zeros(len(vocab))
+    else:
+        cand_vector = [0.0] * len(vocab)
+        job_vector = [0.0] * len(vocab)
 
     matching_skills: list[str] = []
     missing_skills: list[str] = []
@@ -341,7 +348,7 @@ def compute_job_cv_match(job_data: dict[str, Any], candidate_features: dict[str,
     for idx, term in enumerate(vocab):
         # Candidate weight
         if term in cand_skills:
-            cand_vector[idx] = cand_skills[term]
+            cand_vector[idx] = float(cand_skills[term])
         
         # Job weight (TF in job description)
         pattern = r'\b' + re.escape(term) + r'\b'
@@ -356,11 +363,17 @@ def compute_job_cv_match(job_data: dict[str, Any], candidate_features: dict[str,
                     missing_skills.append(term.title() if len(term) > 3 else term.upper())
 
     # Cosine Similarity Calculation: dot(u, v) / (norm(u) * norm(v))
-    norm_c = np.linalg.norm(cand_vector)
-    norm_j = np.linalg.norm(job_vector)
+    if np is not None:
+        norm_c = float(np.linalg.norm(cand_vector))
+        norm_j = float(np.linalg.norm(job_vector))
+        dot_product = float(np.dot(cand_vector, job_vector))
+    else:
+        norm_c = math.sqrt(sum(x * x for x in cand_vector))
+        norm_j = math.sqrt(sum(x * x for x in job_vector))
+        dot_product = sum(x * y for x, y in zip(cand_vector, job_vector))
 
     if norm_c > 0 and norm_j > 0:
-        cosine_sim = float(np.dot(cand_vector, job_vector) / (norm_c * norm_j))
+        cosine_sim = float(dot_product / (norm_c * norm_j))
     else:
         cosine_sim = 0.0
 

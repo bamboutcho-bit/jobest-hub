@@ -1,5 +1,6 @@
 import pytest
 from src.storage.db import get_session, init_db
+from src.storage.models import CandidateProfile
 from src.candidate.profile_manager import (
     create_profile,
     get_active_profile,
@@ -147,3 +148,71 @@ def test_heuristic_evaluator_unrelated_job():
     res = evaluate_heuristic(job_unrelated, profile=java_profile)
     assert res["match_score"] < 50
     assert res["visa_sponsorship_detected"] is False
+
+
+def test_user_cv_generation_and_upload():
+    from src.candidate.profile_manager import (
+        create_profile,
+        generate_and_save_profile_cv,
+        save_user_uploaded_cv,
+        resolve_user_resume_path,
+        delete_profile,
+    )
+    import os
+
+    with get_session() as session:
+        # Create a user-specific candidate profile
+        test_uid = 9988
+        prof = create_profile(
+            data={
+                "name": "Jane Doe",
+                "headline": "Full Stack Cloud Architect",
+                "target_titles": ["Cloud Architect", "DevOps Engineer"],
+                "core_stack": ["AWS", "Kubernetes", "Python", "Go"],
+                "keywords": ["cloud", "iac", "terraform"],
+                "resume_text": "Jane Doe\nExperienced Cloud Architect with 8 years in AWS and Kubernetes.\nDesigned highly available platforms.",
+                "experience_years": 8,
+                "is_active": True,
+            },
+            user_id=test_uid,
+            session=session
+        )
+
+        assert prof["id"] is not None
+
+        # 1. Test generate_and_save_profile_cv
+        gen_res = generate_and_save_profile_cv(profile_id=prof["id"], user_id=test_uid, session=session)
+        assert gen_res["ok"] is True
+        assert gen_res["resume_path"] is not None
+        pdf_path = gen_res["resume_path"]
+        assert os.path.exists(pdf_path)
+        assert os.path.getsize(pdf_path) > 500
+
+        # Verify resolve_user_resume_path retrieves this generated file
+        resolved = resolve_user_resume_path(user_id=test_uid, auto_generate=False, session=session)
+        assert resolved is not None
+        assert str(resolved) == str(pdf_path)
+
+        # 2. Test save_user_uploaded_cv with text/markdown file
+        sample_cv_content = b"Jane Doe\nStaff Engineer with expertise in Terraform, Prometheus, and Golang."
+        up_res = save_user_uploaded_cv(
+            user_id=test_uid,
+            file_bytes=sample_cv_content,
+            original_filename="jane_custom_cv.txt",
+            session=session
+        )
+        assert up_res["ok"] is True
+        assert "uploads" in up_res["resume_path"].replace("\\", "/")
+        assert os.path.exists(up_res["resume_path"])
+
+        # 3. Clean up
+        try:
+            delete_profile(prof["id"], user_id=test_uid, session=session)
+        except ValueError:
+            # Expected if it is the user's only profile
+            row = session.get(CandidateProfile, prof["id"])
+            if row:
+                session.delete(row)
+                session.commit()
+
+

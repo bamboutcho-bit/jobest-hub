@@ -64,13 +64,13 @@ def get_user_effective_settings(user_id: Optional[int] = None) -> dict[str, Any]
             else:
                 user_setting = session.scalar(select(UserSetting).order_by(UserSetting.updated_at.desc()).limit(1))
             if user_setting:
-                if user_setting.sender_email:
+                if user_setting.sender_email and (user_setting.smtp_password or user_setting.sender_email == settings.sender_email):
                     effective["sender_email"] = user_setting.sender_email
                 if user_setting.sender_name:
                     effective["sender_name"] = user_setting.sender_name
-                if user_setting.smtp_host:
+                if user_setting.smtp_host and user_setting.smtp_password:
                     effective["smtp_host"] = user_setting.smtp_host
-                if user_setting.smtp_port:
+                if user_setting.smtp_port and user_setting.smtp_password:
                     effective["smtp_port"] = user_setting.smtp_port
                 if user_setting.smtp_password:
                     effective["smtp_password"] = user_setting.smtp_password

@@ -19,7 +19,7 @@ from src.outreach.message_generator import generate_outreach_draft
 from sqlalchemy import func, select
 
 from src.storage.db import get_session, init_db
-from src.storage.models import EmailEvent, JobPosting, PipelineRun, PipelineRunEvent, PipelineStage
+from src.storage.models import CandidateProfile, EmailEvent, JobPosting, PipelineRun, PipelineRunEvent, PipelineStage, User, UserJobApplication
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -60,15 +60,25 @@ def _normalize_raw_job(raw: dict, user_id: int | None = None) -> dict:
 
 
 def _persist_new_jobs(new_jobs: list[dict], user_id: int | None = None) -> list[int]:
+    """Persist new job postings, silently skipping any that already exist (dedup_hash conflict)."""
     ids: list[int] = []
     with get_session() as session:
         for raw in new_jobs:
-            normalized = _normalize_raw_job(raw, user_id=user_id)
-            normalized["ai_relevance_score"] = relevance_score(raw)
-            record = JobPosting(**normalized)
-            session.add(record)
-            session.flush()
-            ids.append(record.id)
+            try:
+                normalized = _normalize_raw_job(raw, user_id=user_id)
+                normalized["ai_relevance_score"] = relevance_score(raw)
+                record = JobPosting(**normalized)
+                session.add(record)
+                session.flush()
+                ids.append(record.id)
+            except Exception as persist_err:
+                err_str = str(persist_err)
+                if "duplicate key" in err_str or "UniqueViolation" in err_str or "UNIQUE constraint" in err_str:
+                    session.rollback()
+                    logger.debug("Skipping duplicate job posting (dedup_hash conflict): %s", raw.get("dedup_hash"))
+                else:
+                    session.rollback()
+                    logger.warning("Failed to persist job posting: %s", persist_err)
     return ids
 
 
@@ -488,10 +498,23 @@ def auto_apply_pending_matches(user_id: int | None = None, run_id: int | None = 
     from sqlalchemy import case, desc, func, or_, select
 
     def _execute(s):
-        target_user = s.get(User, user_id) if user_id else (
-            s.scalar(select(User).where(User.role == "user").order_by(User.id))
-            or s.scalar(select(User).order_by(User.id))
-        )
+        target_user = None
+        if user_id:
+            target_user = s.get(User, user_id)
+        if not target_user:
+            target_user = (
+                s.scalar(
+                    select(User).join(CandidateProfile, CandidateProfile.user_id == User.id)
+                    .where(
+                        User.is_active.is_(True),
+                        CandidateProfile.is_active.is_(True),
+                        CandidateProfile.resume_text.isnot(None),
+                        CandidateProfile.resume_text != "",
+                    ).order_by(User.id)
+                )
+                or s.scalar(select(User).where(User.role == "admin").order_by(User.id))
+                or s.scalar(select(User).order_by(User.id))
+            )
         if not target_user:
             return {"ok": False, "applied": 0, "message": "No target user found"}
 
@@ -521,13 +544,18 @@ def auto_apply_pending_matches(user_id: int | None = None, run_id: int | None = 
             logger.info("Daily auto-apply quota (%s/%s) already met today for user %s.", sent_today, daily_limit, target_user.email)
             return {"ok": True, "applied": 0, "sent_today": sent_today, "daily_limit": daily_limit, "message": f"Daily limit reached ({sent_today}/{daily_limit})"}
 
-        # Exclude job types that cannot be automatically dispatched without email contact
-        blocked_statuses = [
-            "manual_linkedin",
-            "manual_job_board",
-            "manual_security_challenge",
+        # Exclude job statuses that are fundamentally non-viable or already failed delivery
+        permanently_blocked_statuses = [
             "blocked",
             "invalid_recipient",
+            "recruiter_email_blocked",
+            "bounced",
+            "manual_security_challenge",
+            "manual_auth_required",
+            "manual_submit_button_not_found",
+            "manual_apply_button_not_found",
+            "manual_required_fields",
+            "manual_unconfirmed_submission",
         ]
         apply_q = select(JobPosting).where(
             JobPosting.match_score >= settings.auto_apply_min_score,
@@ -535,9 +563,10 @@ def auto_apply_pending_matches(user_id: int | None = None, run_id: int | None = 
             JobPosting.pipeline_stage != PipelineStage.APPLIED,
             or_(
                 JobPosting.application_status.is_(None),
-                ~JobPosting.application_status.in_(blocked_statuses),
-                (JobPosting.application_emails.isnot(None) & (JobPosting.application_emails != ""))
-            )
+                JobPosting.application_status.in_(["not_attempted", "draft", "daily_quota_reached", "manual_non_ats", "manual_portal", "no_application_channel", ""]),
+                (JobPosting.application_emails.isnot(None) & (JobPosting.application_emails != "")),
+            ),
+            ~JobPosting.application_status.in_(permanently_blocked_statuses),
         )
         if target_user.role != "admin":
             apply_q = apply_q.where(or_(JobPosting.user_id == effective_uid, JobPosting.user_id.is_(None)))
@@ -547,8 +576,8 @@ def auto_apply_pending_matches(user_id: int | None = None, run_id: int | None = 
             case((JobPosting.application_emails.isnot(None) & (JobPosting.application_emails != ""), 0), else_=1),
             desc(JobPosting.match_score)
         )
-        # Bounded query limit to prevent long-running hanging loops
-        batch_candidate_limit = min(max(remaining_quota * 3, 15), 60)
+        # Bounded query limit: inspect enough candidates to fulfill the remaining quota
+        batch_candidate_limit = min(max(remaining_quota * 4, 100), 1000)
         pending_matches = s.scalars(apply_q.limit(batch_candidate_limit)).all()
 
         applied_count = 0
@@ -570,10 +599,11 @@ def auto_apply_pending_matches(user_id: int | None = None, run_id: int | None = 
             has_web = bool(job.application_url or job.job_url) and settings.auto_apply_web_enabled
             if not has_email and not has_web:
                 consecutive_unactionable += 1
-                if consecutive_unactionable >= 15:
+                if consecutive_unactionable >= 100:
                     logger.warning("Breaking batch early: %s consecutive jobs without actionable application channels.", consecutive_unactionable)
                     break
                 continue
+            consecutive_unactionable = 0
 
             job_dict = {
                 "id": job.id,
@@ -764,7 +794,21 @@ def run_pipeline(user_id: int | None = None) -> dict:
         # candidates to Ollama this run. This prevents a large scrape from exhausting
         # the daily local-model budget before the best jobs are evaluated.
         ranked = sorted(new_jobs, key=relevance_score, reverse=True)
-        selected_jobs = ranked[: max(0, settings.evaluation_backlog_limit_per_run)]
+        # Determine remaining daily quota so we evaluate enough jobs to meet the target quota
+        with get_session() as s_quota:
+            target_u = s_quota.get(User, user_id) if user_id else s_quota.scalar(select(User).order_by(User.id))
+            target_limit = target_u.daily_apply_limit or (200 if target_u and target_u.role == "admin" else 50) if target_u else 200
+            today_start_eval = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+            user_sent_eval = s_quota.scalar(
+                select(func.count(UserJobApplication.id)).where(
+                    UserJobApplication.user_id == (target_u.id if target_u else user_id),
+                    UserJobApplication.applied_at >= today_start_eval,
+                )
+            ) or 0
+            pipe_remaining_quota = max(0, target_limit - user_sent_eval)
+
+        eval_run_limit = max(settings.evaluation_backlog_limit_per_run, min(pipe_remaining_quota * 2, 250))
+        selected_jobs = ranked[: max(0, eval_run_limit)]
         deferred = ranked[len(selected_jobs):]
         for job in deferred:
             job.setdefault("evaluation_status", "queued")
@@ -795,6 +839,7 @@ def run_pipeline(user_id: int | None = None) -> dict:
 
         # ── Phase: evaluate backlog of previously-discovered, un-evaluated jobs ──
         backlog_counts = {k: 0 for k in ("evaluated", "prefilter_skipped", "budget_skipped", "failed", "already_done")}
+        backlog_limit = max(settings.evaluation_backlog_limit_per_run, min(pipe_remaining_quota * 3, 300))
         with get_session() as session:
             backlog_query = session.query(JobPosting.id).filter(
                 JobPosting.pipeline_stage == PipelineStage.DISCOVERED,
@@ -805,7 +850,7 @@ def run_pipeline(user_id: int | None = None) -> dict:
             backlog_ids = [
                 row[0]
                 for row in backlog_query.order_by(JobPosting.id.desc()).limit(
-                    max(0, settings.evaluation_backlog_limit_per_run)
+                    max(0, backlog_limit)
                 ).all()
                 if row[0] not in set(selected_ids)
             ]
@@ -870,6 +915,7 @@ def run_pipeline(user_id: int | None = None) -> dict:
             record.claude_skipped_prefilter = summary["prefilter_skipped"]
             record.claude_skipped_budget = summary["budget_skipped"]
             record.evaluation_failures = summary["evaluation_failures"]
+            record.applications_sent = auto_applied_count
             record.anomaly_alerted = anomaly_alerted
             record.summary_json = json.dumps({**summary, "stage": "complete", "message": "Pipeline run complete", "progress_percent": 100, "source_results": ingestion_stats.get("source_results", [])}, ensure_ascii=False)
             session.add(PipelineRunEvent(run_id=run_record_id, phase="complete", status="success", message="Pipeline run complete", details_json=json.dumps(summary, ensure_ascii=False)))

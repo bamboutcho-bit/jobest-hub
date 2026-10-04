@@ -18,22 +18,25 @@ DEFAULT_PLANS: List[Dict[str, Any]] = [
         "slug": "free",
         "name": "Free Tier",
         "badge": "Trial / Basic",
-        "description": "Basic exploratory job search with essential alerts and limited automated applications.",
+        "description": "100% Free entry-level automated job search. Includes daily discovery, resume match scoring, and safe automated applications.",
         "price_usd": 0.0,
         "price_mad": 0,
         "price_eur": 0.0,
         "price_usdt": 0.0,
-        "billing_interval": "/ month",
+        "billing_interval": "Forever",
         "daily_apply_limit": 5,
         "max_ai_calls_per_day": 10,
         "can_access_freelance": False,
         "is_active": True,
         "is_recommended": False,
         "features": [
-            "5 Automated Applications / Day",
-            "Basic Job Discovery & Deduplication",
-            "Standard Resume Matching",
+            "5 Automated Applications / Day (100% Free Forever)",
+            "Multi-Continent Discovery (Europe, US, Global Remote)",
+            "Pure ML CV Vector Similarity Scoring",
+            "Direct Matching (0-2y, Degree, Visa & Relocation)",
             "Email & Telegram Notifications",
+            "Application History & ATS Status Tracking",
+            "Zero Credit Card or Payment Required",
         ],
         "sort_order": 0,
     },
@@ -47,13 +50,13 @@ DEFAULT_PLANS: List[Dict[str, Any]] = [
         "price_eur": 14.0,
         "price_usdt": 15.0,
         "billing_interval": "/ month",
-        "daily_apply_limit": 50,
+        "daily_apply_limit": 25,
         "max_ai_calls_per_day": 50,
         "can_access_freelance": False,
         "is_active": True,
         "is_recommended": False,
         "features": [
-            "50 Automated Applications / Day",
+            "25 Automated Applications / Day (100% Gmail Safe)",
             "Multi-Continent Discovery (Europe, US, Remote)",
             "0-2y Experience & Degree Matching",
             "Visa Sponsorship & Relocation Filter",
@@ -71,13 +74,13 @@ DEFAULT_PLANS: List[Dict[str, Any]] = [
         "price_eur": 32.0,
         "price_usdt": 35.0,
         "billing_interval": "/ month",
-        "daily_apply_limit": 150,
-        "max_ai_calls_per_day": 200,
+        "daily_apply_limit": 50,
+        "max_ai_calls_per_day": 100,
         "can_access_freelance": True,
         "is_active": True,
         "is_recommended": True,
         "features": [
-            "150 Automated Applications / Day",
+            "50 Automated Applications / Day (High Deliverability)",
             "Automated Freelance Deal Finder (HN, Reddit, RemoteOK)",
             "AI Proposal & Pitch Generator + Smart Follow-ups",
             "Direct Recruiter & HR Contact Discovery",
@@ -90,19 +93,19 @@ DEFAULT_PLANS: List[Dict[str, Any]] = [
         "slug": "ultra",
         "name": "Executive & Agency",
         "badge": "Maximum Power 🚀",
-        "description": "Unlimited scale, 24/7 background automation, and dedicated outreach.",
+        "description": "Maximum safe volume, 24/7 background automation, and dedicated outreach.",
         "price_usd": 69.0,
         "price_mad": 690,
         "price_eur": 65.0,
         "price_usdt": 69.0,
         "billing_interval": "/ month",
-        "daily_apply_limit": 9999,
-        "max_ai_calls_per_day": 9999,
+        "daily_apply_limit": 100,
+        "max_ai_calls_per_day": 250,
         "can_access_freelance": True,
         "is_active": True,
         "is_recommended": False,
         "features": [
-            "Unlimited Applications / Day (9,999)",
+            "100 Automated Applications / Day (Maximum Safe Volume)",
             "24/7 Autonomous Daemon Engine",
             "Custom Domain Outreach & Multiple Mailboxes",
             "Unlimited Freelance Pitches & Deal Closing",
@@ -140,6 +143,20 @@ def seed_default_plans_and_gateways(session) -> None:
                     sort_order=pdata.get("sort_order", 0),
                 )
                 session.add(plan)
+            else:
+                existing = existing_plans[slug]
+                # Auto-heal empty description or features from backend defaults
+                if not existing.description and pdata.get("description"):
+                    existing.description = pdata["description"]
+                if (not existing.features_json or existing.features_json in ("[]", "", "null")) and pdata.get("features"):
+                    existing.features_json = json.dumps(pdata["features"])
+                if slug == "free":
+                    existing.price_usd = 0.0
+                    existing.price_mad = 0
+                    existing.price_eur = 0.0
+                    existing.price_usdt = 0.0
+                    if not existing.billing_interval or existing.billing_interval == "/ month":
+                        existing.billing_interval = "Forever"
         session.flush()
 
         # 2. Seed Payment Gateways
@@ -324,15 +341,15 @@ def get_effective_daily_limit(session, plan_slug: str, fallback_limit: Optional[
         return plan.daily_apply_limit
     if fallback_limit is not None:
         return fallback_limit
-    # Fallback safety table
+    # Fallback safety table aligned with Gmail deliverability
     safety = {
         "free": 5,
-        "starter": 50,
-        "starter_99": 50,
-        "pro": 150,
-        "pro_499": 150,
-        "ultra": 9999,
-        "unlimited": 9999,
+        "starter": 25,
+        "starter_99": 25,
+        "pro": 50,
+        "pro_499": 50,
+        "ultra": 100,
+        "unlimited": 100,
     }
     return safety.get(resolve_plan_slug(plan_slug), 5)
 

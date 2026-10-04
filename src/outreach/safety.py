@@ -78,6 +78,123 @@ def has_unresolved_placeholders(text: str | None) -> bool:
     return bool(PLACEHOLDER_PATTERN.search(text))
 
 
+import socket
+import struct
+import time
+
+_MX_CACHE: dict[str, tuple[bool, float]] = {}
+_MX_CACHE_TTL = 3600.0  # 1 hour cache
+
+DUMMY_LOCAL_EXACT = {
+    "name", "yourname", "your-name", "your_name", "your", "youremail", "your-email", "your_email",
+    "email", "e-mail", "myemail", "mail", "mailaddress", "mailbox", "test", "testing",
+    "example", "sample", "user", "username", "candidate", "applicant", "candidat",
+    "placeholder", "info-job", "fake", "dummy", "admin", "null", "none", "void",
+    "firstname.lastname", "fname.lname", "fname_lname",
+    "max.mustermann", "erika.mustermann", "maxmustermann", "erikamustermann", "max_mustermann",
+    "etunimi.sukunimi", "etunimisukunimi", "etunimi_sukunimi",
+    "prenom.nom", "nom.prenom", "prenom_nom", "nom_prenom",
+    "fulano.detal", "fulanodetal", "fulano_detal",
+}
+
+DUMMY_DOMAINS = {
+    "email.com", "example.com", "example.org", "example.net", "domain.com", "test.com",
+    "sample.com", "invalid", "localhost", "wixpress.com", "cloudflare.com", "github.com",
+    "facebookmail.com", "schema.org", "w3.org", "gravatar.com", "wordpress.org",
+    "duckduckgo.com", "googlemail.invalid",
+}
+
+TELEMETRY_DOMAIN_KEYWORDS = {
+    "sentry", "ingest", "bugsnag", "rollbar", "datadoghq", "logrocket",
+    "telemetry", "analytics", "crashlytics", "track", "pixel",
+}
+
+COMPLIANCE_AND_NON_HIRING_PREFIXES = {
+    # Compliance & Legal
+    "dpo", "gdpr", "privacy", "data.privacy", "dataprivacy", "dataprotection",
+    "legal", "compliance", "copyright", "dmca", "abuse", "security", "security-alert",
+    "infosec", "fraud",
+    # Non-hiring operational
+    "press", "media", "pr", "ir", "investors", "investor-relations",
+    "billing", "invoice", "invoices", "accounting", "roadtax",
+    "customer-service", "accessibility", "accommodation", "accommodations",
+    # Automated / System
+    "noreply", "no-reply", "donotreply", "do-not-reply", "notifications", "notification",
+    "mailer-daemon", "daemon", "postmaster", "hostmaster", "webmaster", "bounce", "bounces",
+    "auto-confirm", "alerts", "alert", "system",
+}
+
+HEX_HASH_RE = re.compile(r"^[0-9a-f]{16,}$", re.I)
+
+
+def check_domain_has_mx(domain: str, timeout: float = 2.5) -> bool:
+    """Validate that a domain has active MX records using DNS over UDP (pure standard library).
+    
+    Checks 8.8.8.8 and 1.1.1.1 with in-memory caching.
+    """
+    if not domain or "." not in domain:
+        return False
+    clean_dom = domain.strip().lower().rstrip(".")
+    if clean_dom in DUMMY_DOMAINS or any(clean_dom.endswith("." + d) for d in DUMMY_DOMAINS):
+        return False
+    if any(t in clean_dom for t in TELEMETRY_DOMAIN_KEYWORDS):
+        return False
+    if clean_dom.endswith((".invalid", ".test", ".example", ".local", ".localhost")):
+        return False
+
+    now = time.time()
+    if clean_dom in _MX_CACHE:
+        val, ts = _MX_CACHE[clean_dom]
+        if now - ts < _MX_CACHE_TTL:
+            return val
+
+    # Fast-path for major known corporate/public email systems
+    major_providers = {
+        "gmail.com", "googlemail.com", "outlook.com", "hotmail.com", "live.com",
+        "yahoo.com", "yahoo.fr", "icloud.com", "proton.me", "protonmail.com"
+    }
+    if clean_dom in major_providers:
+        _MX_CACHE[clean_dom] = (True, now)
+        return True
+
+    # 1. Query UDP port 53 to public DNS (8.8.8.8, fallback 1.1.1.1)
+    for dns_ip in ("8.8.8.8", "1.1.1.1"):
+        try:
+            header = struct.pack(">HHHHHH", 0x1234, 0x0100, 1, 0, 0, 0)
+            qname = b"".join(bytes([len(p)]) + p.encode("latin1") for p in clean_dom.split(".")) + b"\x00"
+            packet = header + qname + struct.pack(">HH", 15, 1)  # 15 = MX, 1 = IN
+
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sock.settimeout(timeout)
+            sock.sendto(packet, (dns_ip, 53))
+            resp, _ = sock.recvfrom(1024)
+            sock.close()
+            ancount = struct.unpack(">H", resp[6:8])[0]
+            if ancount > 0:
+                _MX_CACHE[clean_dom] = (True, now)
+                return True
+            else:
+                # DNS server explicitly answered that 0 MX records exist
+                _MX_CACHE[clean_dom] = (False, now)
+                return False
+        except Exception:
+            continue
+
+    # 2. Fallback only if UDP DNS was blocked by network firewall
+    try:
+        socket.getaddrinfo(clean_dom, 25, socket.AF_INET, socket.SOCK_STREAM)
+        _MX_CACHE[clean_dom] = (True, now)
+        return True
+    except Exception:
+        try:
+            socket.gethostbyname(clean_dom)
+            _MX_CACHE[clean_dom] = (True, now)
+            return True
+        except Exception:
+            _MX_CACHE[clean_dom] = (False, now)
+            return False
+
+
 @dataclass(frozen=True)
 class SafetyResult:
     allowed: bool
@@ -104,6 +221,9 @@ def clean_email(address: str | None) -> str:
     local, _, domain = raw.partition("@")
     clean_local = local.strip(PUNCTUATION_STRIP)
     clean_domain = domain.strip(PUNCTUATION_STRIP)
+
+    # Strip HTML escapes / corrupted prefixes
+    clean_local = re.sub(r"^(?:u003e|&gt;|&lt;|3e)+", "", clean_local)
 
     # Strip any remaining leading/trailing non-alphanumeric chars (e.g. bullets, dashes, dots)
     clean_local = re.sub(r"^[^a-zA-Z0-9]+", "", clean_local)
@@ -137,16 +257,47 @@ def _urls(body: str) -> list[str]:
     return URL_RE.findall(body or "")
 
 
-def validate_external_email(address: str | None, *, allow_personal_domain: bool = False) -> SafetyResult:
+def validate_external_email(address: str | None, *, allow_personal_domain: bool = False, check_mx: bool = True) -> SafetyResult:
+    """Validate that an email address is real, active, hiring-related, and not a dummy or tracker."""
     cleaned = clean_email(address)
     if not cleaned or not CLEAN_EMAIL_RE.match(cleaned):
         return SafetyResult(False, f"Invalid recipient email address syntax: '{address}'", "high")
+    
     local = _local_part(cleaned)
     domain = _domain(cleaned)
-    if local in GENERIC_MAILBOXES or local.startswith("no-reply") or local.startswith("noreply"):
-        return SafetyResult(False, "Recipient appears to be an automated/no-reply mailbox", "high")
+
+    # 1. Corrupted / HTML prefix check
+    if local.startswith(("u003e", "&gt;", "3e")):
+        return SafetyResult(False, f"Corrupted email prefix: '{local}'", "high")
+
+    # 2. Dummy / Placeholder local names
+    if local in DUMMY_LOCAL_EXACT or local.strip("._-") in DUMMY_LOCAL_EXACT:
+        return SafetyResult(False, f"Placeholder/dummy recipient mailbox: '{local}'", "high")
+    
+    # 3. Dummy / Placeholder domains
+    if domain in DUMMY_DOMAINS or any(domain.endswith("." + d) for d in DUMMY_DOMAINS):
+        return SafetyResult(False, f"Placeholder/sample email domain: '{domain}'", "high")
+
+    # 4. Sentry / Telemetry / Crash reporting / DSN tokens
+    if HEX_HASH_RE.match(local):
+        return SafetyResult(False, f"Telemetry/Sentry DSN key detected instead of human email: '{local}'", "high")
+    if any(t in domain for t in TELEMETRY_DOMAIN_KEYWORDS):
+        return SafetyResult(False, f"Telemetry/error tracking domain detected: '{domain}'", "high")
+
+    # 5. Non-hiring / Legal / Compliance / Generic mailboxes
+    if local in COMPLIANCE_AND_NON_HIRING_PREFIXES or any(local.startswith(p) for p in ("noreply", "no-reply", "donotreply", "do-not-reply", "mailer-daemon")):
+        return SafetyResult(False, f"Non-hiring/compliance or automated mailbox: '{local}'", "high")
+    if any(k in local for k in ("privacy", "dataprotection", "accommodation", "accommodations")):
+        return SafetyResult(False, f"Legal/compliance mailbox: '{local}'", "high")
+
+    # 6. Personal mailbox domains
     if not allow_personal_domain and domain in PERSONAL_DOMAINS:
-        return SafetyResult(False, "Personal mailbox domain is not eligible for automatic external outreach", "medium")
+        return SafetyResult(False, f"Personal mailbox domain is not eligible for automatic external outreach: '{domain}'", "medium")
+
+    # 7. Active DNS MX verification
+    if check_mx and not check_domain_has_mx(domain):
+        return SafetyResult(False, f"Domain '{domain}' has no active mail exchange (MX) servers.", "high")
+
     return SafetyResult(True)
 
 

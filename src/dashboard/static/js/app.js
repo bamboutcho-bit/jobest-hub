@@ -1038,7 +1038,9 @@
 
     function isUserProOrAdmin() {
       if (typeof currentUser === 'undefined' || !currentUser) return false;
-      return currentUser.role === 'admin' || currentUser.current_plan === 'pro_499';
+      if (currentUser.role === 'admin') return true;
+      const p = (currentUser.current_plan || '').toLowerCase();
+      return ['pro', 'pro_499', 'ultra'].includes(p);
     }
 
     function updateHrDiscoveryAccess() {
@@ -2260,9 +2262,31 @@
         const linksWrap = document.getElementById('modalJobLinks');
         linksWrap.innerHTML = `
           ${applyBtn}
+          <a href="/api/jobs/${j.id}/motivation_letter/download" target="_blank" download class="btn btn-sm" style="background:rgba(59,130,246,0.18);border:1px solid rgba(59,130,246,0.4);color:#60a5fa;display:inline-flex;align-items:center;gap:5px" title="Download dedicated company motivation letter (.docx)">
+            <span>📝</span> Motivation Letter (.docx)
+          </a>
           ${j.job_url ? `<a href="${esc(j.job_url)}" target="_blank" class="btn btn-sm">Original Post ↗</a>` : ''}
           ${j.application_url ? `<a href="${esc(j.application_url)}" target="_blank" class="btn btn-sm btn-cyan">Apply URL ↗</a>` : ''}
         `;
+
+        // Motivation Letter (.docx) Preview
+        const btnCover = document.getElementById('btnDownloadModalCoverLetter');
+        if (btnCover) btnCover.href = `/api/jobs/${j.id}/motivation_letter/download`;
+
+        const prevCoverEl = document.getElementById('mJobMotivationLetterPreview');
+        if (prevCoverEl) {
+          prevCoverEl.textContent = 'Generating tailored company letter preview... ⏳';
+          apiGet(`/api/jobs/${j.id}/motivation_letter/preview`).then(res => {
+            if (res && res.ok && res.letter) {
+              const l = res.letter;
+              prevCoverEl.textContent = `${l.salutation}\n\n${(l.paragraphs || []).join('\n\n')}\n\n${l.closing}\n${l.candidate_name}`;
+            } else {
+              prevCoverEl.textContent = j.pitch_en || j.pitch_fr || 'Company-dedicated motivation letter will be generated on apply.';
+            }
+          }).catch(() => {
+            prevCoverEl.textContent = j.pitch_en || j.pitch_fr || 'Company-dedicated motivation letter will be generated on apply.';
+          });
+        }
 
         // Email thread
         const emailsWrap = document.getElementById('mJobEmails');
@@ -2554,6 +2578,32 @@
       } else {
         badge.style.display = 'none';
         btnAct.style.display = 'inline-block';
+      }
+
+      // Real-time CV Status Banner update
+      const cvStatusIcon = document.getElementById('cvStatusIcon');
+      const cvStatusTitle = document.getElementById('cvStatusTitle');
+      const cvStatusSub = document.getElementById('cvStatusSub');
+      const btnDownloadBanner = document.getElementById('btnDownloadCvBanner');
+
+      if (cvStatusIcon && cvStatusTitle && cvStatusSub) {
+        if (p.resume_path) {
+          const fn = p.resume_path.split(/[\\/]/).pop();
+          cvStatusIcon.textContent = '📄';
+          cvStatusTitle.textContent = `Active CV: ${fn}`;
+          cvStatusSub.textContent = `PDF file ready. Attached automatically to applications & outbound outreach.`;
+          if (btnDownloadBanner) btnDownloadBanner.style.display = 'inline-flex';
+        } else if (p.resume_text && p.resume_text.trim().length > 30) {
+          cvStatusIcon.textContent = '📝';
+          cvStatusTitle.textContent = `Resume text configured (${p.resume_text.trim().length} chars)`;
+          cvStatusSub.textContent = `Click "⚡ Generate ATS PDF" to create your ATS-compliant PDF resume from this profile.`;
+          if (btnDownloadBanner) btnDownloadBanner.style.display = 'none';
+        } else {
+          cvStatusIcon.textContent = '📁';
+          cvStatusTitle.textContent = `No CV uploaded or generated yet`;
+          cvStatusSub.textContent = `Upload your PDF or generate one from this profile to activate automatic job applications.`;
+          if (btnDownloadBanner) btnDownloadBanner.style.display = 'none';
+        }
       }
 
       currentProfileData = {
@@ -2849,6 +2899,56 @@
       }
     }
 
+    async function uploadCvFromStudio(event) {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+
+      const sel = document.getElementById('profileSelect');
+      const profileId = sel ? sel.value : null;
+
+      showToast(`Uploading ${file.name}...`, 'normal');
+      const reader = new FileReader();
+      reader.onload = async function(e) {
+        try {
+          const b64 = e.target.result;
+          const res = await apiSend('/api/candidate/cv/upload', 'POST', {
+            filename: file.name,
+            file_base64: b64,
+            profile_id: profileId ? parseInt(profileId, 10) : null
+          });
+          showToast(res.message || 'CV uploaded and linked to profile! ✓', 'success');
+          await loadProfiles();
+          if (profileId) selectProfile(profileId);
+        } catch (err) {
+          showToast('Failed to upload CV: ' + err.message, 'error');
+        } finally {
+          event.target.value = '';
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+
+    async function generateCvFromStudio() {
+      const sel = document.getElementById('profileSelect');
+      const profileId = sel ? sel.value : null;
+      const btn = document.getElementById('btnGenerateCvStudio');
+      if (btn) btn.disabled = true;
+
+      showToast('Generating ATS-compliant PDF resume from profile...', 'normal');
+      try {
+        const res = await apiSend('/api/candidate/cv/generate', 'POST', {
+          profile_id: profileId ? parseInt(profileId, 10) : null
+        });
+        showToast(res.message || 'ATS Resume PDF generated successfully! ✓', 'success');
+        await loadProfiles();
+        if (profileId) selectProfile(profileId);
+      } catch (err) {
+        showToast('Failed to generate CV PDF: ' + err.message, 'error');
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
+
     // =========================================================================
     // TOP ACTIONS: EVALUATE BACKLOG, CHECK INBOX, EXPORT CSV
     // =========================================================================
@@ -3110,13 +3210,13 @@
           } else {
             pricingActiveBtns.innerHTML = `
               <button type="button" class="btn btn-sm btn-cyan" onclick="openPaymentModal('starter')" style="font-weight:700;padding:9px 16px">
-                ⚡ Get Starter ($15)
+                ⚡ Get Starter (25 apps/day)
               </button>
               <button type="button" class="btn btn-primary" onclick="openPaymentModal('pro')" style="font-weight:700;padding:9px 18px">
-                ⭐ Upgrade to Pro ($35)
+                ⭐ Upgrade to Pro Hunter
               </button>
               <button type="button" class="btn" onclick="openPaymentModal('ultra')" style="font-weight:700;padding:9px 16px;border-color:rgba(168,85,247,0.5);color:var(--purple-light)">
-                🚀 Ultra Agency ($69)
+                🚀 Ultra Agency
               </button>
             `;
           }
@@ -3300,9 +3400,9 @@
 
       const plansList = (adminCachedPlans && adminCachedPlans.length) ? adminCachedPlans : [
         { slug: 'free', name: 'Free Tier', daily_apply_limit: 5 },
-        { slug: 'starter', name: 'Starter Hunter', daily_apply_limit: 50 },
-        { slug: 'pro', name: 'Pro Hunter & Freelancer', daily_apply_limit: 150 },
-        { slug: 'ultra', name: 'Executive & Agency', daily_apply_limit: 9999 }
+        { slug: 'starter', name: 'Starter Hunter', daily_apply_limit: 25 },
+        { slug: 'pro', name: 'Pro Hunter & Freelancer', daily_apply_limit: 50 },
+        { slug: 'ultra', name: 'Executive & Agency', daily_apply_limit: 100 }
       ];
 
       tbody.innerHTML = users.map(u => {
@@ -3535,11 +3635,11 @@
       if (planObj && planObj.daily_apply_limit !== undefined) {
         input.value = planObj.daily_apply_limit;
       } else if (plan === 'starter_99' || plan === 'starter') {
-        input.value = 50;
+        input.value = 25;
       } else if (plan === 'pro_499' || plan === 'pro') {
-        input.value = 150;
+        input.value = 50;
       } else if (plan === 'ultra') {
-        input.value = 9999;
+        input.value = 100;
       } else {
         input.value = 5;
       }
@@ -4658,14 +4758,50 @@
     }
 
     function formatPlanPrice(plan, curr) {
-      if (curr === 'MAD') {
-        return { num: plan.price_mad || 150, symbol: 'MAD', display: `${plan.price_mad || 150} MAD` };
-      } else if (curr === 'EUR') {
-        return { num: plan.price_eur || 14, symbol: '€', display: `€${plan.price_eur || 14}` };
-      } else if (curr === 'USDT') {
-        return { num: plan.price_usdt || 15, symbol: '₮', display: `${plan.price_usdt || 15} USDT` };
+      if (!plan) return { num: 0, symbol: '', display: 'Free' };
+      const isFree = (plan.slug === 'free') || (
+        Number(plan.price_usd || 0) === 0 &&
+        Number(plan.price_mad || 0) === 0 &&
+        Number(plan.price_eur || 0) === 0
+      );
+      if (isFree) {
+        return { num: 0, symbol: '', display: 'Free' };
       }
-      return { num: plan.price_usd || 15, symbol: '$', display: `$${plan.price_usd || 15}` };
+      const getVal = (val, def) => (val !== undefined && val !== null && !isNaN(Number(val))) ? Number(val) : def;
+      if (curr === 'MAD') {
+        const val = getVal(plan.price_mad, 150);
+        return { num: val, symbol: 'MAD', display: `${val} MAD` };
+      } else if (curr === 'EUR') {
+        const val = getVal(plan.price_eur, 14);
+        return { num: val, symbol: '€', display: `€${val}` };
+      } else if (curr === 'USDT') {
+        const val = getVal(plan.price_usdt, 15);
+        return { num: val, symbol: '₮', display: `${val} USDT` };
+      }
+      const val = getVal(plan.price_usd, 15);
+      return { num: val, symbol: '$', display: `$${val}` };
+    }
+
+    async function switchToFreePlan() {
+      if (!confirm('Are you sure you want to downgrade to the Free Tier? Your daily limit will return to 5 applications/day.')) {
+        return;
+      }
+      try {
+        const res = await apiSend('/api/user/switch-free', 'POST');
+        if (res && res.ok) {
+          showToast(res.message || 'Switched to Free Tier (5 apps/day).', 'success');
+          if (typeof currentUser !== 'undefined' && currentUser) {
+            currentUser.current_plan = 'free';
+            currentUser.daily_apply_limit = res.daily_apply_limit || 5;
+          }
+          renderPricingCards();
+          if (typeof initAuth === 'function') initAuth();
+        } else {
+          showToast(res?.detail || res?.message || 'Failed to switch plan', 'error');
+        }
+      } catch (err) {
+        showToast('Failed to switch to Free Tier: ' + err.message, 'error');
+      }
     }
 
     function renderPricingCards() {
@@ -4673,6 +4809,28 @@
       if (!container) return;
 
       const defaultPlans = [
+        {
+          slug: 'free',
+          name: 'Free Tier',
+          badge: 'Trial / Basic',
+          price_usd: 0,
+          price_mad: 0,
+          price_eur: 0,
+          price_usdt: 0,
+          billing: 'Forever',
+          daily_limit: 5,
+          description: '100% Free entry-level automated job search. Includes daily discovery, resume match scoring, and safe automated applications.',
+          features: [
+            '5 Automated Applications / Day (100% Free Forever)',
+            'Multi-Continent Discovery (Europe, US, Global Remote)',
+            'Pure ML CV Vector Similarity Scoring',
+            'Direct Matching (0-2y, Degree, Visa & Relocation)',
+            'Email & Telegram Notifications',
+            'Application History & ATS Status Tracking',
+            'Zero Credit Card or Payment Required'
+          ],
+          recommended: false,
+        },
         {
           slug: 'starter',
           name: 'Starter Hunter',
@@ -4682,10 +4840,10 @@
           price_eur: 14,
           price_usdt: 15,
           billing: '/ month',
-          daily_limit: 50,
+          daily_limit: 25,
           description: 'Ideal for active job seekers targeting European, US, and Global Remote roles.',
           features: [
-            '50 Automated Applications / Day',
+            '25 Automated Applications / Day (100% Gmail Safe)',
             'Multi-Continent Discovery (Europe, US, Remote)',
             '0-2y Experience & Degree Matching',
             'Visa Sponsorship & Relocation Filter',
@@ -4702,10 +4860,10 @@
           price_eur: 32,
           price_usdt: 35,
           billing: '/ month',
-          daily_limit: 150,
+          daily_limit: 50,
           description: 'Full-stack job hunt + automated freelance client deal acquisition.',
           features: [
-            '150 Automated Applications / Day',
+            '50 Automated Applications / Day (High Deliverability)',
             'Automated Freelance Deal Finder (HN, Reddit, RemoteOK)',
             'AI Proposal & Pitch Generator + Smart Follow-ups',
             'Direct Recruiter & HR Contact Discovery',
@@ -4723,10 +4881,10 @@
           price_eur: 65,
           price_usdt: 69,
           billing: '/ month',
-          daily_limit: 9999,
+          daily_limit: 100,
           description: 'Unlimited scale, 24/7 background automation, and dedicated outreach.',
           features: [
-            'Unlimited Applications / Day (9,999)',
+            '100 Automated Applications / Day (Maximum Safe Volume)',
             '24/7 Autonomous Daemon Engine',
             'Custom Domain Outreach & Multiple Mailboxes',
             'Unlimited Freelance Pitches & Deal Closing',
@@ -4744,9 +4902,16 @@
       container.innerHTML = plans.map(p => {
         const priceInfo = formatPlanPrice(p, currentPricingCurrency);
         const isCurrent = (currentPlan === p.slug || (currentPlan === 'pro_499' && p.slug === 'pro') || (currentPlan === 'starter_99' && p.slug === 'starter'));
-        const targetWeight = tierWeights[p.slug] || 1;
+        const targetWeight = tierWeights[p.slug] || 0;
         const isUpgrade = targetWeight > userWeight;
         const isRec = !isCurrent && (p.recommended || p.slug === 'pro');
+        const isFreePlan = (p.slug === 'free') || (Number(p.price_usd || 0) === 0 && Number(p.price_mad || 0) === 0);
+
+        const priceDisplay = isFreePlan ? 'Free' : priceInfo.display;
+        const billingDisplay = isFreePlan ? 'Forever' : esc(p.billing || '/ month');
+        const defaultMatch = defaultPlans.find(d => d.slug === p.slug);
+        const planDesc = esc(p.description || defaultMatch?.description || '');
+        const planFeatures = (p.features && p.features.length) ? p.features : (defaultMatch?.features || []);
 
         let cardBorder = 'border:1px solid var(--border);';
         let cardBg = 'background:rgba(15,23,42,0.75);';
@@ -4757,12 +4922,26 @@
           cardBorder = 'border:2px solid #10b981;box-shadow:0 0 28px rgba(16,185,129,0.35);';
           cardBg = 'background:radial-gradient(ellipse at top, rgba(16,185,129,0.18) 0%, rgba(15,23,42,0.96) 75%);';
           badgeHtml = `<div style="position:absolute;top:-13px;right:20px;background:linear-gradient(135deg, #10b981 0%, #059669 100%);color:#fff;font-size:11px;font-weight:800;padding:3px 12px;border-radius:20px;box-shadow:0 4px 12px rgba(16,185,129,0.4);letter-spacing:0.04em">✓ YOUR CURRENT PLAN</div>`;
-          btnHtml = `
-            <button class="btn btn-sm btn-cyan" onclick="openPaymentModal('${esc(p.slug)}', '${esc(currentPricingCurrency)}')" style="width:100%;padding:11px;font-weight:800;font-size:13px;border-radius:10px;justify-content:center;display:flex;align-items:center;gap:6px;background:rgba(16,185,129,0.22);border:1px solid #10b981;color:#fff">
-              <span>🔄 Extend / Renew Plan</span>
-            </button>
-            <div style="text-align:center;font-size:11px;color:var(--good);margin-top:6px;font-weight:600">✓ Active membership · Click to renew</div>
-          `;
+          if (isFreePlan) {
+            btnHtml = `
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <div style="width:100%;padding:11px;font-weight:700;font-size:13px;border-radius:10px;justify-content:center;display:flex;align-items:center;gap:6px;background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.4);color:#a7f3d0">
+                  <span>✓ Active (Free Forever)</span>
+                </div>
+                <button type="button" class="btn btn-primary" onclick="openPaymentModal('starter')" style="width:100%;padding:11px;font-weight:800;font-size:13px;border-radius:10px;justify-content:center;display:flex;align-items:center;gap:6px">
+                  <span>⚡ Upgrade to Starter (25 apps/day)</span>
+                </button>
+              </div>
+              <div style="text-align:center;font-size:11px;color:var(--text-muted);margin-top:6px;font-weight:500">5 applications/day included · No credit card required</div>
+            `;
+          } else {
+            btnHtml = `
+              <button class="btn btn-sm btn-cyan" onclick="openPaymentModal('${esc(p.slug)}', '${esc(currentPricingCurrency)}')" style="width:100%;padding:11px;font-weight:800;font-size:13px;border-radius:10px;justify-content:center;display:flex;align-items:center;gap:6px;background:rgba(16,185,129,0.22);border:1px solid #10b981;color:#fff">
+                <span>🔄 Extend / Renew Plan</span>
+              </button>
+              <div style="text-align:center;font-size:11px;color:var(--good);margin-top:6px;font-weight:600">✓ Active membership · Click to renew</div>
+            `;
+          }
         } else if (isUpgrade) {
           if (isRec) {
             cardBorder = 'border:2px solid rgba(139,92,246,0.6);box-shadow:0 0 30px rgba(139,92,246,0.25);';
@@ -4777,11 +4956,20 @@
             </button>
           `;
         } else {
-          btnHtml = `
-            <button class="btn" onclick="openPaymentModal('${esc(p.slug)}', '${esc(currentPricingCurrency)}')" style="width:100%;padding:12px;font-weight:700;font-size:13px;border-radius:10px;justify-content:center;display:flex;align-items:center;gap:6px;border-color:rgba(255,255,255,0.2);color:#cbd5e1">
-              <span>🔄 Switch to ${esc(p.name)}</span>
-            </button>
-          `;
+          if (isFreePlan) {
+            btnHtml = `
+              <button class="btn" onclick="switchToFreePlan()" style="width:100%;padding:12px;font-weight:700;font-size:13px;border-radius:10px;justify-content:center;display:flex;align-items:center;gap:6px;border-color:rgba(255,255,255,0.2);color:#cbd5e1">
+                <span>⬇️ Switch to Free Plan</span>
+              </button>
+              <div style="text-align:center;font-size:11px;color:var(--text-muted);margin-top:6px">100% Free · 5 applications/day included</div>
+            `;
+          } else {
+            btnHtml = `
+              <button class="btn" onclick="openPaymentModal('${esc(p.slug)}', '${esc(currentPricingCurrency)}')" style="width:100%;padding:12px;font-weight:700;font-size:13px;border-radius:10px;justify-content:center;display:flex;align-items:center;gap:6px;border-color:rgba(255,255,255,0.2);color:#cbd5e1">
+                <span>🔄 Switch to ${esc(p.name)}</span>
+              </button>
+            `;
+          }
         }
 
         return `
@@ -4790,17 +4978,17 @@
             <div>
               <div style="font-size:12px;font-weight:700;color:${isCurrent ? 'var(--good)' : (isRec ? 'var(--cyan-light)' : 'var(--text-muted)')};text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">${isCurrent ? 'ACTIVE PLAN' : esc(p.badge || 'PLAN')}</div>
               <h3 style="font-size:20px;font-weight:800;color:#fff;margin-bottom:8px">${esc(p.name)}</h3>
-              <div style="font-size:12px;color:var(--text-muted);min-height:36px;margin-bottom:16px;line-height:1.4">${esc(p.description)}</div>
+              <div style="font-size:12px;color:var(--text-muted);min-height:36px;margin-bottom:16px;line-height:1.4">${planDesc}</div>
 
               <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid rgba(255,255,255,0.08)">
-                <span style="font-size:32px;font-weight:800;color:#fff;letter-spacing:-0.03em">${priceInfo.display}</span>
-                <span style="font-size:13px;color:var(--text-muted)">${esc(p.billing || '/ month')}</span>
+                <span style="font-size:32px;font-weight:900;color:${isFreePlan ? 'var(--good)' : '#fff'};letter-spacing:-0.03em">${priceDisplay}</span>
+                <span style="font-size:13px;color:var(--text-muted)">${billingDisplay}</span>
               </div>
 
               <div style="margin-bottom:20px">
                 <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:10px">Included Features:</div>
                 <div style="display:flex;flex-direction:column;gap:9px">
-                  ${(p.features || []).map(f => `
+                  ${planFeatures.map(f => `
                     <div style="display:flex;align-items:flex-start;gap:8px;font-size:12.5px;color:#e2e8f0;line-height:1.4">
                       <span style="color:var(--good);font-weight:800">✓</span>
                       <span>${esc(f)}</span>
@@ -4875,16 +5063,17 @@
 
     function selectModalPlan(planSlug) {
       const defaultPlans = [
-        { slug: 'starter', name: 'Starter Hunter', price_usd: 15, price_mad: 150, price_eur: 14, price_usdt: 15, daily_limit: 50 },
-        { slug: 'pro', name: 'Pro Hunter & Freelancer', price_usd: 35, price_mad: 350, price_eur: 32, price_usdt: 35, daily_limit: 150 },
-        { slug: 'ultra', name: 'Executive & Agency', price_usd: 69, price_mad: 690, price_eur: 65, price_usdt: 69, daily_limit: 9999 },
+        { slug: 'starter', name: 'Starter Hunter', price_usd: 15, price_mad: 150, price_eur: 14, price_usdt: 15, daily_limit: 25 },
+        { slug: 'pro', name: 'Pro Hunter & Freelancer', price_usd: 35, price_mad: 350, price_eur: 32, price_usdt: 35, daily_limit: 50 },
+        { slug: 'ultra', name: 'Executive & Agency', price_usd: 69, price_mad: 690, price_eur: 65, price_usdt: 69, daily_limit: 100 },
       ];
       const plans = (pricingPlansData && pricingPlansData.length) ? pricingPlansData : defaultPlans;
       let cleanSlug = planSlug || 'pro';
       if (cleanSlug === 'pro_499') cleanSlug = 'pro';
       else if (cleanSlug === 'starter_99') cleanSlug = 'starter';
+      else if (cleanSlug === 'free') cleanSlug = 'starter';
 
-      const plan = plans.find(p => p.slug === cleanSlug) || plans[1] || plans[0];
+      const plan = plans.find(p => p.slug === cleanSlug) || plans.find(p => p.slug === 'pro') || plans[0];
       const priceInfo = formatPlanPrice(plan, currentPricingCurrency);
 
       // Dynamically populate or update interactive plan selector pills in modal (purchasable plans only)
@@ -4969,6 +5158,9 @@
       if (!modal) return;
 
       if (currency) currentPricingCurrency = currency;
+      if (planSlug === 'free') {
+        planSlug = 'starter';
+      }
 
       if (!pricingPlansData || !pricingMethodsData) {
         try {
@@ -6117,6 +6309,7 @@
     window.closeReceiptModal = closeReceiptModal;
     window.selectModalPlan = selectModalPlan;
     window.scrollToPricingCards = scrollToPricingCards;
+    window.switchToFreePlan = switchToFreePlan;
 
     // Expose Admin Plans & Gateways Functions Globally
     window.openAdminPlanModal = openAdminPlanModal;
@@ -6612,6 +6805,17 @@
       }
     }
 
+    // Expose CV Studio & Profile Functions Globally
+    window.uploadCvFromStudio = uploadCvFromStudio;
+    window.generateCvFromStudio = generateCvFromStudio;
+    window.runMlCvAnalysis = runMlCvAnalysis;
+    window.syncExtractedCvToProfile = syncExtractedCvToProfile;
+    window.activateCurrentProfile = activateCurrentProfile;
+    window.saveCurrentProfile = saveCurrentProfile;
+    window.createNewProfile = createNewProfile;
+    window.cloneCurrentProfile = cloneCurrentProfile;
+    window.deleteCurrentProfile = deleteCurrentProfile;
+
     // Expose Onboarding Functions Globally
     window.checkUserOnboardingStatus = checkUserOnboardingStatus;
     window.openOnboardingModal = openOnboardingModal;
@@ -6629,5 +6833,6 @@
     window.handleOnbCvFileSelect = handleOnbCvFileSelect;
     window.triggerOnbMlAnalysis = triggerOnbMlAnalysis;
     window.submitOnboardingAndLaunch = submitOnboardingAndLaunch;
+
 
 

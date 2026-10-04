@@ -1,7 +1,13 @@
 """Cheap deterministic relevance gate; sponsorship is never a hard discovery gate."""
+from __future__ import annotations
+
 import re
+from typing import Any
 import requests
-import numpy as np
+try:
+    import numpy as np
+except ImportError:
+    np = None
 
 from config.candidate_profile import CANDIDATE_PROFILE
 from config.settings import settings
@@ -16,9 +22,9 @@ _profile_embedding = None
 _profile_embedding_attempted: bool = False
 
 
-def _get_embedding(text: str, model: str = "nomic-embed-text") -> np.ndarray | None:
+def _get_embedding(text: str, model: str = "nomic-embed-text") -> Any:
     global _embedding_available
-    if _embedding_available is False:
+    if np is None or _embedding_available is False:
         return None
 
     base_url = (settings.ollama_base_url or "http://ollama:11434").rstrip("/")
@@ -35,14 +41,16 @@ def _get_embedding(text: str, model: str = "nomic-embed-text") -> np.ndarray | N
     return None
 
 
-def _cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
+def _cosine_similarity(a: Any, b: Any) -> float:
+    if np is None:
+        return 0.0
     norm = np.linalg.norm(a) * np.linalg.norm(b)
     if norm == 0:
         return 0.0
     return float(np.dot(a, b) / norm)
 
 
-def _get_profile_embedding() -> np.ndarray | None:
+def _get_profile_embedding() -> Any:
     global _profile_embedding, _profile_embedding_attempted
     if not _profile_embedding_attempted:
         _profile_embedding_attempted = True

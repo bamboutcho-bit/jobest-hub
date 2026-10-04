@@ -37,6 +37,15 @@ JOB_BOARD_DOMAINS = {
     "smartrecruiters.com", "bamboohr.com", "recruitee.com", "jobvite.com",
 }
 
+JOB_BOARD_ROOTS = {
+    "linkedin", "indeed", "glassdoor", "ziprecruiter", "arbeitnow", "jobicy",
+    "remoteok", "weworkremotely", "himalayas", "wellfound", "monster",
+    "simplyhired", "greenhouse", "lever", "ashby", "workable", "smartrecruiters",
+    "bamboohr", "recruitee", "jobvite", "viecoi", "hellowork", "francetravail",
+    "pole-emploi", "welcometothejungle", "otta", "builtin", "dice", "stepstone",
+    "metajob", "aerocontact", "cadremploi", "apec", "lesjeudis"
+}
+
 # Domains of email services/analytics/trackers to ignore
 JUNK_EMAIL_DOMAINS = {
     "example.com", "domain.com", "sentry.io", "wixpress.com", "cloudflare.com",
@@ -89,23 +98,17 @@ def clean_email_address(raw_email: str | None) -> str:
 
 
 def is_excluded_email(email_addr: str) -> bool:
-    """Check if an email address is generic, compliance-related, or non-hiring."""
-    cleaned = clean_email_address(email_addr)
-    if not cleaned:
-        return True
-    local, _, domain = cleaned.lower().partition("@")
-    clean_local = local.strip("._-")
-    if not clean_local:
-        return True
-    if clean_local in EXCLUDED_EMAIL_PREFIXES:
-        return True
-    if any(clean_local.startswith(p) for p in ("noreply", "no-reply", "donotreply", "do-not-reply", "mailer-daemon")):
-        return True
-    if any(k in clean_local for k in ("privacy", "accommodation", "accessibility", "gdpr", "compliance", "copyright", "dmca")):
-        return True
-    if domain in JUNK_EMAIL_DOMAINS or "duckduckgo" in domain:
-        return True
-    return False
+    """Check if an email address is generic, compliance-related, placeholder, or non-hiring."""
+    from src.outreach.safety import validate_external_email
+    res = validate_external_email(email_addr, allow_personal_domain=True, check_mx=False)
+    return not res.allowed
+
+
+def check_domain_has_mx(domain: str, timeout: float = 2.5) -> bool:
+    """Validate that a domain has active MX records using DNS over UDP."""
+    from src.outreach.safety import check_domain_has_mx as _safety_mx
+    return _safety_mx(domain, timeout=timeout)
+
 
 EMAIL_REGEX = re.compile(r"\b[A-Za-z0-9][A-Za-z0-9._%+-]*@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
 
@@ -130,42 +133,6 @@ class DiscoveredContact:
         }
 
 
-def check_domain_has_mx(domain: str, timeout: float = 3.0) -> bool:
-    """Validate that a domain has active MX records using DNS over UDP (pure standard library)."""
-    if not domain or "." not in domain:
-        return False
-    domain = domain.strip().lower()
-    
-    # 1. Direct DNS Query over UDP port 53 to public DNS (8.8.8.8)
-    try:
-        header = struct.pack(">HHHHHH", 0x1234, 0x0100, 1, 0, 0, 0)
-        qname = b"".join(bytes([len(part)]) + part.encode("latin1") for part in domain.split(".")) + b"\x00"
-        qtype_qclass = struct.pack(">HH", 15, 1)  # 15 = MX, 1 = IN
-        packet = header + qname + qtype_qclass
-
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.settimeout(timeout)
-        sock.sendto(packet, ("8.8.8.8", 53))
-        resp, _ = sock.recvfrom(1024)
-        sock.close()
-        ancount = struct.unpack(">H", resp[6:8])[0]
-        if ancount > 0:
-            return True
-    except Exception:
-        pass
-
-    # 2. Fallback to socket getaddrinfo for general domain existence
-    try:
-        socket.getaddrinfo(domain, 25, socket.AF_INET, socket.SOCK_STREAM)
-        return True
-    except Exception:
-        try:
-            socket.gethostbyname(domain)
-            return True
-        except Exception:
-            return False
-
-
 def extract_clean_domain(url_or_company: str) -> Optional[str]:
     """Extract an apex or clean company domain from a URL or company name."""
     if not url_or_company:
@@ -177,10 +144,12 @@ def extract_clean_domain(url_or_company: str) -> Optional[str]:
         netloc = parsed.netloc.lower().split(":")[0]
         if netloc.startswith("www."):
             netloc = netloc[4:]
-        # If it's a known job board/ATS, don't treat it as company domain
+        # If it's a known job board/ATS across any TLD, don't treat it as company domain
         for jb in JOB_BOARD_DOMAINS:
             if netloc == jb or netloc.endswith("." + jb):
                 return None
+        if any(root in netloc for root in JOB_BOARD_ROOTS):
+            return None
         return netloc if "." in netloc else None
 
     # If it's a domain-like string (e.g. 'axon.com')
@@ -191,6 +160,8 @@ def extract_clean_domain(url_or_company: str) -> Optional[str]:
         for jb in JOB_BOARD_DOMAINS:
             if d == jb or d.endswith("." + jb):
                 return None
+        if any(root in d for root in JOB_BOARD_ROOTS):
+            return None
         return d
 
     return None
@@ -529,10 +500,10 @@ def discover_hr_contacts_for_company(company_name: str, company_url: Optional[st
 
     # 1. Resolve Company Domain
     domain = extract_clean_domain(company_url)
-    if not domain and job_url:
-        domain = extract_clean_domain(job_url)
     if not domain and company_name:
         domain = resolve_company_domain(company_name)
+    if not domain and job_url:
+        domain = extract_clean_domain(job_url)
 
     logger.info("HR Discovery for '%s': resolved domain '%s'", company_name, domain or "None")
 

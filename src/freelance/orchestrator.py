@@ -28,29 +28,31 @@ def _persist_new_leads(raw_leads: list[dict], user_id: int | None = None) -> lis
     new_ids: list[int] = []
     with get_session() as session:
         query = session.query(FreelanceLead.dedup_hash)
-        if user_id is not None:
-            query = query.filter(FreelanceLead.user_id == user_id)
         existing_hashes = {h for (h,) in query.all()}
         for raw in raw_leads:
             dedup_hash = raw.get("dedup_hash")
             if not dedup_hash or dedup_hash in existing_hashes:
                 continue
             existing_hashes.add(dedup_hash)
-            lead = FreelanceLead(
-                user_id=user_id,
-                dedup_hash=dedup_hash,
-                title=raw.get("title"),
-                client_name=raw.get("client_name"),
-                client_type=raw.get("client_type"),
-                contact_email=raw.get("contact_email"),
-                contact_url=raw.get("contact_url"),
-                source_platform=raw.get("source_platform"),
-                source_url=raw.get("source_url"),
-                raw_description=raw.get("raw_description"),
-            )
-            session.add(lead)
-            session.flush()
-            new_ids.append(lead.id)
+            try:
+                lead = FreelanceLead(
+                    user_id=user_id,
+                    dedup_hash=dedup_hash,
+                    title=raw.get("title"),
+                    client_name=raw.get("client_name"),
+                    client_type=raw.get("client_type"),
+                    contact_email=raw.get("contact_email"),
+                    contact_url=raw.get("contact_url"),
+                    source_platform=raw.get("source_platform"),
+                    source_url=raw.get("source_url"),
+                    raw_description=raw.get("raw_description"),
+                )
+                session.add(lead)
+                session.flush()
+                new_ids.append(lead.id)
+            except Exception as lead_err:
+                session.rollback()
+                logger.debug("Skipping duplicate freelance lead (%s): %s", dedup_hash, lead_err)
     return new_ids
 
 

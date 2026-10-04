@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 SUPPORTED_ATS = {
     "greenhouse.io": "greenhouse",
+    "grnh.se": "greenhouse",
     "lever.co": "lever",
     "workable.com": "workable",
     "ashbyhq.com": "ashby",
@@ -35,10 +36,21 @@ SUPPORTED_ATS = {
     "personio.com": "personio",
     "breezy.hr": "breezy",
     "rippling.com": "rippling",
+    "rippling-ats.com": "rippling",
     "pinpointhq.com": "pinpoint",
     "join.com": "join",
     "welcomekit.co": "welcomekit",
     "talents.work": "talents",
+    "applytojob.com": "jazzhr",
+    "jazzhr.com": "jazzhr",
+    "resumator.com": "jazzhr",
+    "taleo.net": "taleo",
+    "oraclecloud.com": "oracle",
+    "icims.com": "icims",
+    "successfactors.com": "successfactors",
+    "successfactors.eu": "successfactors",
+    "cornerstoneondemand.com": "cornerstone",
+    "intervieweb.it": "intervieweb",
 }
 BOARD_HOSTS = {
     "linkedin.com", "indeed.com", "glassdoor.com", "ziprecruiter.com", "google.com", "bayt.com", "bdjobs.com"
@@ -535,10 +547,10 @@ def apply_via_browser(job_record: dict, session=None, profile: dict | None = Non
     if settings.auto_apply_known_ats_only and not ats and not (is_linkedin or is_indeed):
         return {"application_method": "manual_non_ats", "application_status": "manual_non_ats", "application_url": url, "applied": False}
 
-    resume_candidate = Path(profile.get("resume_path")) if profile and profile.get("resume_path") else None
-    if resume_candidate and resume_candidate.is_file():
-        resume = resume_candidate
-    else:
+    from src.candidate.profile_manager import resolve_user_resume_path
+    uid = job_record.get("user_id") if isinstance(job_record, dict) else None
+    resume = resolve_user_resume_path(user_id=uid, profile=profile, auto_generate=True)
+    if not resume:
         resume = Path(settings.candidate_resume_path)
 
     if not resume.is_file() and not settings.auto_apply_allow_missing_resume:

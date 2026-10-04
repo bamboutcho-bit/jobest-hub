@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -155,6 +157,16 @@ def list_profiles(user_id: int | None = None, session=None) -> list[dict[str, An
         return []
 
 
+def _is_authorized(s, user_id: int | None, row_user_id: int | None) -> bool:
+    if user_id is None:
+        return True
+    if row_user_id == user_id:
+        return True
+    from src.storage.models import User
+    caller = s.get(User, user_id)
+    return bool(caller and caller.role == "admin")
+
+
 def get_profile_by_id(profile_id: int, user_id: int | None = None, session=None) -> dict[str, Any] | None:
     user_id, session = _normalize_args(user_id, session)
 
@@ -162,7 +174,7 @@ def get_profile_by_id(profile_id: int, user_id: int | None = None, session=None)
         row = s.get(CandidateProfile, profile_id)
         if not row:
             return None
-        if user_id is not None and row.user_id is not None and row.user_id != user_id:
+        if not _is_authorized(s, user_id, row.user_id):
             return None
         return _profile_to_dict(row)
 
@@ -525,3 +537,242 @@ def generate_freelance_queries(profile: dict[str, Any] | None = None) -> list[di
         {"id": "jobicy-contract", "source": "jobicy", "term": "contract freelance developer"},
         {"id": "wwr-contract", "source": "weworkremotely", "term": "contract freelance"},
     ]
+
+
+# ---------------------------------------------------------------------------
+# Multi-User CV Resolution, Dynamic Generation & Upload Management
+# ---------------------------------------------------------------------------
+
+def resolve_user_resume_path(
+    user_id: int | None = None,
+    profile: dict[str, Any] | None = None,
+    auto_generate: bool = True,
+    session=None
+) -> Path | None:
+    """Resolve the specific resume PDF file for a given user or profile.
+    
+    Ensures that every registered user utilizes their own dashboard CV,
+    dynamically generating an ATS-ready PDF from their profile if none exists.
+    """
+    if profile is None:
+        profile = get_active_profile(user_id=user_id, session=session)
+
+    # 1. Check if profile specifies a custom resume path that exists
+    if profile and profile.get("resume_path"):
+        cand_p = Path(profile["resume_path"])
+        if cand_p.is_file():
+            return cand_p
+
+    effective_uid = user_id or (profile.get("user_id") if profile else None)
+
+    # 2. Check if user has an existing uploaded or generated resume file on disk
+    if effective_uid:
+        user_dir = Path("uploads") / "resumes" / f"user_{effective_uid}"
+        if user_dir.is_dir():
+            pdfs = sorted(user_dir.glob("*.pdf"), key=os.path.getmtime, reverse=True)
+            if pdfs and pdfs[0].is_file():
+                # Self-heal profile.resume_path if it was lost
+                try:
+                    if profile and profile.get("id"):
+                        update_profile(profile["id"], {"resume_path": str(pdfs[0].resolve())}, user_id=effective_uid, session=session)
+                except Exception:
+                    pass
+                return pdfs[0]
+
+    # 3. Dynamically generate standard PDF CV from the candidate's dashboard profile
+    if auto_generate and effective_uid and profile:
+        try:
+            from src.candidate.cv_generator import save_user_resume_pdf
+            gen_path = save_user_resume_pdf(effective_uid, profile)
+            if profile.get("id"):
+                update_profile(profile["id"], {"resume_path": gen_path}, user_id=effective_uid, session=session)
+            return Path(gen_path)
+        except Exception as gen_err:
+            logger.warning("Failed to auto-generate resume PDF for user %s: %s", effective_uid, gen_err)
+
+    # 4. Strict multi-user boundary: Only fallback to static file if user is admin or unspecified
+    is_admin = False
+    if effective_uid:
+        try:
+            from src.storage.models import User
+            def _check_admin(s):
+                u = s.get(User, effective_uid)
+                return bool(u and u.role == "admin")
+            if session:
+                is_admin = _check_admin(session)
+            else:
+                with get_session() as s:
+                    is_admin = _check_admin(s)
+        except Exception:
+            pass
+
+    if effective_uid is None or is_admin:
+        fallback = Path(settings.candidate_resume_path)
+        if fallback.is_file():
+            return fallback
+        alt_fallback = Path("candidate_data/resume.pdf")
+        if alt_fallback.is_file():
+            return alt_fallback
+
+    return None
+
+
+def generate_and_save_profile_cv(
+    profile_id: int | None = None,
+    user_id: int | None = None,
+    session=None
+) -> dict[str, Any]:
+    """Generate a clean ATS PDF resume from profile data and store it for the user."""
+    from src.candidate.cv_generator import save_user_resume_pdf
+    from src.candidate.cv_ml_engine import extract_text_from_pdf
+
+    def _generate(s):
+        target_prof: CandidateProfile | None = None
+        if profile_id:
+            target_prof = s.get(CandidateProfile, profile_id)
+        if not target_prof and user_id:
+            target_prof = s.scalar(
+                select(CandidateProfile)
+                .where(CandidateProfile.user_id == user_id, CandidateProfile.is_active.is_(True))
+                .order_by(desc(CandidateProfile.id))
+                .limit(1)
+            ) or s.scalar(
+                select(CandidateProfile)
+                .where(CandidateProfile.user_id == user_id)
+                .order_by(desc(CandidateProfile.id))
+                .limit(1)
+            )
+
+        if not target_prof:
+            raise ValueError("No candidate profile found to generate CV for")
+
+        uid = user_id or target_prof.user_id or 1
+        prof_data = _profile_to_dict(target_prof)
+
+        # Get user email
+        user_email = None
+        try:
+            from src.storage.models import User
+            u = s.get(User, uid)
+            if u:
+                user_email = u.email
+        except Exception:
+            pass
+
+        saved_path = save_user_resume_pdf(uid, prof_data, user_email=user_email)
+        target_prof.resume_path = saved_path
+
+        # If resume_text was empty, extract text from the generated PDF
+        if not target_prof.resume_text or len(target_prof.resume_text.strip()) < 20:
+            extracted_txt = extract_text_from_pdf(saved_path)
+            if extracted_txt:
+                target_prof.resume_text = extracted_txt
+
+        target_prof.updated_at = datetime.now(timezone.utc)
+        s.flush()
+
+        return {
+            "ok": True,
+            "resume_path": saved_path,
+            "filename": Path(saved_path).name,
+            "profile": _profile_to_dict(target_prof),
+        }
+
+    if session is not None:
+        return _generate(session)
+    with get_session() as s:
+        return _generate(s)
+
+
+def save_user_uploaded_cv(
+    user_id: int,
+    file_bytes: bytes,
+    original_filename: str,
+    session=None
+) -> dict[str, Any]:
+    """Save user-uploaded CV file, extract readable text and features, and update active profile."""
+    from src.candidate.cv_ml_engine import extract_text_from_pdf, analyze_cv_content
+
+    if not file_bytes:
+        raise ValueError("Uploaded file is empty")
+
+    upload_dir = Path("uploads") / "resumes" / f"user_{user_id}"
+    upload_dir.mkdir(parents=True, exist_ok=True)
+
+    safe_name = re.sub(r'[^a-zA-Z0-9_.-]', '_', original_filename or "resume.pdf")
+    if not safe_name.lower().endswith(".pdf"):
+        safe_name = f"{Path(safe_name).stem}.pdf"
+    file_path = upload_dir / safe_name
+    file_path.write_bytes(file_bytes)
+
+    # Extract text from uploaded document
+    extracted_text = extract_text_from_pdf(file_path)
+    if not extracted_text:
+        # Try raw text decoding if it was plain text or markdown
+        try:
+            extracted_text = file_bytes.decode("utf-8", errors="ignore").strip()
+        except Exception:
+            pass
+
+    analysis = analyze_cv_content(extracted_text) if extracted_text else {}
+
+    def _persist(s):
+        prof = s.scalar(
+            select(CandidateProfile)
+            .where(CandidateProfile.user_id == user_id, CandidateProfile.is_active.is_(True))
+            .limit(1)
+        ) or s.scalar(
+            select(CandidateProfile)
+            .where(CandidateProfile.user_id == user_id)
+            .order_by(desc(CandidateProfile.id))
+            .limit(1)
+        )
+
+        if not prof:
+            # Create a brand new active profile for this user
+            from src.storage.models import User
+            u = s.get(User, user_id)
+            full_name = (analysis.get("name") or (u.full_name if u else None) or "Candidate").strip()
+            prof = CandidateProfile(
+                user_id=user_id,
+                name=full_name,
+                is_active=True,
+                resume_path=str(file_path.resolve()),
+                resume_text=extracted_text,
+                current_location=analysis.get("location") or "",
+                headline=f"Software Engineer ({', '.join(analysis.get('top_skills', [])[:3])})" if analysis.get("top_skills") else "Software Engineer",
+                experience_years=analysis.get("experience_years", 3),
+                core_stack=json.dumps(analysis.get("top_skills", []), ensure_ascii=False),
+                keywords=json.dumps(analysis.get("keywords", []), ensure_ascii=False),
+            )
+            s.add(prof)
+        else:
+            prof.resume_path = str(file_path.resolve())
+            if extracted_text:
+                prof.resume_text = extracted_text
+            if analysis.get("name") and (not prof.name or prof.name in ("Candidate", "My Profile")):
+                prof.name = analysis["name"]
+            if analysis.get("top_skills") and (not prof.core_stack or prof.core_stack in ("[]", "")):
+                prof.core_stack = json.dumps(analysis["top_skills"], ensure_ascii=False)
+            if analysis.get("location") and not prof.current_location:
+                prof.current_location = analysis["location"]
+            if analysis.get("experience_years") and not prof.experience_years:
+                prof.experience_years = analysis["experience_years"]
+            prof.updated_at = datetime.now(timezone.utc)
+
+        s.flush()
+        return {
+            "ok": True,
+            "message": "CV uploaded and processed successfully",
+            "resume_path": str(file_path.resolve()),
+            "filename": safe_name,
+            "text_length": len(extracted_text),
+            "analysis": analysis,
+            "profile": _profile_to_dict(prof),
+        }
+
+    if session is not None:
+        return _persist(session)
+    with get_session() as s:
+        return _persist(s)
+

@@ -69,10 +69,27 @@ def _extract_json(text: str) -> dict[str, Any]:
     return data
 
 
-def evaluate_job(job: dict[str, Any], *, profile: dict[str, Any] | None = None, session=None) -> Optional[dict[str, Any]]:
+def evaluate_job(job: Any, *, profile: dict[str, Any] | None = None, session=None) -> Optional[dict[str, Any]]:
     """Evaluate a job using configured AI models with seamless offline heuristic fallback."""
+    if not isinstance(job, dict):
+        job = {
+            "id": getattr(job, "id", None),
+            "user_id": getattr(job, "user_id", None),
+            "title": getattr(job, "title", "") or "",
+            "company": getattr(job, "company", "") or "",
+            "location": getattr(job, "location", "") or "",
+            "source_site": getattr(job, "source_site", "") or "",
+            "is_remote": bool(getattr(job, "is_remote", False)),
+            "raw_description": getattr(job, "raw_description", "") or getattr(job, "description", "") or "",
+            "job_url": getattr(job, "job_url", "") or "",
+            "application_url": getattr(job, "application_url", "") or "",
+            "application_emails": getattr(job, "application_emails", None),
+            "company_url": getattr(job, "company_url", "") or "",
+            "continent": getattr(job, "continent", None),
+        }
+
     if profile is None:
-        uid = job.get("user_id") if isinstance(job, dict) else getattr(job, "user_id", None)
+        uid = job.get("user_id")
         profile = get_active_profile(user_id=uid, session=session)
 
     result: dict[str, Any] | None = None

@@ -22,6 +22,8 @@ from src.storage.models import User, UserRole
 
 logger = logging.getLogger(__name__)
 
+import threading
+
 # Secret key for HMAC token signing
 _AUTH_SECRET = os.environ.get("AUTH_SECRET_KEY") or hashlib.sha256(
     (settings.dashboard_password + "_autohunt_secret_salt_2026").encode()
@@ -29,6 +31,43 @@ _AUTH_SECRET = os.environ.get("AUTH_SECRET_KEY") or hashlib.sha256(
 
 _TOKEN_TTL_SECONDS = 7 * 24 * 3600  # 7 days session lifetime
 _http_basic = HTTPBasic(auto_error=False)
+
+# Brute force login protection
+_FAILED_LOGINS: dict[str, list[float]] = {}
+_FAILED_LOCK = threading.Lock()
+_MAX_FAILED_ATTEMPTS = 5
+_LOCKOUT_WINDOW_SECONDS = 300  # 5 minutes
+_LOCKOUT_DURATION_SECONDS = 300  # 5 minutes
+
+
+def check_login_rate_limit(ident: str, ip: str) -> None:
+    """Raise HTTPException(429) if this IP or account has exceeded failed login thresholds."""
+    now = time.time()
+    with _FAILED_LOCK:
+        for key in (f"ip:{ip}", f"ident:{ident.lower()}"):
+            attempts = [t for t in _FAILED_LOGINS.get(key, []) if now - t < _LOCKOUT_WINDOW_SECONDS]
+            _FAILED_LOGINS[key] = attempts
+            if len(attempts) >= _MAX_FAILED_ATTEMPTS:
+                oldest_in_window = attempts[0]
+                retry_after = int(max(1, _LOCKOUT_DURATION_SECONDS - (now - oldest_in_window)))
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail=f"Too many failed login attempts. Account temporarily protected. Please try again in {retry_after} seconds.",
+                    headers={"Retry-After": str(retry_after)},
+                )
+
+
+def record_failed_login(ident: str, ip: str) -> None:
+    now = time.time()
+    with _FAILED_LOCK:
+        for key in (f"ip:{ip}", f"ident:{ident.lower()}"):
+            _FAILED_LOGINS.setdefault(key, []).append(now)
+
+
+def clear_failed_login(ident: str, ip: str) -> None:
+    with _FAILED_LOCK:
+        _FAILED_LOGINS.pop(f"ip:{ip}", None)
+        _FAILED_LOGINS.pop(f"ident:{ident.lower()}", None)
 
 
 def hash_password(password: str) -> str:
