@@ -2003,6 +2003,7 @@
 
       renderJobsTable();
       renderJobsCards();
+      updateBulkLinkedInBadge();
     }
 
     function renderJobsTable() {
@@ -2645,6 +2646,285 @@
       } catch (e) {
         showToast('Opened Indeed, but error recording application: ' + e.message, 'warn');
       }
+    }
+
+    // -------------------------------------------------------------------------
+    // LinkedIn Auto-Apply Assistant & Batch Runner
+    // -------------------------------------------------------------------------
+    let _bulkLiQueue = [];
+    let _bulkLiIndex = 0;
+
+    function isLinkedInJob(j) {
+      if (!j) return false;
+      const m = (j.application_method || '').toLowerCase();
+      const s = (j.source_site || '').toLowerCase();
+      const u = (j.job_url || '').toLowerCase();
+      const au = (j.application_url || '').toLowerCase();
+      return s.includes('linkedin') || u.includes('linkedin.com') || au.includes('linkedin.com') || m.includes('linkedin');
+    }
+
+    function updateBulkLinkedInBadge() {
+      if (!Array.isArray(allJobsList)) return;
+      const count = allJobsList.filter(j => isLinkedInJob(j) && j.stage !== 'applied' && j.application_status !== 'submitted' && j.application_status !== 'sent').length;
+      const b = document.getElementById('bulkLinkedInCountBadge');
+      if (b) b.textContent = count;
+    }
+
+    async function openBulkLinkedInModal() {
+      const modal = document.getElementById('bulkLinkedInModal');
+      if (!modal) return;
+      modal.style.display = 'flex';
+
+      if (!allJobsList || allJobsList.length === 0) {
+        try {
+          allJobsList = await apiGet('/api/jobs?limit=500');
+        } catch (_) {}
+      }
+
+      filterBulkLinkedInQueue();
+    }
+
+    function closeBulkLinkedInModal() {
+      const modal = document.getElementById('bulkLinkedInModal');
+      if (modal) modal.style.display = 'none';
+      loadJobs();
+    }
+
+    function filterBulkLinkedInQueue() {
+      const minScore = parseInt(document.getElementById('bulkLiMinScoreSelect')?.value || '0', 10);
+      _bulkLiQueue = (allJobsList || []).filter(j => {
+        if (!isLinkedInJob(j)) return false;
+        if (j.stage === 'applied' || j.application_status === 'submitted' || j.application_status === 'sent') return false;
+        const s = j.score ?? j.match_score ?? 0;
+        return s >= minScore;
+      });
+
+      // Sort highest score first
+      _bulkLiQueue.sort((a, b) => (b.score ?? b.match_score ?? 0) - (a.score ?? a.match_score ?? 0));
+      _bulkLiIndex = 0;
+
+      const totalEl = document.getElementById('bulkLiTotalCount');
+      if (totalEl) totalEl.textContent = _bulkLiQueue.length;
+
+      const badge = document.getElementById('bulkLinkedInCountBadge');
+      if (badge) badge.textContent = _bulkLiQueue.length;
+
+      renderCurrentBulkLiJob();
+    }
+
+    function renderCurrentBulkLiJob() {
+      const card = document.getElementById('bulkLiRunnerCard');
+      const posEl = document.getElementById('bulkLiCurrentPos');
+      if (!card) return;
+
+      if (!_bulkLiQueue || _bulkLiQueue.length === 0) {
+        if (posEl) posEl.textContent = '0 / 0';
+        card.innerHTML = `
+          <div style="text-align:center;padding:32px 16px;color:var(--text-muted)">
+            <span style="font-size:36px;display:block;margin-bottom:8px">🎉</span>
+            <div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:4px">No Pending LinkedIn Jobs Found</div>
+            <div style="font-size:12px;margin-bottom:12px">All LinkedIn matches at this score threshold have already been applied to, or no listings match your filter.</div>
+            <button type="button" class="btn btn-sm btn-cyan" onclick="document.getElementById('bulkLiMinScoreSelect').value='0';filterBulkLinkedInQueue()">Show All Scores (0%+)</button>
+          </div>
+        `;
+        return;
+      }
+
+      if (_bulkLiIndex >= _bulkLiQueue.length) {
+        if (posEl) posEl.textContent = `${_bulkLiQueue.length} / ${_bulkLiQueue.length}`;
+        card.innerHTML = `
+          <div style="text-align:center;padding:32px 16px;color:var(--text-muted)">
+            <span style="font-size:36px;display:block;margin-bottom:8px">✅</span>
+            <div style="font-size:16px;font-weight:800;color:var(--good);margin-bottom:4px">Queue Completed!</div>
+            <div style="font-size:12px;margin-bottom:16px">You have reviewed or applied to all ${_bulkLiQueue.length} LinkedIn jobs in this batch.</div>
+            <button type="button" class="btn btn-sm btn-cyan" onclick="closeBulkLinkedInModal()">Back to Dashboard</button>
+          </div>
+        `;
+        return;
+      }
+
+      const j = _bulkLiQueue[_bulkLiIndex];
+      if (posEl) posEl.textContent = `${_bulkLiIndex + 1} / ${_bulkLiQueue.length}`;
+
+      const directUrl = j.application_url || j.job_url || `https://www.linkedin.com/jobs/search/?keywords=${encodeURIComponent((j.title || '') + ' ' + (j.company || ''))}`;
+      const pitch = j.pitch_en || j.pitch_fr || 'General Pitch: Experienced software engineer ready to contribute immediate impact with proven production skills.';
+
+      const score = j.score ?? j.match_score ?? 0;
+      const scoreColor = score >= 70 ? 'var(--good)' : score >= 50 ? 'var(--warn)' : 'var(--text-muted)';
+
+      card.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;gap:12px">
+          <div>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">
+              <span class="pill pill-stage-deal_won" style="font-size:11px;font-weight:800;color:${scoreColor}">${score}% Match</span>
+              <span class="pill" style="font-size:11px;background:rgba(255,255,255,0.06)">${esc(j.continent || j.location || 'Remote')}</span>
+              <span class="pill" style="font-size:11px;background:rgba(255,255,255,0.06)">${esc(j.experience_level || 'Any Exp')}</span>
+            </div>
+            <h4 style="font-size:17px;font-weight:800;color:#fff;margin:0 0 4px">${esc(j.title)}</h4>
+            <div style="font-size:13px;color:var(--cyan-light);font-weight:600">${esc(j.company)}</div>
+          </div>
+
+          <a href="${esc(directUrl)}" target="_blank" rel="noopener" class="btn btn-sm" style="background:rgba(255,255,255,0.06);border:1px solid var(--border);color:var(--text-muted);font-size:11px" title="Inspect original job post">
+            Original Post ↗
+          </a>
+        </div>
+
+        <div style="margin-bottom:16px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Tailored Cover Pitch (Auto-copied to clipboard on apply)</span>
+            <button type="button" class="btn btn-sm" onclick="copyBulkLiPitch()" style="padding:2px 8px;font-size:11px;background:rgba(255,255,255,0.06)" id="btnCopyBulkLiPitch">
+              📋 Copy Pitch
+            </button>
+          </div>
+          <div id="bulkLiPitchText" style="background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:12px;font-size:12px;color:#e2e8f0;line-height:1.5;max-height:120px;overflow-y:auto;white-space:pre-wrap;font-family:'Plus Jakarta Sans',sans-serif">${esc(pitch)}</div>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;border-top:1px solid rgba(255,255,255,0.08);padding-top:14px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <button type="button" class="btn btn-sm" onclick="skipBulkLiJob()" style="border:1px solid var(--border);color:var(--text-muted)">
+              ⏭️ Skip
+            </button>
+            <button type="button" class="btn btn-sm" onclick="markCurrentBulkLiApplied()" style="border:1px solid rgba(56,189,248,0.4);color:var(--cyan-light)" title="Mark as applied without opening tab">
+              ✓ Mark Already Applied
+            </button>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:8px">
+            <button type="button" class="btn btn-primary" onclick="launchCurrentBulkLiJob()" style="background:#0a66c2;border-color:#0a66c2;font-weight:800;font-size:13px;padding:8px 18px;box-shadow:0 0 15px rgba(10,102,194,0.4)">
+              🚀 Apply & Open Next ↗
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    async function copyBulkLiPitch() {
+      if (!_bulkLiQueue || !_bulkLiQueue[_bulkLiIndex]) return;
+      const j = _bulkLiQueue[_bulkLiIndex];
+      const pitch = j.pitch_en || j.pitch_fr || '';
+      if (!pitch) return;
+
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(pitch);
+        } else {
+          const ta = document.createElement('textarea');
+          ta.value = pitch;
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+        }
+        const b = document.getElementById('btnCopyBulkLiPitch');
+        if (b) {
+          b.textContent = '✓ Copied!';
+          setTimeout(() => { if (b) b.textContent = '📋 Copy Pitch'; }, 2000);
+        }
+        showToast('Tailored pitch copied to clipboard! ✓', 'success');
+      } catch (_) {}
+    }
+
+    async function launchCurrentBulkLiJob() {
+      if (!_bulkLiQueue || !_bulkLiQueue[_bulkLiIndex]) return;
+      const j = _bulkLiQueue[_bulkLiIndex];
+      const directUrl = j.application_url || j.job_url || `https://www.linkedin.com/jobs/search/?keywords=${encodeURIComponent((j.title || '') + ' ' + (j.company || ''))}`;
+      const pitch = j.pitch_en || j.pitch_fr || '';
+
+      // Copy pitch
+      if (pitch) {
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(pitch);
+          }
+        } catch (_) {}
+      }
+
+      // Open in tab
+      window.open(directUrl, '_blank', 'noopener,noreferrer');
+
+      // Record in DB
+      try {
+        await apiSend(`/api/jobs/${j.id}/record_application`, 'POST', {
+          channel: 'linkedin',
+          status: 'submitted'
+        });
+        j.stage = 'applied';
+        j.application_method = 'linkedin';
+        j.application_status = 'submitted';
+        showToast(`💼 Opened LinkedIn for "${j.title}" & recorded application ✓`, 'success');
+      } catch (err) {
+        showToast('Application record warning: ' + err.message, 'warn');
+      }
+
+      _bulkLiIndex++;
+      renderCurrentBulkLiJob();
+      updateBulkLinkedInBadge();
+    }
+
+    function skipBulkLiJob() {
+      _bulkLiIndex++;
+      renderCurrentBulkLiJob();
+    }
+
+    async function markCurrentBulkLiApplied() {
+      if (!_bulkLiQueue || !_bulkLiQueue[_bulkLiIndex]) return;
+      const j = _bulkLiQueue[_bulkLiIndex];
+      try {
+        await apiSend(`/api/jobs/${j.id}/record_application`, 'POST', {
+          channel: 'linkedin',
+          status: 'submitted'
+        });
+        j.stage = 'applied';
+        j.application_method = 'linkedin';
+        j.application_status = 'submitted';
+        showToast(`✓ Marked "${j.title}" as applied via LinkedIn!`, 'success');
+      } catch (err) {
+        showToast('Error marking applied: ' + err.message, 'error');
+      }
+      _bulkLiIndex++;
+      renderCurrentBulkLiJob();
+      updateBulkLinkedInBadge();
+    }
+
+    async function launchBatchLinkedInTabs() {
+      const select = document.getElementById('bulkLiBatchSizeSelect');
+      const batchSize = parseInt(select?.value || '5', 10);
+      const remaining = _bulkLiQueue.slice(_bulkLiIndex, _bulkLiIndex + batchSize);
+
+      if (remaining.length === 0) {
+        showToast('No more pending LinkedIn jobs to launch.', 'warn');
+        return;
+      }
+
+      if (!confirm(`Are you sure you want to open ${remaining.length} LinkedIn jobs in browser tabs? Each application will also be logged in your Outreach Ledger.`)) {
+        return;
+      }
+
+      showToast(`Launching ${remaining.length} LinkedIn jobs in tabs...`, 'normal');
+      for (let i = 0; i < remaining.length; i++) {
+        const j = remaining[i];
+        const directUrl = j.application_url || j.job_url || `https://www.linkedin.com/jobs/search/?keywords=${encodeURIComponent((j.title || '') + ' ' + (j.company || ''))}`;
+        
+        // Open tab
+        window.open(directUrl, '_blank', 'noopener,noreferrer');
+
+        // Record in DB
+        try {
+          await apiSend(`/api/jobs/${j.id}/record_application`, 'POST', {
+            channel: 'linkedin',
+            status: 'submitted'
+          });
+          j.stage = 'applied';
+          j.application_method = 'linkedin';
+          j.application_status = 'submitted';
+        } catch (_) {}
+      }
+
+      _bulkLiIndex += remaining.length;
+      renderCurrentBulkLiJob();
+      updateBulkLinkedInBadge();
+      showToast(`✓ Successfully launched ${remaining.length} LinkedIn jobs! Check your browser tabs to complete submissions.`, 'success');
+      loadOutbound();
     }
 
     let _activeSpecifyAppJobId = null;
@@ -8068,6 +8348,17 @@
     window.closeRecordExternalModal = closeRecordExternalModal;
     window.setExtChannelChoice = setExtChannelChoice;
     window.submitRecordExternalApplication = submitRecordExternalApplication;
+
+    // Expose LinkedIn Auto-Apply Assistant Globally
+    window.openBulkLinkedInModal = openBulkLinkedInModal;
+    window.closeBulkLinkedInModal = closeBulkLinkedInModal;
+    window.filterBulkLinkedInQueue = filterBulkLinkedInQueue;
+    window.copyBulkLiPitch = copyBulkLiPitch;
+    window.launchCurrentBulkLiJob = launchCurrentBulkLiJob;
+    window.skipBulkLiJob = skipBulkLiJob;
+    window.markCurrentBulkLiApplied = markCurrentBulkLiApplied;
+    window.launchBatchLinkedInTabs = launchBatchLinkedInTabs;
+    window.updateBulkLinkedInBadge = updateBulkLinkedInBadge;
 
 
 
