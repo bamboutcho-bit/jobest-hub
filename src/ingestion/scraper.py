@@ -75,13 +75,12 @@ def _configured_sites(query: dict[str, Any]) -> list[str]:
     else:
         sites = [x.strip().lower() for x in settings.scrape_sites.split(",") if x.strip()] or list(DEFAULT_DISCOVERY_SITES)
 
-    # Without proxies, Indeed GraphQL endpoint (apis.indeed.com) times out indefinitely (4500s+)
-    # and Google 429s. Automatically prune them if unproxied to protect pipeline throughput.
+    # Google search scraper returns 429 without rotating proxies. Prune if unproxied.
     has_proxies = bool(settings.jobspy_proxies and settings.jobspy_proxies.strip())
     if not has_proxies:
-        sites = [s for s in sites if s not in {"indeed", "google"}]
+        sites = [s for s in sites if s != "google"]
         if not sites:
-            sites = ["linkedin"]
+            sites = ["linkedin", "indeed"]
 
     if "glassdoor" in sites:
         country = str(query.get("country") or query.get("location") or "").strip().lower()

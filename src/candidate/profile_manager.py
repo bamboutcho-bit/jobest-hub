@@ -538,7 +538,7 @@ def generate_search_matrix(profile: dict[str, Any] | None = None) -> list[dict[s
                 "location": "",
                 "country": None,
                 "is_remote": True,
-                "sites": ["linkedin", "google", "bayt"],
+                "sites": ["linkedin", "indeed", "google", "bayt"],
             })
 
     return matrix
