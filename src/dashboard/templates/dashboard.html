@@ -320,6 +320,9 @@
           <button id="btnBulkLinkedInApply" class="btn" onclick="openBulkLinkedInModal()" style="border:1px solid #0a66c2;background:linear-gradient(135deg, rgba(10,102,194,0.38) 0%, rgba(2,132,199,0.22) 100%);color:#60a5fa;font-weight:800;display:inline-flex;align-items:center;gap:6px;box-shadow:0 0 12px rgba(10,102,194,0.25)" title="Auto-Apply to all eligible LinkedIn jobs safely via guided 1-click launcher">
             <span>💼</span> Auto-Apply LinkedIn <span id="bulkLinkedInCountBadge" class="brand-badge" style="background:#0a66c2;color:#fff;font-size:10px;padding:1px 6px">...</span>
           </button>
+          <button id="btnBulkIndeedApply" class="btn" onclick="openBulkIndeedModal()" style="border:1px solid #2563eb;background:linear-gradient(135deg, rgba(37,99,235,0.38) 0%, rgba(30,64,175,0.22) 100%);color:#93c5fd;font-weight:800;display:inline-flex;align-items:center;gap:6px;box-shadow:0 0 12px rgba(37,99,235,0.25)" title="Auto-Apply to all eligible Indeed jobs safely via guided 1-click launcher">
+            <span>🔵</span> Auto-Apply Indeed <span id="bulkIndeedCountBadge" class="brand-badge" style="background:#2563eb;color:#fff;font-size:10px;padding:1px 6px">...</span>
+          </button>
           <button id="btnCheckInbox" class="btn" onclick="triggerCheckInbox()">
             <span>📬</span> Check Inbox
           </button>
@@ -369,8 +372,8 @@
             <button id="qfLinkedIn" class="btn btn-sm" onclick="setJobQuickFilter('linkedin')" title="Show jobs applied on LinkedIn">💼 LinkedIn</button>
             <button id="qfIndeed" class="btn btn-sm" onclick="setJobQuickFilter('indeed')" title="Show jobs applied on Indeed">🔵 Indeed</button>
             <button id="qfEmail" class="btn btn-sm" onclick="setJobQuickFilter('email')" title="Show jobs targeted with recruiter email outreach">✉️ Email Channel</button>
-            <button id="qfPortal" class="btn btn-sm" onclick="setJobQuickFilter('portal')" title="Show jobs targeted via online ATS portals">🌐 Web Portal Channel</button>
             <button type="button" class="btn btn-sm" onclick="openBulkLinkedInModal()" style="margin-left:6px;background:rgba(10,102,194,0.25);border:1px solid #0a66c2;color:#60a5fa;font-weight:700" title="Open LinkedIn Auto-Apply Assistant">💼 Auto-Apply LinkedIn Queue</button>
+            <button type="button" class="btn btn-sm" onclick="openBulkIndeedModal()" style="margin-left:4px;background:rgba(37,99,235,0.25);border:1px solid #2563eb;color:#93c5fd;font-weight:700" title="Open Indeed Auto-Apply Assistant">🔵 Auto-Apply Indeed Queue</button>
           </div>
           <div id="jobsQuickStats" style="font-size:12px;color:var(--text-muted);font-family:'JetBrains Mono'"></div>
         </div>
@@ -978,6 +981,9 @@
                     <span>Verified: <span id="profIndVerifiedAt" style="color:#fff">Never</span></span>
                     <span id="profIndCookiePreview" style="color:var(--cyan-light);font-family:monospace">None</span>
                   </div>
+                  <button type="button" class="btn btn-sm" onclick="openBulkIndeedModal()" style="width:100%;background:rgba(37,99,235,0.25);border:1px solid #2563eb;color:#93c5fd;font-weight:700;margin-bottom:8px;padding:6px;font-size:11px" title="Open Indeed Auto-Apply Assistant">
+                    🔵 View & 1-Click Apply to Indeed Jobs (218) ↗
+                  </button>
                   <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#fff;cursor:pointer;margin-bottom:8px">
                     <input type="checkbox" id="profAutoApplyIndeed" checked style="accent-color:var(--cyan)">
                     <span>Auto-apply via Indeed Apply</span>
@@ -1685,7 +1691,9 @@
                   <div>Verified: <span id="indVerifiedAt" style="color:#fff">Never</span></div>
                   <div>Preview: <span id="indCookiePreview" style="color:var(--cyan-light);font-family:monospace">None</span></div>
                 </div>
-
+                <button type="button" class="btn btn-sm" onclick="openBulkIndeedModal()" style="width:100%;background:rgba(37,99,235,0.25);border:1px solid #2563eb;color:#93c5fd;font-weight:700;margin-bottom:12px;padding:8px;font-size:12px" title="Open Indeed Auto-Apply Assistant">
+                  🔵 View & 1-Click Apply to Indeed Jobs (218) ↗
+                </button>
                 <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:#fff;cursor:pointer;margin-bottom:14px">
                   <input type="checkbox" id="usAutoApplyIndeed" checked style="accent-color:var(--cyan)">
                   <span>Auto-apply via Indeed (Indeed Apply & company portals)</span>
@@ -2682,6 +2690,136 @@
     </div>
   </div>
 
+  <!-- MODAL: INDEED AUTO-APPLY ASSISTANT & RUNNER -->
+  <div id="bulkIndeedModal" class="modal-backdrop" style="display:none;z-index:9999" onclick="if(event.target===this)closeBulkIndeedModal()">
+    <div class="modal-card" style="max-width:760px;width:95%;max-height:90vh;display:flex;flex-direction:column">
+      <div class="modal-header" style="background:linear-gradient(135deg, rgba(37,99,235,0.18) 0%, rgba(15,23,42,0.95) 100%);border-bottom:1px solid rgba(37,99,235,0.3)">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="width:36px;height:36px;border-radius:8px;background:#2164f3;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:18px">ind</div>
+          <div>
+            <h3 style="font-size:18px;font-weight:800;margin:0 0 2px;color:#fff;display:flex;align-items:center;gap:8px">
+              Indeed Auto-Apply Assistant
+              <span id="bulkIndActiveBadge" class="pill pill-stage-deal_won" style="font-size:11px">Safe 1-Click Launcher</span>
+            </h3>
+            <div style="font-size:12px;color:var(--text-muted)">
+              Safely launch and complete applications on Indeed &amp; employer portals using your authenticated desktop session.
+            </div>
+          </div>
+        </div>
+        <button class="btn btn-sm btn-icon" onclick="closeBulkIndeedModal()">✕</button>
+      </div>
+
+      <div class="modal-body" style="padding:20px;overflow-y:auto;flex:1">
+        <!-- Runner Top Stats Bar -->
+        <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:16px;flex-wrap:gap:10px">
+          <div style="display:flex;align-items:center;gap:16px">
+            <div>
+              <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;font-weight:700">Eligible Indeed Jobs</div>
+              <div style="font-size:20px;font-weight:800;color:#93c5fd" id="bulkIndTotalCount">0</div>
+            </div>
+            <div style="border-left:1px solid rgba(255,255,255,0.1);padding-left:16px">
+              <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;font-weight:700">Current Position</div>
+              <div style="font-size:20px;font-weight:800;color:#fff" id="bulkIndCurrentPos">0 / 0</div>
+            </div>
+          </div>
+
+          <!-- Filter & Mode Controls -->
+          <div style="display:flex;gap:8px;align-items:center">
+            <label style="font-size:11px;color:var(--text-muted);font-weight:600">Min Score:</label>
+            <select id="bulkIndMinScoreSelect" onchange="filterBulkIndeedQueue()" style="font-size:12px;padding:4px 8px;background:rgba(0,0,0,0.4)">
+              <option value="0">All Scores (0%+)</option>
+              <option value="50">50%+ Match</option>
+              <option value="65" selected>65%+ Recommended</option>
+              <option value="75">75%+ Top Matches</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- ACTIVE RUNNER CARD -->
+        <div id="bulkIndRunnerCard" style="background:rgba(10,16,31,0.7);border:1px solid rgba(37,99,235,0.35);border-radius:12px;padding:18px;margin-bottom:16px;box-shadow:0 8px 24px rgba(0,0,0,0.3)">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;gap:12px">
+            <div>
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">
+                <span id="bulkIndScorePill" class="pill pill-stage-deal_won" style="font-size:11px;font-weight:800">85% Match</span>
+                <span id="bulkIndLocationBadge" class="pill" style="font-size:11px;background:rgba(255,255,255,0.06)">Remote</span>
+                <span id="bulkIndExpBadge" class="pill" style="font-size:11px;background:rgba(255,255,255,0.06)">Mid-Level</span>
+              </div>
+              <h4 id="bulkIndJobTitle" style="font-size:17px;font-weight:800;color:#fff;margin:0 0 4px">Loading job...</h4>
+              <div id="bulkIndJobCompany" style="font-size:13px;color:var(--cyan-light);font-weight:600">Company Name</div>
+            </div>
+
+            <!-- Direct URL Link -->
+            <a id="bulkIndDirectLink" href="#" target="_blank" rel="noopener" class="btn btn-sm" style="background:rgba(255,255,255,0.06);border:1px solid var(--border);color:var(--text-muted);font-size:11px" title="Inspect original job post">
+              Original Post ↗
+            </a>
+          </div>
+
+          <!-- Tailored Motivation Pitch Box -->
+          <div style="margin-bottom:16px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+              <span style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Tailored Cover Pitch (Auto-copied to clipboard on apply)</span>
+              <button type="button" class="btn btn-sm" onclick="copyBulkIndPitch()" style="padding:2px 8px;font-size:11px;background:rgba(255,255,255,0.06)" id="btnCopyBulkIndPitch">
+                📋 Copy Pitch
+              </button>
+            </div>
+            <div id="bulkIndPitchText" style="background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:12px;font-size:12px;color:#e2e8f0;line-height:1.5;max-height:120px;overflow-y:auto;white-space:pre-wrap;font-family:'Plus Jakarta Sans',sans-serif">
+              Pitch will appear here...
+            </div>
+          </div>
+
+          <!-- Runner Actions -->
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;border-top:1px solid rgba(255,255,255,0.08);padding-top:14px">
+            <div style="display:flex;align-items:center;gap:8px">
+              <button type="button" class="btn btn-sm" onclick="skipBulkIndJob()" style="border:1px solid var(--border);color:var(--text-muted)">
+                ⏭️ Skip
+              </button>
+              <button type="button" class="btn btn-sm" onclick="markCurrentBulkIndApplied()" style="border:1px solid rgba(56,189,248,0.4);color:var(--cyan-light)" title="Mark as applied without opening tab">
+                ✓ Mark Already Applied
+              </button>
+            </div>
+
+            <div style="display:flex;align-items:center;gap:8px">
+              <button type="button" id="btnLaunchCurrentBulkInd" class="btn btn-primary" onclick="launchCurrentBulkIndJob()" style="background:#2563eb;border-color:#2563eb;font-weight:800;font-size:13px;padding:8px 18px;box-shadow:0 0 15px rgba(37,99,235,0.4)">
+                🚀 Apply &amp; Open Next ↗
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- FAST BATCH LAUNCHER ACCORDION / TOOLBAR -->
+        <div style="background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:10px;padding:14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+          <div>
+            <div style="font-weight:700;font-size:13px;color:#fff;display:flex;align-items:center;gap:6px">
+              <span>⚡ Fast Multi-Tab Launcher</span>
+              <span class="pill" style="font-size:10px;background:rgba(37,99,235,0.25);color:#93c5fd">Batch Open</span>
+            </div>
+            <div style="font-size:11.5px;color:var(--text-muted)">
+              Opens top pending Indeed jobs in tabs &amp; automatically records each application in the Outreach Ledger.
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <select id="bulkIndBatchSizeSelect" style="font-size:12px;padding:5px 8px;background:rgba(0,0,0,0.4)">
+              <option value="5" selected>Launch Top 5 Jobs</option>
+              <option value="10">Launch Top 10 Jobs</option>
+              <option value="20">Launch Top 20 Jobs</option>
+            </select>
+            <button type="button" class="btn btn-cyan" onclick="launchBatchIndeedTabs()" style="font-weight:700">
+              🌐 Launch Batch
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="modal-footer" style="padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;background:rgba(0,0,0,0.2)">
+        <div style="font-size:11px;color:var(--text-muted)">
+          🛡️ Desktop Protected: Uses your authentic active desktop browser session.
+        </div>
+        <button type="button" class="btn" onclick="closeBulkIndeedModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
   <!-- MODAL: SPECIFY APPLICATION CHANNEL FOR A JOB -->
   <div id="specifyAppModal" class="modal-backdrop" style="display:none;z-index:9999" onclick="if(event.target===this)closeSpecifyAppModal()">
     <div class="modal-card" style="max-width:540px;width:95%">
@@ -3617,7 +3755,7 @@
     </div>
   </div>
 
-  <script src="/static/js/app.js?v=6.6.2"></script>
+  <script src="/static/js/app.js?v=6.6.3"></script>
   <!-- Real-Time Floating Notification Toasts -->
   <div id="notifToastContainer" style="position:fixed;bottom:96px;right:24px;display:flex;flex-direction:column-reverse;gap:10px;z-index:99999;pointer-events:none"></div>
 
