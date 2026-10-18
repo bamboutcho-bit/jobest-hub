@@ -928,9 +928,12 @@
                     <span>Verified: <span id="profLiVerifiedAt" style="color:#fff">Never</span></span>
                     <span id="profLiCookiePreview" style="color:var(--cyan-light);font-family:monospace">None</span>
                   </div>
+                  <div style="font-size:10px;color:#f59e0b;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:4px;padding:6px;margin-bottom:8px;line-height:1.4">
+                    🛡️ <strong>Safety Protected:</strong> Automated background Easy Apply is disabled to prevent LinkedIn Sentinel session lockouts on your desktop. Use the <strong>💼 1-Click Apply</strong> button on any job to safely apply in your personal browser!
+                  </div>
                   <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#fff;cursor:pointer;margin-bottom:8px">
-                    <input type="checkbox" id="profAutoApplyLinkedin" checked style="accent-color:var(--cyan)">
-                    <span>Auto-apply via Easy Apply</span>
+                    <input type="checkbox" id="profAutoApplyLinkedin" style="accent-color:var(--cyan)">
+                    <span>Auto-apply via Easy Apply (Background Headless)</span>
                   </label>
                   <div style="display:flex;gap:6px">
                     <button type="button" class="btn btn-sm btn-cyan" id="profBtnConnectLi" onclick="connectPortal('linkedin', 'prof')" style="flex:1;font-size:11px;padding:3px 6px">🔗 Connect</button>
@@ -1617,9 +1620,12 @@
                   <div>Preview: <span id="liCookiePreview" style="color:var(--cyan-light);font-family:monospace">None</span></div>
                 </div>
 
+                <div style="font-size:11px;color:#f59e0b;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:6px;padding:8px 10px;margin-bottom:12px;line-height:1.4">
+                  🛡️ <strong>Safety Protected:</strong> Automated background headless Easy Apply is disabled to prevent LinkedIn Sentinel from terminating your desktop browser session. Use the <strong>💼 1-Click Apply</strong> button directly on any job card/table to safely open, auto-copy your tailored pitch, and record your application!
+                </div>
                 <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:#fff;cursor:pointer;margin-bottom:14px">
-                  <input type="checkbox" id="usAutoApplyLinkedin" checked style="accent-color:var(--cyan)">
-                  <span>Auto-apply via LinkedIn (Easy Apply & company portals)</span>
+                  <input type="checkbox" id="usAutoApplyLinkedin" style="accent-color:var(--cyan)">
+                  <span>Auto-apply via LinkedIn (Headless Easy Apply — Requires dedicated secondary session)</span>
                 </label>
               </div>
 

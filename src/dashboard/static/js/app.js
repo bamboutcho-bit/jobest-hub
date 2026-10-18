@@ -2011,7 +2011,18 @@
       tbody.innerHTML = allJobsList.map(j => {
         const viewBtn = `<button class="btn btn-sm" onclick="event.stopPropagation(); openJobModal(${j.id})" title="View job posting and AI match analysis" style="padding:2px 8px;font-size:11px;font-weight:700">👁️ View</button>`;
         const directUrl = j.application_url || j.job_url || '';
-        const applyBtn = directUrl ? `<a href="${esc(directUrl)}" target="_blank" rel="noopener" class="btn btn-sm btn-cyan" onclick="event.stopPropagation()" style="padding:2px 8px;font-size:11px">Direct Apply ↗</a>` : '';
+        const isLiJob = (j.source_site && j.source_site.toLowerCase().includes('linkedin')) || (j.job_url && j.job_url.includes('linkedin.com')) || (j.application_url && j.application_url.includes('linkedin.com'));
+        const isIndeedJob = (j.source_site && j.source_site.toLowerCase().includes('indeed')) || (j.job_url && j.job_url.includes('indeed.com')) || (j.application_url && j.application_url.includes('indeed.com'));
+
+        let applyBtn = '';
+        if (isLiJob) {
+          applyBtn = `<button class="btn btn-sm" onclick="event.stopPropagation(); oneClickApplyLinkedIn(${j.id})" style="background:rgba(10,102,194,0.22);border:1px solid #0a66c2;color:#60a5fa;font-weight:700;padding:2px 8px;font-size:11px" title="1-Click Apply: Open on LinkedIn, auto-copy tailored pitch, and record application">💼 Apply on LinkedIn ↗</button>`;
+        } else if (isIndeedJob) {
+          applyBtn = `<button class="btn btn-sm" onclick="event.stopPropagation(); oneClickApplyIndeed(${j.id})" style="background:rgba(37,99,235,0.22);border:1px solid #2563eb;color:#93c5fd;font-weight:700;padding:2px 8px;font-size:11px" title="1-Click Apply: Open on Indeed and record application">🔵 Apply on Indeed ↗</button>`;
+        } else if (directUrl) {
+          applyBtn = `<a href="${esc(directUrl)}" target="_blank" rel="noopener" class="btn btn-sm btn-cyan" onclick="event.stopPropagation()" style="padding:2px 8px;font-size:11px">Direct Apply ↗</a>`;
+        }
+
         const logBtn = `<button class="btn btn-sm" onclick="event.stopPropagation(); openSpecifyAppModal(${j.id})" title="Specify or log application via LinkedIn, Indeed, etc." style="padding:2px 7px;font-size:11px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15)">📌 Log</button>`;
         const skillsPreview = (j.skills || []).slice(0, 3).map(s => `<span class="pill" style="font-size:10px;padding:1px 5px;background:rgba(255,255,255,0.06)">${esc(s)}</span>`).join(' ');
         
@@ -2047,7 +2058,18 @@
       const container = document.getElementById('jobsCardsContainer');
       container.innerHTML = allJobsList.map(j => {
         const directUrl = j.application_url || j.job_url || '';
-        const applyBtn = directUrl ? `<a href="${esc(directUrl)}" target="_blank" rel="noopener" class="btn btn-sm btn-cyan" onclick="event.stopPropagation()" style="padding:3px 9px;font-size:11px">Direct Apply ↗</a>` : '';
+        const isLiJob = (j.source_site && j.source_site.toLowerCase().includes('linkedin')) || (j.job_url && j.job_url.includes('linkedin.com')) || (j.application_url && j.application_url.includes('linkedin.com'));
+        const isIndeedJob = (j.source_site && j.source_site.toLowerCase().includes('indeed')) || (j.job_url && j.job_url.includes('indeed.com')) || (j.application_url && j.application_url.includes('indeed.com'));
+
+        let applyBtn = '';
+        if (isLiJob) {
+          applyBtn = `<button class="btn btn-sm" onclick="event.stopPropagation(); oneClickApplyLinkedIn(${j.id})" style="background:rgba(10,102,194,0.22);border:1px solid #0a66c2;color:#60a5fa;font-weight:700;padding:3px 9px;font-size:11px" title="1-Click Apply: Open on LinkedIn, auto-copy tailored pitch, and record application">💼 Apply on LinkedIn ↗</button>`;
+        } else if (isIndeedJob) {
+          applyBtn = `<button class="btn btn-sm" onclick="event.stopPropagation(); oneClickApplyIndeed(${j.id})" style="background:rgba(37,99,235,0.22);border:1px solid #2563eb;color:#93c5fd;font-weight:700;padding:3px 9px;font-size:11px" title="1-Click Apply: Open on Indeed and record application">🔵 Apply on Indeed ↗</button>`;
+        } else if (directUrl) {
+          applyBtn = `<a href="${esc(directUrl)}" target="_blank" rel="noopener" class="btn btn-sm btn-cyan" onclick="event.stopPropagation()" style="padding:3px 9px;font-size:11px">Direct Apply ↗</a>`;
+        }
+
         const logBtn = `<button class="btn btn-sm" onclick="event.stopPropagation(); openSpecifyAppModal(${j.id})" title="Specify or log application via LinkedIn, Indeed, etc." style="padding:3px 8px;font-size:11px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15)">📌 Log</button>`;
         const methodBadge = j.evaluation_method ? `<span class="pill" style="font-size:10px;background:rgba(139,92,246,0.15);color:var(--purple-light)">${esc(j.evaluation_method)}</span>` : '';
         const expBadge = getExpBadge(j.experience_level, j.experience_years_required);
@@ -2314,9 +2336,19 @@
 
         // Links & Actions
         const isApplied = j.stage === 'applied' || j.application_status === 'sent' || j.application_status === 'submitted';
-        const applyBtn = isApplied
-          ? `<span class="pill pill-stage-deal_won" style="padding:4px 10px;font-size:12px">✓ Applied (${esc(j.application_method || 'sent')})</span>`
-          : `<button class="btn btn-sm btn-primary" id="btnModalApplySingle" onclick="applySingleJob(${j.id})">🚀 Auto-Apply to This Job</button>`;
+        const isLiJob = (j.source_site && j.source_site.toLowerCase().includes('linkedin')) || (j.job_url && j.job_url.includes('linkedin.com')) || (j.application_url && j.application_url.includes('linkedin.com'));
+        const isIndeedJob = (j.source_site && j.source_site.toLowerCase().includes('indeed')) || (j.job_url && j.job_url.includes('indeed.com')) || (j.application_url && j.application_url.includes('indeed.com'));
+
+        let applyBtn = '';
+        if (isApplied) {
+          applyBtn = `<span class="pill pill-stage-deal_won" style="padding:5px 12px;font-size:12px;font-weight:700">✓ Applied (${esc(j.application_method || 'sent')})</span>`;
+        } else if (isLiJob) {
+          applyBtn = `<button class="btn btn-sm" id="btnModalApplySingle" onclick="oneClickApplyLinkedIn(${j.id})" style="background:rgba(10,102,194,0.3);border:1px solid #0a66c2;color:#60a5fa;font-weight:700;padding:5px 12px;font-size:12px" title="1-Click Apply: Open on LinkedIn, auto-copy tailored pitch, and record application">💼 1-Click Apply on LinkedIn ↗</button>`;
+        } else if (isIndeedJob) {
+          applyBtn = `<button class="btn btn-sm" id="btnModalApplySingle" onclick="oneClickApplyIndeed(${j.id})" style="background:rgba(37,99,235,0.3);border:1px solid #2563eb;color:#93c5fd;font-weight:700;padding:5px 12px;font-size:12px" title="1-Click Apply: Open on Indeed and record application">🔵 1-Click Apply on Indeed ↗</button>`;
+        } else {
+          applyBtn = `<button class="btn btn-sm btn-primary" id="btnModalApplySingle" onclick="applySingleJob(${j.id})">🚀 Auto-Apply to This Job</button>`;
+        }
 
         const chanSelect = document.getElementById('modalJobChannelSelect');
         if (chanSelect) {
@@ -2481,6 +2513,133 @@
         loadOutbound();
       } catch (e) {
         showToast('Error recording application: ' + e.message, 'error');
+      }
+    }
+
+    async function oneClickApplyLinkedIn(jobId) {
+      const job = (Array.isArray(allJobsList) ? allJobsList.find(j => j.id === jobId) : null) || currentActiveJob;
+      const targetUrl = (job && (job.application_url || job.job_url))
+        ? (job.application_url || job.job_url)
+        : (job ? `https://www.linkedin.com/jobs/search/?keywords=${encodeURIComponent((job.title || '') + ' ' + (job.company || ''))}` : 'https://www.linkedin.com/jobs/');
+
+      const pitch = (job && (job.pitch_en || job.pitch_fr)) ? (job.pitch_en || job.pitch_fr) : '';
+
+      // Copy tailored motivation pitch to user's desktop clipboard
+      let copied = false;
+      if (pitch) {
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(pitch);
+            copied = true;
+          } else {
+            const ta = document.createElement('textarea');
+            ta.value = pitch;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            copied = true;
+          }
+        } catch (e) {
+          console.warn('Clipboard copy warning:', e);
+        }
+      }
+
+      // Open LinkedIn job link in user's active browser
+      window.open(targetUrl, '_blank', 'noopener,noreferrer');
+
+      // Record application in DB & update UI
+      try {
+        await apiSend(`/api/jobs/${jobId}/record_application`, 'POST', {
+          channel: 'linkedin',
+          status: 'submitted'
+        });
+        if (job) {
+          job.application_method = 'linkedin';
+          job.stage = 'applied';
+          job.application_status = 'submitted';
+        }
+        if (currentActiveJob && currentActiveJob.id === jobId) {
+          currentActiveJob.application_method = 'linkedin';
+          currentActiveJob.stage = 'applied';
+          currentActiveJob.application_status = 'submitted';
+          await openJobModal(jobId);
+        }
+        renderJobsTable();
+        renderJobsCards();
+        loadOutbound();
+        showToast(
+          copied 
+            ? '💼 Opened LinkedIn! Tailored pitch copied to your clipboard & application logged ✓'
+            : '💼 Opened LinkedIn! Application logged in Outreach Ledger ✓',
+          'success'
+        );
+      } catch (e) {
+        showToast('Opened LinkedIn, but error recording application: ' + e.message, 'warn');
+      }
+    }
+
+    async function oneClickApplyIndeed(jobId) {
+      const job = (Array.isArray(allJobsList) ? allJobsList.find(j => j.id === jobId) : null) || currentActiveJob;
+      const targetUrl = (job && (job.application_url || job.job_url))
+        ? (job.application_url || job.job_url)
+        : (job ? `https://www.indeed.com/jobs?q=${encodeURIComponent((job.title || '') + ' ' + (job.company || ''))}` : 'https://www.indeed.com/');
+
+      const pitch = (job && (job.pitch_en || job.pitch_fr)) ? (job.pitch_en || job.pitch_fr) : '';
+
+      let copied = false;
+      if (pitch) {
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(pitch);
+            copied = true;
+          } else {
+            const ta = document.createElement('textarea');
+            ta.value = pitch;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            copied = true;
+          }
+        } catch (e) {
+          console.warn('Clipboard copy warning:', e);
+        }
+      }
+
+      window.open(targetUrl, '_blank', 'noopener,noreferrer');
+
+      try {
+        await apiSend(`/api/jobs/${jobId}/record_application`, 'POST', {
+          channel: 'indeed',
+          status: 'submitted'
+        });
+        if (job) {
+          job.application_method = 'indeed';
+          job.stage = 'applied';
+          job.application_status = 'submitted';
+        }
+        if (currentActiveJob && currentActiveJob.id === jobId) {
+          currentActiveJob.application_method = 'indeed';
+          currentActiveJob.stage = 'applied';
+          currentActiveJob.application_status = 'submitted';
+          await openJobModal(jobId);
+        }
+        renderJobsTable();
+        renderJobsCards();
+        loadOutbound();
+        showToast(
+          copied
+            ? '🔵 Opened Indeed! Tailored pitch copied to clipboard & application logged ✓'
+            : '🔵 Opened Indeed! Application logged in Outreach Ledger ✓',
+          'success'
+        );
+      } catch (e) {
+        showToast('Opened Indeed, but error recording application: ' + e.message, 'warn');
       }
     }
 
@@ -5214,7 +5373,10 @@
         setVal('usLinkedinCookie', s.linkedin_cookie || (s.custom_env && s.custom_env.LINKEDIN_COOKIE) || '');
         setVal('usIndeedCookie', s.indeed_cookie || (s.custom_env && s.custom_env.INDEED_COOKIE) || '');
         if (document.getElementById('usAutoApplyLinkedin')) {
-          document.getElementById('usAutoApplyLinkedin').checked = s.auto_apply_linkedin_enabled !== false;
+          document.getElementById('usAutoApplyLinkedin').checked = Boolean(s.auto_apply_linkedin_enabled);
+        }
+        if (document.getElementById('profAutoApplyLinkedin')) {
+          document.getElementById('profAutoApplyLinkedin').checked = Boolean(s.auto_apply_linkedin_enabled);
         }
         if (document.getElementById('usAutoApplyIndeed')) {
           document.getElementById('usAutoApplyIndeed').checked = s.auto_apply_indeed_enabled !== false;
@@ -5442,7 +5604,9 @@
         updateTexts(['liCookiePreview', 'profLiCookiePreview'], li.cookie_preview || (li.connected ? '••••••••' : 'None'));
 
         if (li.auto_apply_enabled !== undefined) {
-          updateChecks(['usAutoApplyLinkedin', 'profAutoApplyLinkedin'], li.auto_apply_enabled !== false);
+          updateChecks(['usAutoApplyLinkedin', 'profAutoApplyLinkedin'], Boolean(li.auto_apply_enabled));
+        } else {
+          updateChecks(['usAutoApplyLinkedin', 'profAutoApplyLinkedin'], false);
         }
 
         ['usLinkedinCookie', 'profLinkedinCookie'].forEach(id => {
@@ -7890,6 +8054,8 @@
     window.setOutboundFilter = setOutboundFilter;
     window.saveJobChannel = saveJobChannel;
     window.specifyApplicationChannel = specifyApplicationChannel;
+    window.oneClickApplyLinkedIn = oneClickApplyLinkedIn;
+    window.oneClickApplyIndeed = oneClickApplyIndeed;
     window.openSpecifyAppModal = openSpecifyAppModal;
     window.closeSpecifyAppModal = closeSpecifyAppModal;
     window.setSpecifyChannelChoice = setSpecifyChannelChoice;

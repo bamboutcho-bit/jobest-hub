@@ -4018,7 +4018,7 @@ def api_user_get_settings(request: Request):
                 "alert_email": (us.alert_email if us and us.alert_email else None) or eff.get("alert_email") or user.email,
                 "linkedin_cookie": "••••••••" if custom_env.get("LINKEDIN_COOKIE") or eff.get("linkedin_cookie") else None,
                 "indeed_cookie": "••••••••" if custom_env.get("INDEED_COOKIE") or eff.get("indeed_cookie") else None,
-                "auto_apply_linkedin_enabled": custom_env.get("AUTO_APPLY_LINKEDIN_ENABLED", eff.get("auto_apply_linkedin_enabled", True)),
+                "auto_apply_linkedin_enabled": custom_env.get("AUTO_APPLY_LINKEDIN_ENABLED", eff.get("auto_apply_linkedin_enabled", False)),
                 "auto_apply_indeed_enabled": custom_env.get("AUTO_APPLY_INDEED_ENABLED", eff.get("auto_apply_indeed_enabled", True)),
                 "custom_env": custom_env,
             }
@@ -4160,7 +4160,7 @@ def api_user_get_integrations(request: Request):
             "has_cookie": bool(li_cookie),
             "cookie_preview": f"li_at={li_cookie[:8]}...{li_cookie[-4:]}" if len(li_cookie) > 16 else ("Configured" if li_cookie else None),
             "profile_url": eff.get("linkedin_url") or custom.get("LINKEDIN_PROFILE_URL") or "",
-            "auto_apply_enabled": custom.get("AUTO_APPLY_LINKEDIN_ENABLED", eff.get("auto_apply_linkedin_enabled", True)),
+            "auto_apply_enabled": custom.get("AUTO_APPLY_LINKEDIN_ENABLED", eff.get("auto_apply_linkedin_enabled", False)),
             "verified_at": custom.get("LINKEDIN_VERIFIED_AT"),
             "status": "ready" if li_cookie else "disconnected",
         },
@@ -4458,7 +4458,7 @@ def api_user_get_setup_status(request: Request):
             eff.get("auto_apply_linkedin_enabled")
             or eff.get("auto_apply_indeed_enabled")
             or getattr(settings, "auto_apply_web_enabled", True)
-            or getattr(settings, "auto_apply_linkedin_enabled", True)
+            or getattr(settings, "auto_apply_linkedin_enabled", False)
             or getattr(settings, "auto_apply_indeed_enabled", True)
             or (us and us.auto_apply_mode and us.auto_apply_mode != "off")
         )

@@ -536,7 +536,7 @@ def _candidate_application_url(
             pass
 
     web_enabled = user_cfg.get("auto_apply_web_enabled") if "auto_apply_web_enabled" in user_cfg else getattr(settings, "auto_apply_web_enabled", True)
-    linkedin_enabled = user_cfg.get("auto_apply_linkedin_enabled") if "auto_apply_linkedin_enabled" in user_cfg else getattr(settings, "auto_apply_linkedin_enabled", True)
+    linkedin_enabled = user_cfg.get("auto_apply_linkedin_enabled") if "auto_apply_linkedin_enabled" in user_cfg else getattr(settings, "auto_apply_linkedin_enabled", False)
     indeed_enabled = user_cfg.get("auto_apply_indeed_enabled") if "auto_apply_indeed_enabled" in user_cfg else getattr(settings, "auto_apply_indeed_enabled", True)
 
     # 2. If web automation is enabled, allow LinkedIn and Indeed portals

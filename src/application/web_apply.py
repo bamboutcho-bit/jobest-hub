@@ -556,7 +556,7 @@ def apply_via_browser(job_record: dict, session=None, profile: dict | None = Non
 
     auto_linkedin = u_cfg.get("auto_apply_linkedin_enabled")
     if auto_linkedin is None:
-        auto_linkedin = getattr(settings, "auto_apply_linkedin_enabled", True)
+        auto_linkedin = getattr(settings, "auto_apply_linkedin_enabled", False)
 
     auto_indeed = u_cfg.get("auto_apply_indeed_enabled")
     if auto_indeed is None:

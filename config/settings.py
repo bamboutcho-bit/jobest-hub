@@ -119,7 +119,7 @@ class Settings(BaseSettings):
     auto_apply_mode: str = "send"
     auto_apply_web_enabled: bool = True
     auto_apply_known_ats_only: bool = False
-    auto_apply_linkedin_enabled: bool = True
+    auto_apply_linkedin_enabled: bool = False
     auto_apply_indeed_enabled: bool = True
     linkedin_cookie: str = ""
     indeed_cookie: str = ""
