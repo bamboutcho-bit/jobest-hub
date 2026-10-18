@@ -669,15 +669,16 @@
       background: rgba(4, 7, 15, 0.78);
       backdrop-filter: blur(8px);
       -webkit-backdrop-filter: blur(8px);
-      display: flex;
+      display: none !important;
       align-items: center;
       justify-content: center;
-      z-index: 100;
+      z-index: 9999;
       opacity: 0;
       pointer-events: none;
       transition: opacity 0.2s ease-out;
     }
     .modal-backdrop.open {
+      display: flex !important;
       opacity: 1;
       pointer-events: auto;
     }

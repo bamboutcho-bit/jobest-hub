@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Optional
 
 import requests
@@ -12,9 +13,34 @@ from config.settings import settings
 from src.storage.db import get_session
 from src.storage.models import Notification
 
+import socket
+import time
+
 logger = logging.getLogger(__name__)
 
 _exchange_declared = False
+_broker_checked = 0.0
+_broker_available = False
+
+
+def _is_broker_reachable() -> bool:
+    global _broker_checked, _broker_available
+    now = time.time()
+    if now - _broker_checked < 60.0:
+        return _broker_available
+    _broker_checked = now
+    host = settings.rabbitmq_host or "rabbitmq"
+    if host in ("rabbitmq", "broker") and not Path("/.dockerenv").is_file():
+        _broker_available = False
+        return False
+    port = settings.rabbitmq_port or 5672
+    try:
+        with socket.create_connection((host, port), timeout=0.3):
+            _broker_available = True
+            return True
+    except Exception:
+        _broker_available = False
+        return False
 
 
 def _get_rabbitmq_params() -> tuple[str, int, int, str, str, str]:
@@ -179,16 +205,17 @@ def publish_notification(
         "created_at": now_iso,
     }
 
-    # 2. Publish to Message Broker (RabbitMQ or Kafka)
-    broker = (settings.message_broker or "rabbitmq").lower()
-    if broker == "rabbitmq":
-        routing_key = f"notify.user.{user_id}" if user_id else ("notify.admin" if is_admin_event else "notify.broadcast")
-        published = _publish_rabbitmq_amqp(routing_key, payload)
-        if not published:
-            _publish_rabbitmq_http(routing_key, payload)
-    elif broker == "kafka":
-        topic = settings.kafka_topic or "autohunt_notifications"
-        _publish_kafka(topic, payload)
+    # 2. Publish to Message Broker (RabbitMQ or Kafka) if available
+    if _is_broker_reachable():
+        broker = (settings.message_broker or "rabbitmq").lower()
+        if broker == "rabbitmq":
+            routing_key = f"notify.user.{user_id}" if user_id else ("notify.admin" if is_admin_event else "notify.broadcast")
+            published = _publish_rabbitmq_amqp(routing_key, payload)
+            if not published:
+                _publish_rabbitmq_http(routing_key, payload)
+        elif broker == "kafka":
+            topic = settings.kafka_topic or "autohunt_notifications"
+            _publish_kafka(topic, payload)
 
     # 3. Direct local WebSocket dispatch (strictly isolated via NotificationHub RBAC)
     try:

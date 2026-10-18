@@ -23,6 +23,10 @@ from src.dashboard.app import (
     api_outbound,
     api_outbound_stats,
     api_resend_application,
+    record_job_application,
+    record_external_outreach,
+    RecordApplicationPayload,
+    RecordExternalOutreachPayload,
 )
 from src.application.auto_apply import apply_to_job
 
@@ -231,3 +235,152 @@ def test_auto_apply_min_score_respects_custom_threshold():
         assert res is not None
         assert res["application_status"] in ("draft", "sent")
         assert res["application_email"] == "jobs@techcorp.com"
+
+
+def test_specify_application_and_external_outreach_tracking():
+    """Verify that jobs can be specified as applied via LinkedIn or Indeed and tracked in Outreach Ledger."""
+    u_id = uuid.uuid4().hex[:8]
+    with get_session() as session:
+        user = User(email=f"app_channel_{u_id}@example.com", full_name="Channel Tester", role="user", is_active=True)
+        session.add(user)
+        session.flush()
+
+        # 1. Existing scraped job specified as applied via LinkedIn
+        job1 = JobPosting(
+            dedup_hash=f"spotify_backend_{u_id}",
+            title="Senior Systems Engineer",
+            company="Spotify",
+            location="Stockholm",
+            source_site="linkedin",
+            user_id=user.id,
+            match_score=88,
+            pipeline_stage=PipelineStage.DISCOVERED,
+        )
+        session.add(job1)
+        session.commit()
+
+        req = _make_dummy_request(path=f"/api/jobs/{job1.id}/record_application")
+        req.state.current_user = user
+
+        payload_linkedin = RecordApplicationPayload(
+            channel="linkedin",
+            status="submitted",
+            notes="Applied using Easy Apply with tailored CV",
+            application_url="https://linkedin.com/jobs/view/999888",
+        )
+        res1 = record_job_application(job1.id, payload_linkedin, req, _=True)
+        assert res1["ok"] is True
+        assert res1["channel"] == "linkedin"
+
+        # Check job updated
+        with get_session() as s2:
+            j_updated = s2.get(JobPosting, job1.id)
+            assert j_updated.pipeline_stage == PipelineStage.APPLIED
+            assert j_updated.application_method == "linkedin"
+            assert j_updated.application_status == "submitted"
+            assert "Easy Apply" in (j_updated.interview_notes or "")
+
+        # 2. Record external application made via Indeed
+        req_ext = _make_dummy_request(path="/api/outbound/record_external")
+        req_ext.state.current_user = user
+
+        payload_indeed = RecordExternalOutreachPayload(
+            company="Revolut",
+            job_title="Lead Data Engineer",
+            channel="indeed",
+            job_url="https://indeed.com/viewjob?jk=123456",
+            status="submitted",
+            notes="Applied through Indeed apply button",
+        )
+        res2 = record_external_outreach(payload_indeed, req_ext, _=True)
+        assert res2["ok"] is True
+        assert res2["channel"] == "indeed"
+        indeed_job_id = res2["job_id"]
+        assert indeed_job_id is not None
+
+        # 3. Query outbound ledger with channel filters
+        req_outbound_li = _make_dummy_request(path="/api/outbound", query_string="status_filter=linkedin&all_users=1")
+        records_li = api_outbound(req_outbound_li, limit=50)
+        found_li = next((r for r in records_li if r["job_id"] == job1.id), None)
+        assert found_li is not None
+        assert found_li["channel"] == "linkedin"
+        assert "LinkedIn" in found_li["channel_label"]
+
+        req_outbound_in = _make_dummy_request(path="/api/outbound", query_string="status_filter=indeed&all_users=1")
+        records_in = api_outbound(req_outbound_in, limit=50)
+        found_in = next((r for r in records_in if r["job_id"] == indeed_job_id), None)
+        assert found_in is not None
+        assert found_in["channel"] == "indeed"
+        assert "Indeed" in found_in["channel_label"]
+
+        # 4. Outbound stats
+        stats = api_outbound_stats(req_outbound_li)
+        assert stats["linkedin_applications"] >= 1
+        assert stats["indeed_applications"] >= 1
+
+
+def test_linkedin_and_indeed_filters_isolation():
+    """Verify LinkedIn and Indeed filters never mix applications, even when scraped from opposing sources."""
+    u_id = uuid.uuid4().hex[:8]
+    with get_session() as session:
+        user = User(email=f"isolate_{u_id}@example.com", full_name="Isolation Tester", role="user", is_active=True)
+        session.add(user)
+        session.flush()
+
+        # Job scraped from LinkedIn, but applied via Indeed
+        job_li_src = JobPosting(
+            dedup_hash=f"scraped_li_but_applied_indeed_{u_id}",
+            title="Senior Backend Engineer",
+            company="IndeedAppliedCo",
+            source_site="linkedin",
+            job_url="https://linkedin.com/jobs/view/111",
+            application_method="indeed",
+            application_status="submitted",
+            pipeline_stage=PipelineStage.APPLIED,
+            user_id=user.id,
+        )
+        # Job scraped from Indeed, but applied via LinkedIn
+        job_in_src = JobPosting(
+            dedup_hash=f"scraped_indeed_but_applied_li_{u_id}",
+            title="Senior Frontend Engineer",
+            company="LinkedInAppliedCo",
+            source_site="indeed",
+            job_url="https://indeed.com/viewjob?jk=222",
+            application_method="linkedin",
+            application_status="submitted",
+            pipeline_stage=PipelineStage.APPLIED,
+            user_id=user.id,
+        )
+        # Job discovered on LinkedIn but NEVER applied
+        job_unapplied = JobPosting(
+            dedup_hash=f"unapplied_li_{u_id}",
+            title="Discovered Only",
+            company="NeverAppliedCo",
+            source_site="linkedin",
+            pipeline_stage=PipelineStage.DISCOVERED,
+            application_status="not_attempted",
+            user_id=user.id,
+        )
+        session.add_all([job_li_src, job_in_src, job_unapplied])
+        session.commit()
+
+        # Query LinkedIn filter
+        req_li = _make_dummy_request(path="/api/outbound", query_string="status_filter=linkedin")
+        req_li.state.current_user = user
+        records_li = api_outbound(req_li, limit=50)
+
+        li_ids = [r["job_id"] for r in records_li]
+        assert job_in_src.id in li_ids, "LinkedIn applied job must appear under LinkedIn filter"
+        assert job_li_src.id not in li_ids, "Indeed applied job must NOT appear under LinkedIn filter even if scraped from LinkedIn"
+        assert job_unapplied.id not in li_ids, "Unapplied discovered job must NOT appear in Outreach Ledger"
+
+        # Query Indeed filter
+        req_in = _make_dummy_request(path="/api/outbound", query_string="status_filter=indeed")
+        req_in.state.current_user = user
+        records_in = api_outbound(req_in, limit=50)
+
+        in_ids = [r["job_id"] for r in records_in]
+        assert job_li_src.id in in_ids, "Indeed applied job must appear under Indeed filter"
+        assert job_in_src.id not in in_ids, "LinkedIn applied job must NOT appear under Indeed filter even if scraped from Indeed"
+        assert job_unapplied.id not in in_ids, "Unapplied discovered job must NOT appear in Outreach Ledger"
+

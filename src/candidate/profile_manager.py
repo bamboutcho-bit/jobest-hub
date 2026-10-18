@@ -106,14 +106,23 @@ def get_active_profile(user_id: int | None = None, session=None) -> dict[str, An
         stmt = select(CandidateProfile).where(CandidateProfile.is_active.is_(True))
         if user_id is not None:
             stmt = stmt.where(CandidateProfile.user_id == user_id)
-        row = s.scalar(stmt.limit(1))
+        row = s.scalar(stmt.order_by(desc(CandidateProfile.updated_at)).limit(1))
         if not row and user_id is not None:
             # Fallback to any profile belonging to this user
             row = s.scalar(select(CandidateProfile).where(CandidateProfile.user_id == user_id).order_by(desc(CandidateProfile.id)).limit(1))
-        if not row and user_id is None:
-            # Global fallback when no specific user is provided
+        if not row:
+            # Fallback to unassigned active profile or global profile
+            row = s.scalar(select(CandidateProfile).where(CandidateProfile.user_id.is_(None), CandidateProfile.is_active.is_(True)).limit(1))
+        if not row:
+            # Global fallback to the latest profile in DB
             row = s.scalar(select(CandidateProfile).order_by(desc(CandidateProfile.is_active), desc(CandidateProfile.id)).limit(1))
         if row:
+            if user_id is not None and row.user_id is None:
+                try:
+                    row.user_id = user_id
+                    s.flush()
+                except Exception:
+                    pass
             return _profile_to_dict(row)
         fallback = dict(DEFAULT_STATIC_PROFILE)
         if user_id is not None:
@@ -141,10 +150,24 @@ def list_profiles(user_id: int | None = None, session=None) -> list[dict[str, An
     user_id, session = _normalize_args(user_id, session)
 
     def _fetch(s):
+        from sqlalchemy import or_
         stmt = select(CandidateProfile)
         if user_id is not None:
-            stmt = stmt.where(CandidateProfile.user_id == user_id)
+            # Return profiles belonging to this user or any unassigned profiles
+            stmt = stmt.where(or_(CandidateProfile.user_id == user_id, CandidateProfile.user_id.is_(None)))
         rows = s.scalars(stmt.order_by(desc(CandidateProfile.is_active), CandidateProfile.name)).all()
+        # Automatically claim unassigned profile for this user if found
+        if user_id is not None:
+            for r in rows:
+                if r.user_id is None:
+                    try:
+                        r.user_id = user_id
+                    except Exception:
+                        pass
+            try:
+                s.flush()
+            except Exception:
+                pass
         return [_profile_to_dict(r) for r in rows]
 
     try:
@@ -207,7 +230,7 @@ def create_profile(data: dict[str, Any], user_id: int | None = None, session=Non
             if uid is not None:
                 s.query(CandidateProfile).filter(CandidateProfile.user_id == uid).update({"is_active": False})
             else:
-                s.query(CandidateProfile).update({"is_active": False})
+                s.query(CandidateProfile).filter(CandidateProfile.user_id.is_(None)).update({"is_active": False})
 
         profile = CandidateProfile(
             name=name,
@@ -309,7 +332,7 @@ def update_profile(profile_id: int, data: dict[str, Any], user_id: int | None = 
             if uid is not None:
                 s.query(CandidateProfile).filter(CandidateProfile.user_id == uid, CandidateProfile.id != profile_id).update({"is_active": False})
             else:
-                s.query(CandidateProfile).filter(CandidateProfile.id != profile_id).update({"is_active": False})
+                s.query(CandidateProfile).filter(CandidateProfile.user_id.is_(None), CandidateProfile.id != profile_id).update({"is_active": False})
             row.is_active = True
 
         row.updated_at = datetime.now(timezone.utc)
@@ -350,7 +373,7 @@ def set_active_profile(profile_id: int, user_id: int | None = None, session=None
             if uid is not None:
                 q_unapplied = q_unapplied.where(JobPosting.user_id == uid)
             unapplied_jobs = s.scalars(q_unapplied).all()
-            for job in unapplied_jobs:
+            for idx, job in enumerate(unapplied_jobs):
                 eval_res = evaluate_heuristic(job, profile=prof_dict)
                 score = eval_res.get("match_score", 0)
                 job.match_score = score
@@ -361,6 +384,8 @@ def set_active_profile(profile_id: int, user_id: int | None = None, session=None
                 job.application_email_body = (eval_res.get("application_email_fr") if is_fr else eval_res.get("application_email_en")) or job.application_email_body
                 clears = score >= settings.min_match_score
                 job.pipeline_stage = PipelineStage.EVALUATED_MATCH if clears else PipelineStage.EVALUATED_LOW
+                if (idx + 1) % 50 == 0:
+                    s.flush()
             s.flush()
             logger.info("Re-scored %d unapplied jobs against active profile '%s'", len(unapplied_jobs), prof_dict.get("headline") or prof_dict.get("name"))
         except Exception as resc_err:
@@ -380,6 +405,8 @@ def delete_profile(profile_id: int, user_id: int | None = None, session=None) ->
         row = s.get(CandidateProfile, profile_id)
         if not row:
             return False
+        if row.id == 1:
+            raise ValueError("Protected profile: Primary master candidate profile cannot be deleted")
         if user_id is not None and row.user_id is not None and row.user_id != user_id:
             raise ValueError("Unauthorized to delete this profile")
         uid = user_id or row.user_id
@@ -400,6 +427,8 @@ def delete_profile(profile_id: int, user_id: int | None = None, session=None) ->
             if uid is not None:
                 fb_stmt = fb_stmt.where(CandidateProfile.user_id == uid)
             fallback = s.scalar(fb_stmt.order_by(desc(CandidateProfile.id)).limit(1))
+            if not fallback:
+                fallback = s.scalar(select(CandidateProfile).order_by(desc(CandidateProfile.id)).limit(1))
             if fallback:
                 fallback.is_active = True
                 s.flush()

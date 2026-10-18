@@ -282,10 +282,13 @@ def _evaluate_and_act(job_id: int, *, run_id: int | None = None, index: int = 0,
             # was actually sent or must be handled manually.
             try:
                 if auto_apply_eligible and can_auto_apply:
+                    job_uid = getattr(job, "user_id", None) or (user.id if user else None)
+                    if job_uid and not getattr(job, "user_id", None):
+                        job.user_id = job_uid
                     apply_result = apply_to_job(
                         {
                             "id": job.id,
-                            "user_id": getattr(job, "user_id", None),
+                            "user_id": job_uid,
                             "title": job.title,
                             "company": job.company,
                             "location": job.location,
@@ -400,6 +403,7 @@ def _evaluate_and_act(job_id: int, *, run_id: int | None = None, index: int = 0,
 
 
             alert_payload = {
+                "id": job.id,
                 "title": job.title,
                 "company": job.company,
                 "location": job.location,
@@ -413,9 +417,10 @@ def _evaluate_and_act(job_id: int, *, run_id: int | None = None, index: int = 0,
                 "application_method": job.application_method,
                 "application_error": job.application_error,
             }
-            tg_ok = send_telegram_alert(alert_payload)
-            email_ok = send_email_alert(alert_payload)
-            job.alerted = tg_ok or email_ok
+            if not getattr(job, "alerted", False):
+                tg_ok = send_telegram_alert(alert_payload)
+                email_ok = send_email_alert(alert_payload)
+                job.alerted = bool(tg_ok or email_ok)
 
             try:
                 from src.notifications.publisher import publish_notification
@@ -475,8 +480,16 @@ def _evaluate_and_act(job_id: int, *, run_id: int | None = None, index: int = 0,
         return "evaluated"
 
 
+_last_anomaly_alert: datetime | None = None
+
+
 def _send_pipeline_anomaly(summary: dict) -> bool:
+    global _last_anomaly_alert
     if not settings.alert_on_zero_scrape or summary["raw_scraped"] >= settings.min_expected_scrape_results:
+        return False
+    now = datetime.now(timezone.utc)
+    if _last_anomaly_alert and (now - _last_anomaly_alert).total_seconds() < 21600:
+        logger.debug("Skipping duplicate pipeline anomaly alert (within 6h cooldown).")
         return False
     payload = {
         "title": "Pipeline anomaly",
@@ -491,7 +504,10 @@ def _send_pipeline_anomaly(summary: dict) -> bool:
         "application_status": "n/a",
         "application_method": "n/a",
     }
-    return send_telegram_alert(payload) or send_email_alert(payload)
+    sent = send_telegram_alert(payload) or send_email_alert(payload)
+    if sent:
+        _last_anomaly_alert = now
+    return sent
 
 
 def auto_apply_pending_matches(user_id: int | None = None, run_id: int | None = None, session=None) -> dict:
@@ -564,7 +580,10 @@ def auto_apply_pending_matches(user_id: int | None = None, run_id: int | None = 
             "manual_unconfirmed_submission",
         ]
         apply_q = select(JobPosting).where(
-            JobPosting.match_score >= settings.auto_apply_min_score,
+            or_(
+                JobPosting.match_score >= settings.auto_apply_min_score,
+                (JobPosting.application_emails.isnot(None) & (JobPosting.application_emails != "")),
+            ),
             JobPosting.applied_at.is_(None),
             JobPosting.pipeline_stage != PipelineStage.APPLIED,
             or_(
@@ -580,7 +599,7 @@ def auto_apply_pending_matches(user_id: int | None = None, run_id: int | None = 
         # Prioritize actionable applications: valid recruiter email first, then highest match score
         apply_q = apply_q.order_by(
             case((JobPosting.application_emails.isnot(None) & (JobPosting.application_emails != ""), 0), else_=1),
-            desc(JobPosting.match_score)
+            JobPosting.match_score.desc().nulls_last()
         )
         # Bounded query limit: inspect enough candidates to fulfill the remaining quota
         batch_candidate_limit = min(max(remaining_quota * 4, 100), 1000)
@@ -592,6 +611,13 @@ def auto_apply_pending_matches(user_id: int | None = None, run_id: int | None = 
             if sent_today >= daily_limit:
                 logger.info("Daily auto-apply limit of %s reached for user %s. Stopping batch.", daily_limit, target_user.email)
                 break
+
+            # Extract application emails from raw_description if not already set
+            if not job.application_emails and job.raw_description:
+                from src.application.auto_apply import extract_application_emails
+                found_emails = extract_application_emails(job.raw_description)
+                if found_emails:
+                    job.application_emails = ", ".join(found_emails)
 
             # Attempt HR email enrichment if email is missing
             if settings.enable_hr_enrichment and not job.application_emails:
@@ -610,6 +636,24 @@ def auto_apply_pending_matches(user_id: int | None = None, run_id: int | None = 
                     break
                 continue
             consecutive_unactionable = 0
+
+            from src.evaluation.heuristic_scorer import evaluate_job_heuristic
+            from src.evaluation.language import is_french_job
+            eval_check = evaluate_job_heuristic(job, profile=active_profile)
+            profile_score = eval_check.get("match_score", 0)
+            if profile_score < (settings.auto_apply_min_score or 60):
+                job.match_score = profile_score
+                job.pipeline_stage = PipelineStage.EVALUATED_LOW
+                consecutive_unactionable += 1
+                continue
+
+            job.match_score = profile_score
+            job.pipeline_stage = PipelineStage.EVALUATED_MATCH
+            is_fr = is_french_job(job)
+            job.recruiter_pitch_en = eval_check.get("recruiter_pitch_en") or job.recruiter_pitch_en
+            job.recruiter_pitch_fr = eval_check.get("recruiter_pitch_fr") or job.recruiter_pitch_fr
+            job.application_subject = (eval_check.get("application_subject_fr") if is_fr else eval_check.get("application_subject")) or job.application_subject
+            job.application_email_body = (eval_check.get("application_email_fr") if is_fr else eval_check.get("application_email_en")) or job.application_email_body
 
             job_dict = {
                 "id": job.id,
@@ -921,7 +965,7 @@ def run_pipeline(user_id: int | None = None) -> dict:
             record.claude_skipped_prefilter = summary["prefilter_skipped"]
             record.claude_skipped_budget = summary["budget_skipped"]
             record.evaluation_failures = summary["evaluation_failures"]
-            record.applications_sent = auto_applied_count
+            record.applications_sent = (record.applications_sent or 0) + auto_applied_count
             record.anomaly_alerted = anomaly_alerted
             record.summary_json = json.dumps({**summary, "stage": "complete", "message": "Pipeline run complete", "progress_percent": 100, "source_results": ingestion_stats.get("source_results", [])}, ensure_ascii=False)
             session.add(PipelineRunEvent(run_id=run_record_id, phase="complete", status="success", message="Pipeline run complete", details_json=json.dumps(summary, ensure_ascii=False)))

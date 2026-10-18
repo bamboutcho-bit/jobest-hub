@@ -44,7 +44,7 @@ PERSONAL_DOMAINS = {"gmail.com", "googlemail.com", "outlook.com", "hotmail.com",
 
 def _clean_sender_name(profile: dict | None = None) -> str:
     name = (profile.get("name") if profile else None) or (settings.sender_display_name or "").strip()
-    if not name:
+    if not name or name.lower() in ("candidate", "python ai architect", "ss", "applicant", "unknown"):
         try:
             from src.candidate.profile_manager import get_active_profile
             p = get_active_profile()
@@ -55,7 +55,7 @@ def _clean_sender_name(profile: dict | None = None) -> str:
         name = name.split(" - ")[0].strip()
     elif " — " in name:
         name = name.split(" — ")[0].strip()
-    return name or getattr(settings, "sender_display_name", "") or "Applicant"
+    return name or getattr(settings, "sender_display_name", "") or "Hamza Oukhouya"
 
 
 
@@ -149,6 +149,9 @@ def _application_subject(job: Any, profile: dict | None = None) -> str:
         custom = _get_job_val(job, "application_subject_fr") or _get_job_val(job, "application_subject")
         if custom and isinstance(custom, str):
             sanitized = sanitize_application_text(custom, sender, company, title, is_french=True)
+            for bad in ("Python AI Architect", "Candidate Name", "Candidate", "ss"):
+                sanitized = re.sub(rf"\s*[-—–]\s*{re.escape(bad)}.*$", "", sanitized, flags=re.I)
+                sanitized = re.sub(rf"\b{re.escape(bad)}\b", sender, sanitized, flags=re.I)
             if sanitized.lower().startswith("application"):
                 sanitized = re.sub(r"^Application\b", "Candidature", sanitized, flags=re.I)
             if not has_unresolved_placeholders(sanitized) and not is_inverted_perspective(sanitized) and len(sanitized) >= 10:
@@ -162,6 +165,9 @@ def _application_subject(job: Any, profile: dict | None = None) -> str:
         custom = _get_job_val(job, "application_subject") or _get_job_val(job, "application_subject_fr")
         if custom and isinstance(custom, str):
             sanitized = sanitize_application_text(custom, sender, company, title, is_french=False)
+            for bad in ("Python AI Architect", "Candidate Name", "Candidate", "ss"):
+                sanitized = re.sub(rf"\s*[-—–]\s*{re.escape(bad)}.*$", "", sanitized, flags=re.I)
+                sanitized = re.sub(rf"\b{re.escape(bad)}\b", sender, sanitized, flags=re.I)
             if sanitized.lower().startswith("candidature"):
                 sanitized = re.sub(r"^Candidature\b", "Application", sanitized, flags=re.I)
             if not has_unresolved_placeholders(sanitized) and not is_inverted_perspective(sanitized) and len(sanitized) >= 10:
@@ -223,7 +229,12 @@ def _application_body(job: Any, profile: dict | None = None) -> str:
             if not any(w in sanitized.lower() for w in ("dear", "hello", "hi", "application", "regards", "sincerely", "writing to submit", "resume")):
                 continue
 
-        # Ensure applicant signature is present
+        # Strip any existing signoff with dummy/test names
+        for bad_name in ("Python AI Architect", "Candidate Name", "Candidate", "ss"):
+            sanitized = re.sub(rf"(?:Best regards|Sincerely|Bien cordialement|Cordialement),?\s*\n+{re.escape(bad_name)}.*$", "", sanitized, flags=re.IGNORECASE | re.DOTALL).strip()
+            sanitized = re.sub(rf"\b{re.escape(bad_name)}\b", sender, sanitized, flags=re.IGNORECASE)
+
+        # Ensure applicant signature is present (single clean signature)
         if sender.lower() not in sanitized.lower():
             closing = "\n\nBien cordialement,\n" if is_fr else "\n\nBest regards,\n"
             sanitized = f"{sanitized}{closing}{sender}"
@@ -386,7 +397,7 @@ def _attach_documents(msg: EmailMessage, profile: dict | None = None, user_id: i
     
     sender_name = _clean_sender_name(profile).replace(" ", "_")
     if resume_target and resume_target.is_file():
-        filename = f"{sender_name}_Resume.pdf" if not resume_target.name.endswith(".pdf") else resume_target.name
+        filename = f"{sender_name}_CV.pdf" if resume_target.name.lower() in ("resume.pdf", "cv.pdf", "placeholder.pdf") else (f"{sender_name}_CV.pdf" if not resume_target.name.endswith(".pdf") else resume_target.name)
         msg.add_attachment(resume_target.read_bytes(), maintype="application", subtype="pdf", filename=filename)
         has_resume = True
 
@@ -563,6 +574,25 @@ def apply_to_job(job_record: dict, session=None, profile: dict | None = None) ->
             profile = get_active_profile(user_id=uid, session=session)
         except Exception:
             profile = None
+
+    job_id = job_record.get("id")
+    if job_id and session:
+        from src.storage.models import JobPosting, PipelineStage
+        existing_job = session.get(JobPosting, job_id)
+        if existing_job and (existing_job.pipeline_stage == PipelineStage.APPLIED or existing_job.applied_at is not None):
+            logger.info("Job %s was already applied to on %s — skipping duplicate application send.", job_id, existing_job.applied_at)
+            return {
+                "application_method": existing_job.application_method or "recruiter_email",
+                "application_email": existing_job.application_email,
+                "application_url": existing_job.application_url,
+                "application_status": existing_job.application_status or "sent",
+                "application_error": None,
+                "resume_attached": bool(existing_job.resume_attached),
+                "applied": True,
+                "applied_at": existing_job.applied_at,
+                "thread_subject": existing_job.thread_subject,
+                "already_applied": True,
+            }
 
     raw_description = job_record.get("raw_description") or ""
     explicit_emails = _normalize_emails(job_record.get("application_emails"))

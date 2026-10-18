@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/style.css?v=6.0.0">
+  <link rel="stylesheet" href="/static/css/style.css?v=6.5.0">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
@@ -146,10 +146,10 @@
 
         <!-- User Badge & RBAC Logout -->
         <div id="navUserBadge" style="display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.03);border:1px solid var(--border);padding:3px 10px;border-radius:10px">
-          <div style="font-size:12px;font-weight:700" id="navUserName">Loading...</div>
-          <span id="navRoleBadge" class="pill" style="font-size:10px;background:rgba(56,189,248,0.15);color:var(--cyan-light)">USER</span>
-          <span id="navPlanNameBadge" class="pill" style="font-size:10px;font-weight:800;cursor:pointer;display:inline-flex;align-items:center;gap:4px;letter-spacing:0.04em" onclick="switchAppMode('jobs');switchJobsTab('pricing')" title="Click to view or change your active plan">FREE TIER</span>
-          <span id="navPlanBadge" class="pill pill-stage-deal_won" style="font-size:10px;cursor:pointer" onclick="switchAppMode('jobs');switchJobsTab('pricing')" title="Click to view subscription plans & billing">0/200 apps today</span>
+          <div style="font-size:12px;font-weight:700" id="navUserName">Hamza Oukhouya</div>
+          <span id="navRoleBadge" class="pill" style="font-size:10px;background:rgba(168,85,247,0.2);color:var(--purple-light);border:1px solid rgba(168,85,247,0.4)">ADMIN</span>
+          <span id="navPlanNameBadge" class="pill" style="font-size:10px;font-weight:800;cursor:pointer;display:inline-flex;align-items:center;gap:4px;letter-spacing:0.04em;background:rgba(168, 85, 247, 0.22);color:#c084fc;border:1px solid rgba(168, 85, 247, 0.55);box-shadow:0 0 10px rgba(168, 85, 247, 0.25)" onclick="switchAppMode('jobs');switchJobsTab('pricing')" title="Active Plan: Pro Hunter (150 apps/day + HR discovery). Click to change plan or manage billing.">PRO ⭐</span>
+          <span id="navPlanBadge" class="pill pill-stage-deal_won" style="font-size:10px;cursor:pointer" onclick="switchAppMode('jobs');switchJobsTab('pricing')" title="Click to view subscription plans & billing">0/150 apps today</span>
           <button class="btn btn-sm" onclick="handleLogout()" style="padding:2px 8px;font-size:11px;background:rgba(239,68,68,0.15);color:#f87171;border:none;cursor:pointer">Logout</button>
         </div>
       </div>
@@ -362,7 +362,9 @@
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
             <span style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">Quick View:</span>
             <button id="qfAll" class="btn btn-sm btn-cyan" onclick="setJobQuickFilter('all')">All Postings</button>
-            <button id="qfApplied" class="btn btn-sm" onclick="setJobQuickFilter('applied')" title="Show jobs that have been applied to">✓ Applied (Email & Portal)</button>
+            <button id="qfApplied" class="btn btn-sm" onclick="setJobQuickFilter('applied')" title="Show jobs that have been applied to">✓ Applied (All)</button>
+            <button id="qfLinkedIn" class="btn btn-sm" onclick="setJobQuickFilter('linkedin')" title="Show jobs applied on LinkedIn">💼 LinkedIn</button>
+            <button id="qfIndeed" class="btn btn-sm" onclick="setJobQuickFilter('indeed')" title="Show jobs applied on Indeed">🔵 Indeed</button>
             <button id="qfEmail" class="btn btn-sm" onclick="setJobQuickFilter('email')" title="Show jobs targeted with recruiter email outreach">✉️ Email Channel</button>
             <button id="qfPortal" class="btn btn-sm" onclick="setJobQuickFilter('portal')" title="Show jobs targeted via online ATS portals">🌐 Web Portal Channel</button>
           </div>
@@ -402,9 +404,11 @@
             <option value="unspecified">❓ Unspecified</option>
           </select>
           <select id="jobsHrFilter" onchange="loadJobs()">
-            <option value="">📧 All Apply Types</option>
+            <option value="">📧 All Apply Types & Channels</option>
             <option value="has_hr">✉️ Recruiter Email Target</option>
             <option value="web_form">🌐 Web ATS Form Only</option>
+            <option value="linkedin">💼 Applied via LinkedIn</option>
+            <option value="indeed">🔵 Applied via Indeed</option>
           </select>
           <select id="jobsMinScoreFilter" onchange="loadJobs()">
             <option value="">🎯 Min Score: Any</option>
@@ -1235,27 +1239,27 @@
       <div id="jInboxSection" class="panel" style="display:none">
         <!-- Inbox KPI Cards -->
         <div class="kpi-grid" style="grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));margin-bottom:16px">
-          <div class="kpi-card">
+          <div class="kpi-card" onclick="setInboxFilter('')" style="cursor:pointer" title="Click to view all replies">
             <div class="kpi-label">Total Inbound</div>
             <div class="kpi-value" id="inboxKpiTotal" style="color:var(--cyan-light)">0</div>
-            <div class="kpi-sub">Recruiter responses detected</div>
+            <div class="kpi-sub">Emails received & analyzed</div>
           </div>
-          <div class="kpi-card" style="border-color:rgba(16,185,129,0.3)">
+          <div class="kpi-card" onclick="setInboxFilter('interview')" style="border-color:rgba(16,185,129,0.3);cursor:pointer" title="Click to view interviews and offers">
             <div class="kpi-label">🎯 Interviews & Offers</div>
             <div class="kpi-value" id="inboxKpiInterviews" style="color:var(--good)">0</div>
             <div class="kpi-sub">High-intent invitations</div>
           </div>
-          <div class="kpi-card" style="border-color:rgba(245,158,11,0.3)">
-            <div class="kpi-label">📝 Action Needed</div>
-            <div class="kpi-value" id="inboxKpiAction" style="color:var(--warn)">0</div>
-            <div class="kpi-sub">Questions / Screening calls</div>
+          <div class="kpi-card" onclick="setInboxFilter('matched')" style="border-color:rgba(56,189,248,0.3);cursor:pointer" title="Click to view job-matched replies">
+            <div class="kpi-label">💼 Matched to Job</div>
+            <div class="kpi-value" id="inboxKpiAction" style="color:var(--cyan-light)">0</div>
+            <div class="kpi-sub">Linked to applications</div>
           </div>
-          <div class="kpi-card" style="border-color:rgba(239,68,68,0.3)">
+          <div class="kpi-card" onclick="setInboxFilter('rejection')" style="border-color:rgba(239,68,68,0.3);cursor:pointer" title="Click to view rejections">
             <div class="kpi-label">⛔ Rejections</div>
             <div class="kpi-value" id="inboxKpiRejections" style="color:var(--bad)">0</div>
             <div class="kpi-sub">Auto-classified & filed</div>
           </div>
-          <div class="kpi-card">
+          <div class="kpi-card" onclick="setInboxFilter('bounce')" style="cursor:pointer" title="Click to view delivery bounces">
             <div class="kpi-label">⚠️ Bounces</div>
             <div class="kpi-value" id="inboxKpiBounces" style="color:var(--text-muted)">0</div>
             <div class="kpi-sub">Delivery failures handled</div>
@@ -1271,6 +1275,7 @@
             <button id="inboxChipMatched" class="btn btn-sm" onclick="setInboxFilter('matched')">💼 Job Matched</button>
             <button id="inboxChipRejection" class="btn btn-sm" onclick="setInboxFilter('rejection')">⛔ Rejections</button>
             <button id="inboxChipBounce" class="btn btn-sm" onclick="setInboxFilter('bounce')">⚠️ Delivery Bounces</button>
+            <button id="inboxChipUnmatched" class="btn btn-sm" onclick="setInboxFilter('unmatched')">❓ Unmatched</button>
           </div>
           <div style="display:flex;align-items:center;gap:8px">
             <button class="btn btn-sm" onclick="triggerCheckInbox()" style="border-color:rgba(56,189,248,0.4);color:var(--cyan-light)">
@@ -1286,7 +1291,7 @@
             <option value="matched">Matched to Job</option>
             <option value="interview">Interviews & Offers</option>
             <option value="rejection">Rejections</option>
-            <option value="bounced">Delivery Bounces</option>
+            <option value="bounce">Delivery Bounces</option>
             <option value="unmatched">Unmatched</option>
           </select>
         </div>
@@ -1313,27 +1318,27 @@
       <div id="jOutboundSection" class="panel" style="display:none">
         <!-- Outreach KPI Cards -->
         <div class="kpi-grid" style="grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));margin-bottom:16px">
-          <div class="kpi-card">
+          <div class="kpi-card" onclick="setOutboundFilter('')" style="cursor:pointer" title="Click to view all outreach">
             <div class="kpi-label">Total Outbound</div>
             <div class="kpi-value" id="outboundKpiTotal" style="color:var(--cyan-light)">0</div>
             <div class="kpi-sub">Applications tracked</div>
           </div>
-          <div class="kpi-card" style="border-color:rgba(16,185,129,0.3)">
+          <div class="kpi-card" onclick="setOutboundFilter('email')" style="border-color:rgba(16,185,129,0.3);cursor:pointer" title="Click to view direct emails">
             <div class="kpi-label">✉️ Emails Sent</div>
             <div class="kpi-value" id="outboundKpiSent" style="color:var(--good)">0</div>
             <div class="kpi-sub">Direct recruiter outreach</div>
           </div>
-          <div class="kpi-card" style="border-color:rgba(168,85,247,0.3)">
+          <div class="kpi-card" onclick="setOutboundFilter('portal')" style="border-color:rgba(168,85,247,0.3);cursor:pointer" title="Click to view web submissions">
             <div class="kpi-label">🌐 Web Submissions</div>
             <div class="kpi-value" id="outboundKpiWeb" style="color:var(--purple-light)">0</div>
             <div class="kpi-sub">LinkedIn, Indeed & ATS</div>
           </div>
-          <div class="kpi-card" style="border-color:rgba(56,189,248,0.3)">
+          <div class="kpi-card" onclick="setOutboundFilter('draft')" style="border-color:rgba(56,189,248,0.3);cursor:pointer" title="Click to view draft applications">
             <div class="kpi-label">📝 Drafts Ready</div>
             <div class="kpi-value" id="outboundKpiDrafts" style="color:var(--cyan)">0</div>
             <div class="kpi-sub">Tailored CV & Letter ready</div>
           </div>
-          <div class="kpi-card" style="border-color:rgba(245,158,11,0.3)">
+          <div class="kpi-card" onclick="setOutboundFilter('blocked')" style="border-color:rgba(245,158,11,0.3);cursor:pointer" title="Click to view blocked or failed applications">
             <div class="kpi-label">⚠️ Blocked / Failed</div>
             <div class="kpi-value" id="outboundKpiBlocked" style="color:var(--warn)">0</div>
             <div class="kpi-sub">Quota or safety holds</div>
@@ -1346,12 +1351,17 @@
             <span style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px">Filter:</span>
             <button id="outboundChipAll" class="btn btn-sm btn-cyan" onclick="setOutboundFilter('')">All Outreach</button>
             <button id="outboundChipSent" class="btn btn-sm" onclick="setOutboundFilter('sent')">✓ Sent & Submitted</button>
+            <button id="outboundChipLinkedIn" class="btn btn-sm" onclick="setOutboundFilter('linkedin')" style="border-color:rgba(10,102,194,0.4);color:#60a5fa">💼 LinkedIn</button>
+            <button id="outboundChipIndeed" class="btn btn-sm" onclick="setOutboundFilter('indeed')" style="border-color:rgba(37,99,235,0.4);color:#93c5fd">🔵 Indeed</button>
             <button id="outboundChipDraft" class="btn btn-sm" onclick="setOutboundFilter('draft')">📝 Drafts Ready</button>
             <button id="outboundChipEmail" class="btn btn-sm" onclick="setOutboundFilter('email')">✉️ Email Channel</button>
             <button id="outboundChipPortal" class="btn btn-sm" onclick="setOutboundFilter('portal')">🌐 Web Portals</button>
             <button id="outboundChipBlocked" class="btn btn-sm" onclick="setOutboundFilter('blocked')">⚠️ Blocked / Failed</button>
           </div>
           <div style="display:flex;align-items:center;gap:8px">
+            <button class="btn btn-sm" onclick="openRecordExternalModal()" style="border-color:rgba(10,102,194,0.5);color:#60a5fa;font-weight:700" title="Log an application made directly on LinkedIn, Indeed, or Web">
+              <span>💼</span> + Log External Application
+            </button>
             <button class="btn btn-sm btn-cyan" onclick="triggerBatchApply()" title="Run batch application on all eligible matches">
               <span>⚡</span> Apply Pending Matches
             </button>
@@ -1359,15 +1369,17 @@
         </div>
 
         <div class="filter-bar" style="margin-bottom:12px">
-          <input type="text" id="outboundSearchInput" class="grow" placeholder="🔍 Search outreach by company, role, recipient, subject, or channel..." oninput="debounce(loadOutbound, 250)()">
-          <select id="outboundStatusFilter" onchange="loadOutbound()" style="min-width:160px">
-            <option value="">All Statuses</option>
+          <input type="text" id="outboundSearchInput" class="grow" placeholder="🔍 Search outreach by company, role, recipient, subject, or channel (e.g. LinkedIn, Indeed)..." oninput="debounce(loadOutbound, 250)()">
+          <select id="outboundStatusFilter" onchange="loadOutbound()" style="min-width:180px">
+            <option value="">All Statuses & Channels</option>
             <option value="sent">Sent / Submitted</option>
+            <option value="linkedin">💼 LinkedIn Applications</option>
+            <option value="indeed">🔵 Indeed Applications</option>
             <option value="draft">Drafts Pending</option>
-            <option value="failed">Failed</option>
-            <option value="blocked">Blocked / Suppressed</option>
             <option value="email">Email Channel</option>
             <option value="portal">Web Portals</option>
+            <option value="failed">Failed</option>
+            <option value="blocked">Blocked / Suppressed</option>
           </select>
         </div>
 
@@ -2088,7 +2100,7 @@
   <!-- ================================================================= -->
   <!-- MODAL: FREELANCE LEAD & PITCH STUDIO -->
   <!-- ================================================================= -->
-  <div id="leadModal" class="modal-backdrop" onclick="if(event.target===this)closeLeadModal()">
+  <div id="leadModal" class="modal-backdrop" style="display:none;z-index:9999" onclick="if(event.target===this)closeLeadModal()">
     <div class="modal-card">
       <div class="modal-header">
         <div>
@@ -2253,7 +2265,7 @@
   <!-- ================================================================= -->
   <!-- MODAL: JOB DETAIL VIEWER -->
   <!-- ================================================================= -->
-  <div id="jobModal" class="modal-backdrop" onclick="if(event.target===this)closeJobModal()">
+  <div id="jobModal" class="modal-backdrop" style="display:none;z-index:9999" onclick="if(event.target===this)closeJobModal()">
     <div class="modal-card">
       <div class="modal-header">
         <div>
@@ -2268,12 +2280,24 @@
         <button class="btn btn-sm btn-icon" onclick="closeJobModal()">✕</button>
       </div>
       <div class="modal-body">
-        <div class="filter-bar" style="justify-content:space-between">
-          <div style="display:flex;align-items:center;gap:8px">
-            <span style="font-size:12px;font-weight:600;color:var(--text-muted)">Update Stage:</span>
-            <select id="modalJobStageSelect" onchange="saveJobStage()"></select>
+        <div class="filter-bar" style="justify-content:space-between;flex-wrap:wrap;gap:10px">
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <div style="display:flex;align-items:center;gap:6px">
+              <span style="font-size:12px;font-weight:600;color:var(--text-muted)">Stage:</span>
+              <select id="modalJobStageSelect" onchange="saveJobStage()"></select>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <span style="font-size:12px;font-weight:600;color:var(--text-muted)">Apply Channel:</span>
+              <select id="modalJobChannelSelect" onchange="saveJobChannel(this.value)" style="border-color:rgba(56,189,248,0.4);font-weight:600">
+                <option value="">— Auto / Unspecified —</option>
+                <option value="linkedin">💼 LinkedIn (Easy Apply / InMail)</option>
+                <option value="indeed">🔵 Indeed (Apply / Direct)</option>
+                <option value="web_portal">🌐 Company ATS / Portal</option>
+                <option value="recruiter_email">✉️ Recruiter Email</option>
+              </select>
+            </div>
           </div>
-          <div id="modalJobLinks" style="display:flex;gap:8px"></div>
+          <div id="modalJobLinks" style="display:flex;gap:8px;flex-wrap:wrap"></div>
         </div>
         <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px;">
           <div class="kpi-card"><div class="kpi-label">Match Score</div><div class="kpi-value" id="mJobScore">0</div></div>
@@ -2333,7 +2357,11 @@
             <div style="font-size:12px"><span style="color:var(--text-muted)">Alt Emails:</span> <strong id="mJobAppEmails" style="word-break:break-all">—</strong></div>
             <div style="font-size:12px"><span style="color:var(--text-muted)">Company URL:</span> <span id="mJobCompanyUrl">—</span></div>
             <div style="font-size:12px"><span style="color:var(--text-muted)">App Status:</span> <strong id="mJobAppStatus">—</strong></div>
-            <div style="font-size:12px"><span style="color:var(--text-muted)">App Method:</span> <strong id="mJobAppMethod">—</strong></div>
+            <div style="font-size:12px;display:flex;align-items:center;gap:6px">
+              <span style="color:var(--text-muted)">App Method:</span>
+              <strong id="mJobAppMethod">—</strong>
+              <button type="button" class="btn btn-sm" onclick="openSpecifyAppModal(currentActiveJob?.id)" style="padding:1px 6px;font-size:10px;border-color:rgba(56,189,248,0.4);color:var(--cyan-light)" title="Specify or change channel">✎ Change</button>
+            </div>
             <div style="font-size:12px"><span style="color:var(--text-muted)">Thread Subject:</span> <strong id="mJobThreadSubject" style="word-break:break-all">—</strong></div>
           </div>
         </div>
@@ -2380,6 +2408,7 @@
             </div>
           </div>
           <div id="mJobMlFitNote" style="font-size:11px;color:var(--text-muted);background:rgba(0,0,0,0.25);padding:6px 10px;border-radius:4px"></div>
+        </div>
         <!-- Company-Dedicated Motivation Letter (.docx) Card -->
         <div class="panel" style="background:linear-gradient(180deg, rgba(30,58,138,0.18) 0%, rgba(15,23,42,0.85) 100%);border:1px solid rgba(59,130,246,0.35);border-radius:var(--radius-md);padding:14px;margin-bottom:16px;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px">
@@ -2411,6 +2440,7 @@
         <h4 style="font-size:13px;text-transform:uppercase;color:var(--text-muted);margin:16px 0 6px">Email Conversation History</h4>
         <div id="mJobEmails" class="timeline"></div>
       </div>
+    </div>
   </div>
 
   <!-- MODAL: INBOX THREAD & REPLY READER -->
@@ -2506,7 +2536,126 @@
     </div>
   </div>
 
-  <!-- Toast Notifications Container -->
+  <!-- MODAL: SPECIFY APPLICATION CHANNEL FOR A JOB -->
+  <div id="specifyAppModal" class="modal-backdrop" style="display:none;z-index:9999" onclick="if(event.target===this)closeSpecifyAppModal()">
+    <div class="modal-card" style="max-width:540px;width:95%">
+      <div class="modal-header">
+        <div>
+          <h3 style="font-size:17px;font-weight:700;margin:0 0 4px">📌 Specify Application Channel</h3>
+          <div id="specifyAppModalSub" style="font-size:12px;color:var(--text-muted)">Record how this application was submitted</div>
+        </div>
+        <button class="btn btn-sm btn-icon" onclick="closeSpecifyAppModal()">✕</button>
+      </div>
+      <div class="modal-body" style="padding:20px">
+        <input type="hidden" id="specifyAppJobId">
+        <div style="margin-bottom:16px">
+          <label style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;display:block;margin-bottom:8px">Select Application Channel *</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <button type="button" id="btnSpecChanLinkedin" class="btn btn-sm" onclick="setSpecifyChannelChoice('linkedin')" style="border-color:rgba(10,102,194,0.5);color:#60a5fa;font-weight:700;justify-content:center;padding:10px">
+              💼 LinkedIn
+            </button>
+            <button type="button" id="btnSpecChanIndeed" class="btn btn-sm" onclick="setSpecifyChannelChoice('indeed')" style="border-color:rgba(37,99,235,0.5);color:#93c5fd;font-weight:700;justify-content:center;padding:10px">
+              🔵 Indeed
+            </button>
+            <button type="button" id="btnSpecChanPortal" class="btn btn-sm" onclick="setSpecifyChannelChoice('web_portal')" style="border-color:rgba(168,85,247,0.5);color:var(--purple-light);font-weight:700;justify-content:center;padding:10px">
+              🌐 Web Portal / ATS
+            </button>
+            <button type="button" id="btnSpecChanEmail" class="btn btn-sm" onclick="setSpecifyChannelChoice('recruiter_email')" style="border-color:rgba(16,185,129,0.5);color:var(--good);font-weight:700;justify-content:center;padding:10px">
+              ✉️ Direct Email
+            </button>
+          </div>
+          <input type="hidden" id="specifyAppChannelVal" value="linkedin">
+        </div>
+
+        <div style="margin-bottom:14px">
+          <label style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;display:block;margin-bottom:6px">Status</label>
+          <select id="specifyAppStatusSelect" style="width:100%">
+            <option value="submitted">✓ Submitted / Applied</option>
+            <option value="sent">✉️ Sent</option>
+            <option value="draft">📝 Draft Pending</option>
+          </select>
+        </div>
+
+        <div style="margin-bottom:14px">
+          <label style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;display:block;margin-bottom:6px">Application URL (Optional)</label>
+          <input type="text" id="specifyAppUrlInput" placeholder="https://www.linkedin.com/jobs/view/... or Indeed link" style="width:100%">
+        </div>
+
+        <div style="margin-bottom:14px">
+          <label style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;display:block;margin-bottom:6px">Notes / Details (Optional)</label>
+          <input type="text" id="specifyAppNotesInput" placeholder="Applied with tailored CV, sent InMail to hiring manager..." style="width:100%">
+        </div>
+
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px;border-top:1px solid var(--border);padding-top:16px">
+          <button type="button" class="btn" onclick="closeSpecifyAppModal()">Cancel</button>
+          <button type="button" class="btn btn-cyan" onclick="submitSpecifyApplication()" style="font-weight:700">
+            <span>✓</span> Save Application Channel
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: LOG EXTERNAL APPLICATION (LINKEDIN / INDEED / WEB) -->
+  <div id="recordExternalModal" class="modal-backdrop" style="display:none;z-index:9999" onclick="if(event.target===this)closeRecordExternalModal()">
+    <div class="modal-card" style="max-width:580px;width:95%">
+      <div class="modal-header">
+        <div>
+          <h3 style="font-size:17px;font-weight:700;margin:0 0 4px">💼 + Log External Application</h3>
+          <div style="font-size:12px;color:var(--text-muted)">Record an application made on LinkedIn, Indeed, or company site into your Outreach Ledger</div>
+        </div>
+        <button class="btn btn-sm btn-icon" onclick="closeRecordExternalModal()">✕</button>
+      </div>
+      <div class="modal-body" style="padding:20px">
+        <div style="margin-bottom:14px">
+          <label style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;display:block;margin-bottom:6px">Company Name *</label>
+          <input type="text" id="extAppCompany" placeholder="e.g. Google, Microsoft, Startup Inc." style="width:100%" required>
+        </div>
+
+        <div style="margin-bottom:14px">
+          <label style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;display:block;margin-bottom:6px">Job Title / Role *</label>
+          <input type="text" id="extAppTitle" placeholder="e.g. Senior Full Stack Engineer" style="width:100%" required>
+        </div>
+
+        <div style="margin-bottom:16px">
+          <label style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;display:block;margin-bottom:8px">Platform / Channel *</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <button type="button" id="btnExtChanLinkedin" class="btn btn-sm btn-cyan" onclick="setExtChannelChoice('linkedin')" style="border-color:rgba(10,102,194,0.5);font-weight:700;justify-content:center;padding:10px">
+              💼 LinkedIn
+            </button>
+            <button type="button" id="btnExtChanIndeed" class="btn btn-sm" onclick="setExtChannelChoice('indeed')" style="border-color:rgba(37,99,235,0.5);font-weight:700;justify-content:center;padding:10px">
+              🔵 Indeed
+            </button>
+            <button type="button" id="btnExtChanPortal" class="btn btn-sm" onclick="setExtChannelChoice('web_portal')" style="border-color:rgba(168,85,247,0.5);font-weight:700;justify-content:center;padding:10px">
+              🌐 Company ATS / Site
+            </button>
+            <button type="button" id="btnExtChanEmail" class="btn btn-sm" onclick="setExtChannelChoice('recruiter_email')" style="border-color:rgba(16,185,129,0.5);font-weight:700;justify-content:center;padding:10px">
+              ✉️ Direct Recruiter Email
+            </button>
+          </div>
+          <input type="hidden" id="extAppChannelVal" value="linkedin">
+        </div>
+
+        <div style="margin-bottom:14px">
+          <label style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;display:block;margin-bottom:6px">Job / Application URL (Optional)</label>
+          <input type="text" id="extAppUrl" placeholder="https://www.linkedin.com/jobs/view/... or Indeed URL" style="width:100%">
+        </div>
+
+        <div style="margin-bottom:14px">
+          <label style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;display:block;margin-bottom:6px">Notes & Follow-Up Context (Optional)</label>
+          <textarea id="extAppNotes" rows="2" placeholder="Mentioned referral from colleague, applied with CV v2..." style="width:100%;font-size:12px;padding:8px"></textarea>
+        </div>
+
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px;border-top:1px solid var(--border);padding-top:16px">
+          <button type="button" class="btn" onclick="closeRecordExternalModal()">Cancel</button>
+          <button type="button" class="btn btn-cyan" onclick="submitRecordExternalApplication()" style="font-weight:700">
+            <span>✓</span> Record to Outreach Ledger
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="toastContainer" class="toast-container"></div>
 
   <!-- MODAL: UNIVERSAL MULTI-METHOD PAYMENT & PROOF CHECKOUT -->
@@ -3322,7 +3471,7 @@
     </div>
   </div>
 
-  <script src="/static/js/app.js?v=6.4.0"></script>
+  <script src="/static/js/app.js?v=6.5.2"></script>
   <!-- Real-Time Floating Notification Toasts -->
   <div id="notifToastContainer" style="position:fixed;bottom:96px;right:24px;display:flex;flex-direction:column-reverse;gap:10px;z-index:99999;pointer-events:none"></div>
 

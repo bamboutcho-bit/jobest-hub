@@ -59,10 +59,21 @@ def get_user_effective_settings(user_id: Optional[int] = None) -> dict[str, Any]
 
     try:
         with get_session() as session:
+            user_setting = None
             if user_id:
                 user_setting = session.scalar(select(UserSetting).where(UserSetting.user_id == user_id))
-            else:
+            if not user_setting:
+                # Fallback to admin user's settings
+                try:
+                    from src.storage.models import User, UserRole
+                    admin = session.scalar(select(User).where(User.role == UserRole.ADMIN.value).order_by(User.id))
+                    if admin:
+                        user_setting = session.scalar(select(UserSetting).where(UserSetting.user_id == admin.id))
+                except Exception:
+                    pass
+            if not user_setting:
                 user_setting = session.scalar(select(UserSetting).order_by(UserSetting.updated_at.desc()).limit(1))
+
             if user_setting:
                 if user_setting.sender_email and (user_setting.smtp_password or user_setting.sender_email == settings.sender_email):
                     effective["sender_email"] = user_setting.sender_email
@@ -112,6 +123,14 @@ def get_user_effective_settings(user_id: Optional[int] = None) -> dict[str, Any]
                             # Also map top-level keys if overridden
                             for k, v in custom.items():
                                 effective[k.lower()] = v
+                            if "LINKEDIN_COOKIE" in custom:
+                                effective["linkedin_cookie"] = custom["LINKEDIN_COOKIE"]
+                            if "INDEED_COOKIE" in custom:
+                                effective["indeed_cookie"] = custom["INDEED_COOKIE"]
+                            if "AUTO_APPLY_LINKEDIN_ENABLED" in custom:
+                                effective["auto_apply_linkedin_enabled"] = custom["AUTO_APPLY_LINKEDIN_ENABLED"]
+                            if "AUTO_APPLY_INDEED_ENABLED" in custom:
+                                effective["auto_apply_indeed_enabled"] = custom["AUTO_APPLY_INDEED_ENABLED"]
                     except Exception:
                         pass
     except Exception as exc:

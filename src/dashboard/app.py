@@ -117,7 +117,7 @@ def _aware_dt(value: datetime | None) -> datetime | None:
 def _stage_counts(session, user_id: int | None = None) -> dict[str, int]:
     stmt = select(JobPosting.pipeline_stage, func.count())
     if user_id is not None:
-        stmt = stmt.where(JobPosting.user_id == user_id)
+        stmt = stmt.where(or_(JobPosting.user_id == user_id, JobPosting.user_id.is_(None)))
     rows = session.execute(stmt.group_by(JobPosting.pipeline_stage)).all()
     return {stage.value if hasattr(stage, "value") else str(stage): int(count) for stage, count in rows}
 
@@ -182,6 +182,28 @@ def _job_dict(job: JobPosting) -> dict:
 
 class StageUpdate(BaseModel):
     stage: str
+    application_method: str | None = None
+    application_status: str | None = None
+    notes: str | None = None
+
+
+class RecordApplicationPayload(BaseModel):
+    channel: str = "linkedin"  # linkedin, indeed, web_portal, recruiter_email
+    status: str = "submitted"
+    applied_at: str | None = None
+    notes: str | None = None
+    application_url: str | None = None
+
+
+class RecordExternalOutreachPayload(BaseModel):
+    job_id: int | None = None
+    company: str
+    job_title: str
+    channel: str = "linkedin"  # linkedin, indeed, web_portal, recruiter_email
+    status: str = "submitted"
+    applied_at: str | None = None
+    job_url: str | None = None
+    notes: str | None = None
 
 
 class SuppressionCreate(BaseModel):
@@ -307,7 +329,7 @@ def startup():
 def health():
     try:
         with get_session() as session:
-            session.execute(select(func.count(JobPosting.id))).scalar_one()
+            session.execute(select(1)).scalar_one()
         return {"status": "ok", "utc": datetime.now(timezone.utc).isoformat()}
     except Exception as exc:
         return JSONResponse(status_code=503, content={"status": "error", "error": str(exc)})
@@ -362,7 +384,9 @@ def api_summary(request: Request, _: bool = Depends(_auth)):
             total_user_apps = session.scalar(select(func.count(UserJobApplication.id)).where(UserJobApplication.applied_at >= day_start)) or 0
             applications_today = max(total_job_apps, total_user_apps)
         else:
-            applications_today = session.scalar(_scope_q(select(func.count(JobPosting.id)).where(JobPosting.applied_at >= day_start))) or 0
+            job_apps = session.scalar(_scope_q(select(func.count(JobPosting.id)).where(JobPosting.applied_at >= day_start))) or 0
+            user_apps = (session.scalar(select(func.count(UserJobApplication.id)).where(UserJobApplication.user_id == user_id, UserJobApplication.applied_at >= day_start)) or 0) if user_id else 0
+            applications_today = max(job_apps, user_apps)
         application_failures_today = session.scalar(_scope_q(select(func.count(JobPosting.id)).where(JobPosting.application_attempted_at >= day_start, JobPosting.application_status.in_(["error", "blocked", "application_error"])))) or 0
         application_manual_today = session.scalar(_scope_q(select(func.count(JobPosting.id)).where(JobPosting.application_attempted_at >= day_start, JobPosting.application_status.like("manual%")))) or 0
         if not is_admin and user_id is not None:
@@ -603,7 +627,10 @@ def api_jobs(
     with get_session() as session:
         query = select(JobPosting)
         if user_id is not None:
-            query = query.where(JobPosting.user_id == user_id)
+            if user and user.role == "admin":
+                query = query.where(or_(JobPosting.user_id == user_id, JobPosting.user_id.is_(None)))
+            else:
+                query = query.where(JobPosting.user_id == user_id)
         if stage:
             if stage in ("applied", "applied_all"):
                 query = query.where(
@@ -631,13 +658,13 @@ def api_jobs(
                 except ValueError:
                     raise HTTPException(400, "Invalid stage")
         if continent and continent != "all":
-            query = query.where(JobPosting.continent == continent)
+            query = query.where(func.lower(JobPosting.continent) == continent.strip().lower())
         if experience and experience != "all":
-            query = query.where(JobPosting.experience_level == experience)
+            query = query.where(func.lower(JobPosting.experience_level) == experience.strip().lower())
         if degree and degree != "all":
-            query = query.where(JobPosting.degree_required == degree)
+            query = query.where(func.lower(JobPosting.degree_required) == degree.strip().lower())
         if visa and visa != "all":
-            query = query.where(JobPosting.visa_category == visa)
+            query = query.where(func.lower(JobPosting.visa_category) == visa.strip().lower())
         if min_score is not None and min_score > 0:
             query = query.where(JobPosting.match_score >= min_score)
         if q:
@@ -669,9 +696,9 @@ def re_evaluate_batch_jobs(force_all: bool = True, _: bool = Depends(_auth)):
         for job in jobs:
             result = evaluate_heuristic(job, profile)
             job.match_score = result.get("score", job.match_score or 0)
-            job.key_skills_matched = json.dumps(result.get("skills", []), ensure_ascii=False)
-            job.visa_sponsorship_detected = result.get("visa_sponsored", job.visa_sponsorship_detected)
-            job.visa_status_notes = result.get("visa_notes", job.visa_status_notes)
+            job.key_skills_matched = json.dumps(result.get("key_skills_matched", []), ensure_ascii=False)
+            job.visa_sponsorship_detected = bool(result.get("visa_sponsorship_detected", job.visa_sponsorship_detected))
+            job.visa_status_notes = result.get("visa_status_notes", job.visa_status_notes)
             job.evaluation_reason = result.get("reason", job.evaluation_reason)
             job.continent = result.get("continent", job.continent or "Europe")
             job.experience_level = result.get("experience_level", job.experience_level or "entry")
@@ -683,6 +710,8 @@ def re_evaluate_batch_jobs(force_all: bool = True, _: bool = Depends(_auth)):
             job.evaluated = True
             job.evaluation_status = "evaluated"
             job.evaluation_method = "heuristic"
+            if job.pipeline_stage != PipelineStage.APPLIED:
+                job.pipeline_stage = PipelineStage.EVALUATED_MATCH if (job.match_score >= (settings.min_match_score or 65)) else PipelineStage.EVALUATED_LOW
             updated_count += 1
         session.commit()
         return {"ok": True, "updated": updated_count}
@@ -727,7 +756,7 @@ def api_job_screenshot(job_id: int, _: bool = Depends(_auth)):
 
 
 @app.patch("/api/jobs/{job_id}/stage")
-def update_stage(job_id: int, payload: StageUpdate, _: bool = Depends(_auth)):
+def update_stage(job_id: int, payload: StageUpdate, request: Request, _: bool = Depends(_auth)):
     try:
         stage = PipelineStage(payload.stage)
     except ValueError:
@@ -738,6 +767,41 @@ def update_stage(job_id: int, payload: StageUpdate, _: bool = Depends(_auth)):
             raise HTTPException(404, "Job not found")
         prev_stage = job.pipeline_stage
         job.pipeline_stage = stage
+
+        if payload.application_method:
+            job.application_method = payload.application_method.strip().lower()
+        if payload.application_status:
+            job.application_status = payload.application_status.strip().lower()
+
+        if stage == PipelineStage.APPLIED or payload.application_method:
+            if not job.applied_at:
+                job.applied_at = datetime.now(timezone.utc)
+            if not job.application_status or job.application_status in ("not_attempted", "pending"):
+                job.application_status = "submitted"
+
+            from src.auth.service import get_current_user_optional
+            from src.storage.models import UserJobApplication
+            user = get_current_user_optional(request)
+            uid = user.id if user else (job.user_id or 1)
+            user_app = session.scalar(
+                select(UserJobApplication).where(UserJobApplication.job_id == job.id, UserJobApplication.user_id == uid)
+            )
+            if not user_app:
+                user_app = UserJobApplication(
+                    user_id=uid,
+                    job_id=job.id,
+                    application_method=job.application_method or "web_portal",
+                    applied_at=job.applied_at or datetime.now(timezone.utc),
+                    status=job.application_status or "submitted",
+                )
+                session.add(user_app)
+            else:
+                if job.application_method:
+                    user_app.application_method = job.application_method
+                user_app.status = job.application_status or "submitted"
+                if job.applied_at:
+                    user_app.applied_at = job.applied_at
+
         if stage in (PipelineStage.INTERVIEW_SCHEDULED, PipelineStage.INTERVIEW_REQUESTED) and prev_stage != stage:
             try:
                 from src.alerting.telegram_bot import send_telegram_interview_alert
@@ -749,7 +813,129 @@ def update_stage(job_id: int, payload: StageUpdate, _: bool = Depends(_auth)):
                 })
             except Exception as e:
                 logging.getLogger("src.dashboard").debug("Failed to send stage change Telegram alert: %s", e)
+        session.commit()
         return {"ok": True, "job": _job_dict(job)}
+
+
+@app.post("/api/jobs/{job_id}/record_application")
+def record_job_application(job_id: int, payload: RecordApplicationPayload, request: Request, _: bool = Depends(_auth)):
+    from src.auth.service import get_current_user_optional
+    from src.storage.models import UserJobApplication
+    channel = (payload.channel or "linkedin").strip().lower()
+    with get_session() as session:
+        job = session.get(JobPosting, job_id)
+        if not job:
+            raise HTTPException(404, "Job not found")
+
+        job.pipeline_stage = PipelineStage.APPLIED
+        job.application_method = channel
+        job.application_status = payload.status or "submitted"
+        if payload.applied_at:
+            try:
+                job.applied_at = datetime.fromisoformat(payload.applied_at.replace("Z", "+00:00"))
+            except Exception:
+                job.applied_at = datetime.now(timezone.utc)
+        else:
+            job.applied_at = datetime.now(timezone.utc)
+
+        if payload.application_url:
+            job.application_url = payload.application_url
+        if payload.notes:
+            prev_notes = job.interview_notes or ""
+            job.interview_notes = f"{prev_notes}\n[Channel Note ({channel})]: {payload.notes}".strip()
+
+        user = get_current_user_optional(request)
+        uid = user.id if user else (job.user_id or 1)
+        user_app = session.scalar(
+            select(UserJobApplication).where(UserJobApplication.job_id == job.id, UserJobApplication.user_id == uid)
+        )
+        if not user_app:
+            user_app = UserJobApplication(
+                user_id=uid,
+                job_id=job.id,
+                application_method=channel,
+                applied_at=job.applied_at,
+                status=payload.status or "submitted",
+            )
+            session.add(user_app)
+        else:
+            user_app.application_method = channel
+            user_app.applied_at = job.applied_at
+            user_app.status = payload.status or "submitted"
+
+        session.commit()
+        return {"ok": True, "job": _job_dict(job), "channel": channel}
+
+
+@app.post("/api/outbound/record_external")
+def record_external_outreach(payload: RecordExternalOutreachPayload, request: Request, _: bool = Depends(_auth)):
+    from src.auth.service import get_current_user_optional
+    from src.storage.models import UserJobApplication
+    user = get_current_user_optional(request)
+    uid = user.id if user else 1
+    channel = (payload.channel or "linkedin").strip().lower()
+
+    with get_session() as session:
+        job = None
+        if payload.job_id:
+            job = session.get(JobPosting, payload.job_id)
+
+        app_date = datetime.now(timezone.utc)
+        if payload.applied_at:
+            try:
+                app_date = datetime.fromisoformat(payload.applied_at.replace("Z", "+00:00"))
+            except Exception:
+                pass
+
+        if not job:
+            dedup = f"ext_{channel}_{abs(hash(payload.company + payload.job_title + str(datetime.now(timezone.utc))))}"
+            job = JobPosting(
+                dedup_hash=dedup,
+                title=payload.job_title.strip(),
+                company=payload.company.strip(),
+                job_url=payload.job_url,
+                source_site=channel,
+                user_id=uid,
+                pipeline_stage=PipelineStage.APPLIED,
+                application_method=channel,
+                application_status=payload.status or "submitted",
+                applied_at=app_date,
+                match_score=75,
+                interview_notes=payload.notes,
+            )
+            session.add(job)
+            session.flush()
+        else:
+            job.pipeline_stage = PipelineStage.APPLIED
+            job.application_method = channel
+            job.application_status = payload.status or "submitted"
+            job.applied_at = app_date
+            if payload.job_url:
+                job.job_url = payload.job_url
+            if payload.notes:
+                prev = job.interview_notes or ""
+                job.interview_notes = f"{prev}\n[Application Note]: {payload.notes}".strip()
+
+        user_app = session.scalar(
+            select(UserJobApplication).where(UserJobApplication.job_id == job.id, UserJobApplication.user_id == uid)
+        )
+        if not user_app:
+            user_app = UserJobApplication(
+                user_id=uid,
+                job_id=job.id,
+                application_method=channel,
+                applied_at=app_date,
+                status=payload.status or "submitted",
+            )
+            session.add(user_app)
+        else:
+            user_app.application_method = channel
+            user_app.applied_at = app_date
+            user_app.status = payload.status or "submitted"
+
+        session.commit()
+        return {"ok": True, "job_id": job.id, "channel": channel}
+
 
 
 @app.get("/api/inbox")
@@ -760,16 +946,88 @@ def api_inbox(request: Request, limit: int = 250, status_filter: str | None = No
     user_id = user.id if user else None
     is_admin = user and user.role == "admin"
     all_users = bool(request.query_params.get("all_users"))
+    sf = (status_filter or request.query_params.get("status_filter") or "").strip().lower()
+    search = search or request.query_params.get("search")
 
     with get_session() as session:
         query = select(InboxMessage)
         if not (is_admin and all_users) and user_id is not None:
             query = query.outerjoin(JobPosting, InboxMessage.job_id == JobPosting.id).where(
-                or_(InboxMessage.user_id == user_id, JobPosting.user_id == user_id)
+                or_(InboxMessage.user_id == user_id, JobPosting.user_id == user_id, InboxMessage.user_id.is_(None))
             )
-        if status_filter:
-            if status_filter in ("matched", "unmatched", "duplicate", "bounced", "bounced_unmatched"):
-                query = query.where(InboxMessage.status == status_filter)
+
+        if sf:
+            if sf in ("bounce", "bounced", "delivery_bounce", "bounces"):
+                query = query.where(
+                    or_(
+                        InboxMessage.status.in_(["bounced", "bounced_unmatched"]),
+                        InboxMessage.status.ilike("%bounce%"),
+                        InboxMessage.reason.ilike("%bounce%"),
+                        InboxMessage.reason.ilike("%delivery%"),
+                    )
+                )
+            elif sf in ("matched", "job_matched"):
+                query = query.where(
+                    or_(
+                        InboxMessage.job_id.isnot(None),
+                        InboxMessage.status == "matched",
+                    )
+                )
+            elif sf == "unmatched":
+                query = query.where(
+                    and_(
+                        InboxMessage.status == "unmatched",
+                        InboxMessage.status.notin_(["bounced", "bounced_unmatched"]),
+                    )
+                )
+            elif sf in ("interview", "interviews", "offer", "offers"):
+                query = query.where(
+                    or_(
+                        InboxMessage.job_id.in_(
+                            select(JobPosting.id).where(JobPosting.pipeline_stage.in_([
+                                PipelineStage.INTERVIEW_REQUESTED,
+                                PipelineStage.INTERVIEW_SCHEDULED,
+                                PipelineStage.OFFER_RECEIVED,
+                            ]))
+                        ),
+                        InboxMessage.message_id.in_(
+                            select(EmailEvent.message_id).where(EmailEvent.classified_intent.in_(["interview_request", "offer"]))
+                        ),
+                        InboxMessage.subject.ilike("%interview%"),
+                        InboxMessage.reason.ilike("%interview%"),
+                    )
+                )
+            elif sf in ("rejection", "rejections", "rejected"):
+                query = query.where(
+                    or_(
+                        InboxMessage.job_id.in_(
+                            select(JobPosting.id).where(JobPosting.pipeline_stage == PipelineStage.REJECTED)
+                        ),
+                        InboxMessage.message_id.in_(
+                            select(EmailEvent.message_id).where(EmailEvent.classified_intent == "rejection")
+                        ),
+                        InboxMessage.subject.ilike("%unfortunat%"),
+                        InboxMessage.subject.ilike("%regret%"),
+                        InboxMessage.subject.ilike("%not moving forward%"),
+                        InboxMessage.subject.ilike("%candidature non retenue%"),
+                        InboxMessage.subject.ilike("%refus%"),
+                        InboxMessage.reason.ilike("%reject%"),
+                    )
+                )
+            elif sf in ("duplicate",):
+                query = query.where(InboxMessage.status == sf)
+
+        if search:
+            s_like = f"%{search.strip()}%"
+            query = query.where(
+                or_(
+                    InboxMessage.subject.ilike(s_like),
+                    InboxMessage.sender_email.ilike(s_like),
+                    InboxMessage.reason.ilike(s_like),
+                    InboxMessage.status.ilike(s_like),
+                )
+            )
+
         rows = session.scalars(query.order_by(desc(InboxMessage.created_at)).limit(max(1, min(limit, 500)))).all()
 
         results = []
@@ -790,13 +1048,17 @@ def api_inbox(request: Request, limit: int = 250, status_filter: str | None = No
             intent = "reply"
             if event and event.classified_intent:
                 intent = event.classified_intent
-            elif x.status in ("bounced", "bounced_unmatched"):
+            elif "bounce" in (x.status or "").lower() or (x.reason and "bounce" in x.reason.lower()) or (x.reason and "delivery" in x.reason.lower()):
                 intent = "bounce"
             elif job and getattr(job, "pipeline_stage", None) in (PipelineStage.INTERVIEW_REQUESTED, PipelineStage.INTERVIEW_SCHEDULED):
                 intent = "interview_request"
             elif job and getattr(job, "pipeline_stage", None) == PipelineStage.OFFER_RECEIVED:
                 intent = "offer"
             elif job and getattr(job, "pipeline_stage", None) == PipelineStage.REJECTED:
+                intent = "rejection"
+            elif "interview" in (x.subject or "").lower() or (x.reason and "interview" in x.reason.lower()):
+                intent = "interview_request"
+            elif any(w in (x.subject or "").lower() for w in ["unfortunat", "regret", "not moving forward", "candidature non retenue", "refus"]) or (x.reason and "reject" in x.reason.lower()):
                 intent = "rejection"
             elif x.status == "unmatched":
                 intent = "unmatched"
@@ -805,21 +1067,25 @@ def api_inbox(request: Request, limit: int = 250, status_filter: str | None = No
             body_clean = " ".join(full_body.split())
             snippet = (body_clean[:180] + "...") if len(body_clean) > 180 else body_clean
 
-            company_name = job.company if job else ("Mailer-Daemon (Delivery Alert)" if "bounced" in (x.status or "") else "External Recruiter")
+            company_name = job.company if job else ("Mailer-Daemon (Delivery Alert)" if ("bounce" in (x.status or "").lower() or intent == "bounce") else "External Recruiter")
             title_name = job.title if job else "Recruiter Response"
 
             if search:
                 s_lower = search.lower()
-                text_to_search = f"{company_name} {title_name} {x.subject or ''} {x.sender_email or ''} {full_body}".lower()
+                text_to_search = f"{company_name} {title_name} {x.subject or ''} {x.sender_email or ''} {full_body} {x.reason or ''}".lower()
                 if s_lower not in text_to_search:
                     continue
 
-            if status_filter and status_filter not in ("matched", "unmatched", "duplicate", "bounced", "bounced_unmatched"):
-                if status_filter == "interview" and intent not in ("interview_request", "offer"):
+            if sf:
+                if sf in ("interview", "interviews", "offer", "offers") and intent not in ("interview_request", "offer"):
                     continue
-                elif status_filter == "rejection" and intent != "rejection":
+                elif sf in ("rejection", "rejections", "rejected") and intent != "rejection":
                     continue
-                elif status_filter == "bounce" and intent != "bounce":
+                elif sf in ("bounce", "bounced", "delivery_bounce", "bounces") and intent != "bounce":
+                    continue
+                elif sf in ("matched", "job_matched") and not (x.job_id or x.status == "matched"):
+                    continue
+                elif sf == "unmatched" and intent != "unmatched":
                     continue
 
             results.append({
@@ -857,7 +1123,7 @@ def api_inbox_stats(request: Request, _: bool = Depends(_auth)):
         query = select(InboxMessage)
         if not (is_admin and all_users) and user_id is not None:
             query = query.outerjoin(JobPosting, InboxMessage.job_id == JobPosting.id).where(
-                or_(InboxMessage.user_id == user_id, JobPosting.user_id == user_id)
+                or_(InboxMessage.user_id == user_id, JobPosting.user_id == user_id, InboxMessage.user_id.is_(None))
             )
         rows = session.scalars(query).all()
         interviews = session.scalar(
@@ -868,13 +1134,17 @@ def api_inbox_stats(request: Request, _: bool = Depends(_auth)):
         rejections = session.scalar(
             select(func.count(JobPosting.id)).where(JobPosting.pipeline_stage == PipelineStage.REJECTED)
         ) or 0
-        bounces = sum(1 for x in rows if "bounced" in (x.status or ""))
+        bounces = sum(1 for x in rows if "bounce" in (x.status or "").lower() or (x.reason and "bounce" in x.reason.lower()))
+        matched = sum(1 for x in rows if x.job_id is not None or x.status == "matched")
+        int_count = max(interviews, sum(1 for x in rows if "interview" in (x.subject or "").lower() or (x.reason and "interview" in x.reason.lower())))
+        rej_count = max(rejections, sum(1 for x in rows if "reject" in (x.reason or "").lower() or any(w in (x.subject or "").lower() for w in ["unfortunat", "regret", "refus"])))
         return {
             "total_replies": len(rows),
-            "interviews": interviews,
-            "rejections": rejections,
+            "interviews": int_count,
+            "rejections": rej_count,
             "bounces": bounces,
-            "action_required": max(0, len(rows) - rejections - bounces),
+            "matched": matched,
+            "action_required": matched,
         }
 
 
@@ -886,33 +1156,162 @@ def api_outbound(request: Request, limit: int = 250, status_filter: str | None =
     user_id = user.id if user else None
     is_admin = user and user.role == "admin"
     all_users = bool(request.query_params.get("all_users"))
+    sf = (status_filter or request.query_params.get("status_filter") or "").strip().lower()
+    search = search or request.query_params.get("search")
 
     with get_session() as session:
-        q_out = select(OutboundMessage)
-        if not (is_admin and all_users) and user_id is not None:
-            q_out = q_out.outerjoin(JobPosting, OutboundMessage.job_id == JobPosting.id).where(
-                or_(OutboundMessage.user_id == user_id, JobPosting.user_id == user_id)
-            )
-        out_rows = session.scalars(q_out.order_by(desc(OutboundMessage.created_at)).limit(max(1, min(limit, 500)))).all()
-
-        q_apps = select(UserJobApplication)
-        if not (is_admin and all_users) and user_id is not None:
-            q_apps = q_apps.where(UserJobApplication.user_id == user_id)
-        app_rows = session.scalars(q_apps.order_by(desc(UserJobApplication.applied_at)).limit(max(1, min(limit, 500)))).all()
-
-        q_jobs = select(JobPosting).where(
-            or_(
-                JobPosting.pipeline_stage == PipelineStage.APPLIED,
-                JobPosting.applied_at.isnot(None),
-                JobPosting.application_status.in_(["sent", "submitted", "draft", "recruiter_email_draft", "blocked", "recruiter_email_blocked", "daily_quota_reached"]),
-            )
-        )
-        if not (is_admin and all_users) and user_id is not None:
-            q_jobs = q_jobs.where(or_(JobPosting.user_id == user_id, JobPosting.user_id.is_(None)))
-        job_rows = session.scalars(q_jobs.order_by(desc(JobPosting.applied_at), desc(JobPosting.id)).limit(max(1, min(limit, 500)))).all()
-
+        fetch_limit = max(1, min(limit, 500))
         seen_jobs = set()
         items = []
+
+        query_out = sf in ("", "sent", "submitted", "email")
+        query_apps = sf in ("", "sent", "submitted", "portal", "ats", "web_portal", "linkedin", "indeed")
+        query_jobs = True
+
+        out_rows = []
+        if query_out:
+            q_out = select(OutboundMessage)
+            if not (is_admin and all_users) and user_id is not None:
+                q_out = q_out.outerjoin(JobPosting, OutboundMessage.job_id == JobPosting.id).where(
+                    or_(OutboundMessage.user_id == user_id, JobPosting.user_id == user_id, OutboundMessage.user_id.is_(None))
+                )
+            if sf in ("sent", "submitted"):
+                q_out = q_out.where(OutboundMessage.status == "sent")
+            if search:
+                s_like = f"%{search.strip()}%"
+                q_out = q_out.where(or_(OutboundMessage.recipient_email.ilike(s_like), OutboundMessage.subject.ilike(s_like)))
+            out_rows = session.scalars(q_out.order_by(desc(OutboundMessage.created_at)).limit(fetch_limit)).all()
+
+        app_rows = []
+        if query_apps:
+            q_apps = select(UserJobApplication)
+            if not (is_admin and all_users) and user_id is not None:
+                q_apps = q_apps.where(UserJobApplication.user_id == user_id)
+            if sf in ("sent", "submitted"):
+                q_apps = q_apps.where(UserJobApplication.status.in_(["submitted", "sent", "submitted_unverified"]))
+            elif sf == "linkedin":
+                q_apps = q_apps.where(UserJobApplication.application_method.ilike("%linkedin%"))
+            elif sf == "indeed":
+                q_apps = q_apps.where(UserJobApplication.application_method.ilike("%indeed%"))
+            elif sf in ("portal", "ats", "web_portal"):
+                q_apps = q_apps.where(UserJobApplication.application_method != "recruiter_email")
+            app_rows = session.scalars(q_apps.order_by(desc(UserJobApplication.applied_at)).limit(fetch_limit)).all()
+
+        job_rows = []
+        if query_jobs:
+            q_jobs = select(JobPosting)
+            if not (is_admin and all_users) and user_id is not None:
+                q_jobs = q_jobs.where(or_(JobPosting.user_id == user_id, JobPosting.user_id.is_(None)))
+
+            if sf in ("blocked", "failed", "recruiter_email_blocked"):
+                q_jobs = q_jobs.where(
+                    JobPosting.application_status.in_(["blocked", "recruiter_email_blocked", "daily_quota_reached", "application_error", "failed"])
+                ).order_by(desc(JobPosting.application_attempted_at), desc(JobPosting.id))
+            elif sf == "draft":
+                q_jobs = q_jobs.where(
+                    JobPosting.application_status.in_(["draft", "recruiter_email_draft"])
+                ).order_by(desc(JobPosting.id))
+            elif sf in ("sent", "submitted"):
+                q_jobs = q_jobs.where(
+                    or_(
+                        JobPosting.pipeline_stage == PipelineStage.APPLIED,
+                        JobPosting.application_status.in_(["sent", "submitted"]),
+                        JobPosting.applied_at.isnot(None),
+                    )
+                ).order_by(desc(JobPosting.applied_at), desc(JobPosting.id))
+            elif sf == "email":
+                q_jobs = q_jobs.where(
+                    and_(
+                        JobPosting.application_email.isnot(None),
+                        JobPosting.application_email != "",
+                        or_(
+                            JobPosting.pipeline_stage == PipelineStage.APPLIED,
+                            JobPosting.application_status.in_(["sent", "submitted", "draft", "blocked"]),
+                            JobPosting.applied_at.isnot(None),
+                        )
+                    )
+                ).order_by(desc(JobPosting.applied_at), desc(JobPosting.id))
+            elif sf == "linkedin":
+                q_jobs = q_jobs.where(
+                    and_(
+                        or_(
+                            JobPosting.pipeline_stage == PipelineStage.APPLIED,
+                            JobPosting.applied_at.isnot(None),
+                            JobPosting.application_status.in_(["sent", "submitted", "draft", "recruiter_email_draft", "blocked", "recruiter_email_blocked", "daily_quota_reached", "application_error", "failed"]),
+                            JobPosting.application_status.like("manual_%"),
+                        ),
+                        or_(
+                            JobPosting.application_method.ilike("%linkedin%"),
+                            and_(
+                                or_(JobPosting.application_method.is_(None), JobPosting.application_method == ""),
+                                or_(
+                                    JobPosting.source_site.ilike("%linkedin%"),
+                                    JobPosting.job_url.ilike("%linkedin.com%"),
+                                    JobPosting.application_url.ilike("%linkedin.com%"),
+                                )
+                            )
+                        )
+                    )
+                ).order_by(desc(JobPosting.applied_at), desc(JobPosting.id))
+            elif sf == "indeed":
+                q_jobs = q_jobs.where(
+                    and_(
+                        or_(
+                            JobPosting.pipeline_stage == PipelineStage.APPLIED,
+                            JobPosting.applied_at.isnot(None),
+                            JobPosting.application_status.in_(["sent", "submitted", "draft", "recruiter_email_draft", "blocked", "recruiter_email_blocked", "daily_quota_reached", "application_error", "failed"]),
+                            JobPosting.application_status.like("manual_%"),
+                        ),
+                        or_(
+                            JobPosting.application_method.ilike("%indeed%"),
+                            and_(
+                                or_(JobPosting.application_method.is_(None), JobPosting.application_method == ""),
+                                or_(
+                                    JobPosting.source_site.ilike("%indeed%"),
+                                    JobPosting.job_url.ilike("%indeed.com%"),
+                                    JobPosting.application_url.ilike("%indeed.com%"),
+                                )
+                            )
+                        )
+                    )
+                ).order_by(desc(JobPosting.applied_at), desc(JobPosting.id))
+            elif sf in ("portal", "ats", "web_portal"):
+                q_jobs = q_jobs.where(
+                    or_(
+                        JobPosting.application_status.like("manual_%"),
+                        JobPosting.application_status.in_(["submitted", "submitted_unverified"]),
+                        and_(
+                            or_(JobPosting.application_url.isnot(None), JobPosting.job_url.isnot(None)),
+                            or_(JobPosting.application_email.is_(None), JobPosting.application_email == ""),
+                            or_(JobPosting.pipeline_stage == PipelineStage.APPLIED, JobPosting.applied_at.isnot(None))
+                        )
+                    )
+                ).order_by(desc(JobPosting.applied_at), desc(JobPosting.id))
+            else:
+                q_jobs = q_jobs.where(
+                    or_(
+                        JobPosting.pipeline_stage == PipelineStage.APPLIED,
+                        JobPosting.applied_at.isnot(None),
+                        JobPosting.application_status.in_(["sent", "submitted", "draft", "recruiter_email_draft", "blocked", "recruiter_email_blocked", "daily_quota_reached", "application_error", "failed"]),
+                        JobPosting.application_status.like("manual_%"),
+                    )
+                ).order_by(desc(JobPosting.applied_at), desc(JobPosting.id))
+
+            if search:
+                s_like = f"%{search.strip()}%"
+                q_jobs = q_jobs.where(
+                    or_(
+                        JobPosting.title.ilike(s_like),
+                        JobPosting.company.ilike(s_like),
+                        JobPosting.application_email.ilike(s_like),
+                        JobPosting.application_url.ilike(s_like),
+                        JobPosting.job_url.ilike(s_like),
+                        JobPosting.application_subject.ilike(s_like),
+                        JobPosting.application_error.ilike(s_like),
+                    )
+                )
+
+            job_rows = session.scalars(q_jobs.limit(fetch_limit)).all()
 
         for om in out_rows:
             job = session.get(JobPosting, om.job_id) if om.job_id else None
@@ -950,18 +1349,32 @@ def api_outbound(request: Request, limit: int = 250, status_filter: str | None =
             seen_jobs.add(ua.job_id)
             job = session.get(JobPosting, ua.job_id) if ua.job_id else None
             method = (ua.application_method or "").lower()
+            src = ((job.source_site if job else "") or (job.source if job else "") or "").lower()
+            jurl = ((job.job_url if job else "") or (job.application_url if job else "") or "").lower()
             if "linkedin" in method:
                 chan = "linkedin"
-                chan_lbl = "💼 LinkedIn Quick Apply"
+                chan_lbl = "💼 LinkedIn Application"
             elif "indeed" in method:
                 chan = "indeed"
-                chan_lbl = "🔵 Indeed Easy Apply"
+                chan_lbl = "🔵 Indeed Application"
+            elif "email" in method:
+                chan = "email"
+                chan_lbl = "✉️ Direct Recruiter Email"
             elif "ats" in method or "greenhouse" in method or "lever" in method:
                 chan = "ats"
                 chan_lbl = "🌐 Web ATS Portal"
             else:
-                chan = "web_portal"
-                chan_lbl = "🌐 Online Career Portal"
+                src = ((job.source_site if job else "") or (job.source if job else "") or "").lower()
+                jurl = ((job.job_url if job else "") or (job.application_url if job else "") or "").lower()
+                if "linkedin" in src or "linkedin.com" in jurl:
+                    chan = "linkedin"
+                    chan_lbl = "💼 LinkedIn Application"
+                elif "indeed" in src or "indeed.com" in jurl:
+                    chan = "indeed"
+                    chan_lbl = "🔵 Indeed Application"
+                else:
+                    chan = "web_portal"
+                    chan_lbl = "🌐 Online Career Portal"
 
             pitch = (job.application_email_body or job.recruiter_pitch_fr or job.recruiter_pitch_en or "") if job else ""
             clean_pitch = " ".join(pitch.split())
@@ -998,14 +1411,40 @@ def api_outbound(request: Request, limit: int = 250, status_filter: str | None =
                 st = "sent"
             elif "draft" in app_st:
                 st = "draft"
-            elif "blocked" in app_st or app_st == "daily_quota_reached":
+            elif "blocked" in app_st or app_st == "daily_quota_reached" or "error" in app_st or app_st == "failed":
                 st = "blocked"
             else:
                 st = app_st
 
+            method = (getattr(job, "application_method", "") or "").lower()
+            src = (getattr(job, "source_site", "") or getattr(job, "source", "") or "").lower()
+            jurl = (getattr(job, "job_url", "") or getattr(job, "application_url", "") or "").lower()
+            if "linkedin" in method:
+                chan = "linkedin"
+                chan_lbl = "💼 LinkedIn Application"
+            elif "indeed" in method:
+                chan = "indeed"
+                chan_lbl = "🔵 Indeed Application"
+            elif "email" in method or (job.application_email and not method):
+                chan = "email"
+                chan_lbl = "✉️ Direct Recruiter Email"
+            elif "ats" in method or "greenhouse" in method or "lever" in method:
+                chan = "ats"
+                chan_lbl = "🌐 Web ATS Portal"
+            else:
+                src = (getattr(job, "source_site", "") or getattr(job, "source", "") or "").lower()
+                jurl = (getattr(job, "job_url", "") or getattr(job, "application_url", "") or "").lower()
+                if "linkedin" in src or "linkedin.com" in jurl:
+                    chan = "linkedin"
+                    chan_lbl = "💼 LinkedIn Application"
+                elif "indeed" in src or "indeed.com" in jurl:
+                    chan = "indeed"
+                    chan_lbl = "🔵 Indeed Application"
+                else:
+                    chan = "web_portal"
+                    chan_lbl = "🌐 Online Career Portal"
+
             recip = job.application_email or job.application_url or job.job_url or "Company Portal"
-            chan = "email" if job.application_email else "web_portal"
-            chan_lbl = "✉️ Direct Recruiter Email" if job.application_email else "🌐 Online Career Portal"
             pitch = (job.application_email_body or job.recruiter_pitch_fr or job.recruiter_pitch_en or "")
             clean_pitch = " ".join(pitch.split())
             items.append({
@@ -1027,34 +1466,39 @@ def api_outbound(request: Request, limit: int = 250, status_filter: str | None =
                 "full_body": pitch,
                 "job_url": job.job_url or job.application_url,
                 "application_url": job.application_url or job.job_url,
-                "created_at": _aware(job.applied_at or job.application_attempted_at or job.created_at),
+                "created_at": _aware(job.applied_at or job.application_attempted_at or getattr(job, "created_at", None) or getattr(job, "scraped_at", None)),
                 "sent_at": _aware(job.applied_at or job.application_attempted_at),
             })
 
         filtered = []
         for x in items:
-            if status_filter:
-                sf = status_filter.lower()
-                if sf == "sent" and x["status"] not in ("sent", "submitted"):
+            if sf:
+                if sf in ("sent", "submitted") and x["status"] not in ("sent", "submitted"):
                     continue
                 elif sf == "draft" and x["status"] != "draft":
                     continue
                 elif sf in ("failed", "blocked") and x["status"] not in ("failed", "blocked", "recruiter_email_blocked"):
                     continue
-                elif sf in ("email", "portal", "linkedin", "indeed"):
-                    if sf not in x["channel"]:
+                elif sf in ("email", "portal", "linkedin", "indeed", "ats", "web_portal"):
+                    if sf == "email" and x["channel"] != "email":
                         continue
-                elif x["status"] != sf:
-                    continue
+                    elif sf == "linkedin" and x["channel"] != "linkedin":
+                        continue
+                    elif sf == "indeed" and x["channel"] != "indeed":
+                        continue
+                    elif sf in ("portal", "ats", "web_portal") and x["channel"] not in ("portal", "ats", "web_portal"):
+                        continue
 
             if search:
                 s_lower = search.lower()
-                text_to_search = f"{x['company']} {x['job_title']} {x['recipient']} {x['subject']} {x['channel']} {x['status']} {x['full_body']}".lower()
+                text_to_search = f"{x['company']} {x['job_title']} {x['recipient']} {x['subject']} {x['channel']} {x['status']} {x['failure_reason'] or ''} {x['full_body']}".lower()
                 if s_lower not in text_to_search:
                     continue
 
             filtered.append(x)
 
+        # Sort all combined items chronologically descending
+        filtered.sort(key=lambda x: str(x.get("sent_at") or x.get("created_at") or ""), reverse=True)
         return filtered[:limit]
 
 
@@ -1072,22 +1516,54 @@ def api_outbound_stats(request: Request, _: bool = Depends(_auth)):
             select(func.count(OutboundMessage.id)).where(OutboundMessage.status == "sent")
         ) or 0
         web_submitted = session.scalar(
-            select(func.count(UserJobApplication.id)).where(UserJobApplication.status.in_(["submitted", "sent"]))
+            select(func.count(UserJobApplication.id)).where(UserJobApplication.status.in_(["submitted", "sent", "submitted_unverified"]))
         ) or 0
         drafts_ready = session.scalar(
             select(func.count(JobPosting.id)).where(JobPosting.application_status.in_(["draft", "recruiter_email_draft"]))
         ) or 0
         blocked_count = session.scalar(
-            select(func.count(JobPosting.id)).where(JobPosting.application_status.in_(["blocked", "recruiter_email_blocked", "daily_quota_reached"]))
+            select(func.count(JobPosting.id)).where(JobPosting.application_status.in_(["blocked", "recruiter_email_blocked", "daily_quota_reached", "application_error", "failed"]))
         ) or 0
 
-        total_apps = max(sent_emails + web_submitted, session.scalar(select(func.count(JobPosting.id)).where(JobPosting.pipeline_stage == PipelineStage.APPLIED)) or 0)
+        linkedin_count = session.scalar(
+            select(func.count(func.distinct(JobPosting.id))).where(
+                or_(JobPosting.pipeline_stage == PipelineStage.APPLIED, JobPosting.applied_at.isnot(None), JobPosting.application_status.in_(["sent", "submitted"])),
+                or_(
+                    JobPosting.application_method.ilike("%linkedin%"),
+                    and_(
+                        or_(JobPosting.application_method.is_(None), JobPosting.application_method == ""),
+                        or_(JobPosting.source_site.ilike("%linkedin%"), JobPosting.job_url.ilike("%linkedin.com%")),
+                    )
+                )
+            )
+        ) or 0
+        indeed_count = session.scalar(
+            select(func.count(func.distinct(JobPosting.id))).where(
+                or_(JobPosting.pipeline_stage == PipelineStage.APPLIED, JobPosting.applied_at.isnot(None), JobPosting.application_status.in_(["sent", "submitted"])),
+                or_(
+                    JobPosting.application_method.ilike("%indeed%"),
+                    and_(
+                        or_(JobPosting.application_method.is_(None), JobPosting.application_method == ""),
+                        or_(JobPosting.source_site.ilike("%indeed%"), JobPosting.job_url.ilike("%indeed.com%")),
+                    )
+                )
+            )
+        ) or 0
+        ua_li = session.scalar(select(func.count(UserJobApplication.id)).where(UserJobApplication.application_method.ilike("%linkedin%"))) or 0
+        ua_in = session.scalar(select(func.count(UserJobApplication.id)).where(UserJobApplication.application_method.ilike("%indeed%"))) or 0
+        linkedin_count = max(linkedin_count, ua_li)
+        indeed_count = max(indeed_count, ua_in)
+
+        applied_jobs = session.scalar(select(func.count(JobPosting.id)).where(or_(JobPosting.pipeline_stage == PipelineStage.APPLIED, JobPosting.applied_at.isnot(None)))) or 0
+        total_apps = max(sent_emails + web_submitted, applied_jobs)
         return {
             "total_applications": total_apps,
             "sent_emails": sent_emails,
             "web_submitted": web_submitted,
             "drafts_ready": drafts_ready,
             "blocked": blocked_count,
+            "linkedin_applications": linkedin_count,
+            "indeed_applications": indeed_count,
         }
 
 
@@ -1805,9 +2281,11 @@ def _set_auth_cookie(response: Response, token: str, request: Request | None = N
     is_secure = False
     if request:
         proto = request.headers.get("x-forwarded-proto", request.url.scheme)
-        is_secure = proto == "https" or settings.app_environment.lower() == "production"
+        host = request.headers.get("host", request.url.hostname or "")
+        is_local = "localhost" in host or "127.0.0.1" in host
+        is_secure = (proto == "https") and not is_local
     else:
-        is_secure = settings.app_environment.lower() == "production"
+        is_secure = False
     response.set_cookie(
         key="session_token",
         value=token,
@@ -1925,10 +2403,19 @@ def api_auth_login(request: Request, req: LoginRequest, response: Response):
     check_login_rate_limit(ident, client_ip)
 
     with get_session() as session:
-        # Look up user by email (try both plain email and @autohunt.internal variant)
-        user = session.scalar(select(User).where(or_(User.email == ident, User.email == f"{ident}@autohunt.internal")))
+        # Look up user by email (try plain email, @autohunt.internal variant, or smtp_user)
+        smtp_email = (settings.smtp_user or "").strip().lower()
+        user = session.scalar(
+            select(User).where(
+                or_(
+                    User.email == ident,
+                    User.email == f"{ident}@autohunt.internal",
+                    and_(User.id == 1, ident == smtp_email) if smtp_email else False,
+                )
+            )
+        )
 
-        # If not found, check if this is the .env admin email or dashboard username
+        # If not found, check if this is the .env admin email, dashboard username, or smtp_user
         admin_email = (settings.admin_email or "").strip().lower()
         admin_password = settings.admin_password or settings.dashboard_password or ""
         if not user:
@@ -1936,6 +2423,7 @@ def api_auth_login(request: Request, req: LoginRequest, response: Response):
                 ident == admin_email
                 or ident == settings.dashboard_username
                 or ident == f"{settings.dashboard_username}@autohunt.internal"
+                or (smtp_email and ident == smtp_email)
             )
             if is_admin_login and secrets.compare_digest(req.password, admin_password):
                 # Auto-create admin if it doesn't exist yet
@@ -4734,7 +5222,10 @@ def api_evaluate_backlog(request: Request, limit: int = 50, _: bool = Depends(_a
     with get_session() as session:
         check_q = select(func.count(JobPosting.id)).where(JobPosting.evaluated.is_(False))
         if user_id is not None:
-            check_q = check_q.where(JobPosting.user_id == user_id)
+            if user and user.role == "admin":
+                check_q = check_q.where(or_(JobPosting.user_id == user_id, JobPosting.user_id.is_(None)))
+            else:
+                check_q = check_q.where(JobPosting.user_id == user_id)
         pending_count = session.scalar(check_q) or 0
 
     if pending_count == 0:
@@ -4762,7 +5253,12 @@ def api_evaluate_backlog(request: Request, limit: int = 50, _: bool = Depends(_a
                     active_profile = get_active_profile(user_id=target_user_id, session=session)
                     q = select(JobPosting).where(JobPosting.evaluated.is_(False))
                     if target_user_id is not None:
-                        q = q.where(JobPosting.user_id == target_user_id)
+                        from src.storage.models import User
+                        tu = session.get(User, target_user_id)
+                        if tu and tu.role == "admin":
+                            q = q.where(or_(JobPosting.user_id == target_user_id, JobPosting.user_id.is_(None)))
+                        else:
+                            q = q.where(JobPosting.user_id == target_user_id)
                     un_eval_jobs = session.scalars(
                         q.order_by(
                             case((JobPosting.application_emails.isnot(None) & (JobPosting.application_emails != ""), 0), else_=1),
@@ -4873,7 +5369,11 @@ def api_evaluate_backlog(request: Request, limit: int = 50, _: bool = Depends(_a
                         except Exception as e:
                             job.evaluation_status = "failed"
                             job.evaluation_reason = str(e)[:300]
-                    session.commit()
+                        try:
+                            session.commit()
+                        except Exception as c_err:
+                            logger.error("Failed committing job %s evaluation: %s", job.id, c_err)
+                            session.rollback()
                 st["message"] = f"Finished evaluating {st['processed']} jobs"
             except Exception as exc:
                 st["message"] = f"Evaluation error: {exc}"
@@ -4900,8 +5400,11 @@ _apply_thread = None
 @app.post("/api/actions/apply_pending_matches")
 def api_action_apply_pending_matches(request: Request, _: bool = Depends(_auth)):
     global _apply_thread, _apply_status
-    if _apply_status["running"]:
-        return JSONResponse(status_code=409, content={"ok": False, "message": "Apply job already running", "status": _apply_status})
+    if _apply_status.get("running"):
+        if _apply_thread is not None and not _apply_thread.is_alive():
+            _apply_status["running"] = False
+        else:
+            return JSONResponse(status_code=409, content={"ok": False, "message": "Apply job already running", "status": _apply_status})
 
     from src.auth.service import get_current_user_optional
     calling_user = get_current_user_optional(request)
@@ -4993,7 +5496,10 @@ def api_action_apply_pending_matches(request: Request, _: bool = Depends(_auth))
                 min_apply_score = user_cfg.get("min_match_score") or user_cfg.get("auto_apply_min_score") or getattr(settings, "auto_apply_min_score", 65)
 
                 apply_q = select(JobPosting).where(
-                    JobPosting.match_score >= min_apply_score,
+                    or_(
+                        JobPosting.match_score >= min_apply_score,
+                        (JobPosting.application_emails.isnot(None) & (JobPosting.application_emails != "")),
+                    ),
                     JobPosting.applied_at.is_(None),
                     JobPosting.pipeline_stage != PipelineStage.APPLIED,
                     or_(
@@ -5011,7 +5517,7 @@ def api_action_apply_pending_matches(request: Request, _: bool = Depends(_auth))
                 pending_matches = session.scalars(
                     apply_q.order_by(
                         case((JobPosting.application_emails.isnot(None) & (JobPosting.application_emails != ""), 0), else_=1),
-                        desc(JobPosting.match_score)
+                        JobPosting.match_score.desc().nulls_last()
                     ).limit(max_to_inspect)
                 ).all()
 
@@ -5043,16 +5549,18 @@ def api_action_apply_pending_matches(request: Request, _: bool = Depends(_auth))
                     # Verify that this job aligns with the currently active candidate profile
                     eval_check = evaluate_job_heuristic(job, profile=active_profile)
                     profile_score = eval_check.get("match_score", 0)
-                    if (job.match_score is None or job.match_score < min_apply_score) and profile_score < min_apply_score:
+                    if profile_score < min_apply_score:
                         job.match_score = profile_score
-                        clears_eval = profile_score >= min_apply_score
-                        job.pipeline_stage = PipelineStage.EVALUATED_MATCH if clears_eval else PipelineStage.EVALUATED_LOW
+                        job.pipeline_stage = PipelineStage.EVALUATED_LOW
                         logger.info(
                             "Skipping job %s (%s): scores %s (< %s) against active profile '%s'",
                             job.id, job.title, profile_score, min_apply_score,
                             active_profile.get("headline") or active_profile.get("name")
                         )
                         continue
+
+                    job.match_score = profile_score
+                    job.pipeline_stage = PipelineStage.EVALUATED_MATCH
 
                     # Refresh pitches for the active profile
                     is_fr = is_french_job(job)
@@ -5063,6 +5571,13 @@ def api_action_apply_pending_matches(request: Request, _: bool = Depends(_auth))
 
                     _apply_status["processed"] = i
                     _apply_status["message"] = f"Applying to {i}/{len(pending_matches)}: {job.title} @ {job.company}"
+
+                    # Extract application emails from raw_description if not already set
+                    if not job.application_emails and job.raw_description:
+                        from src.application.auto_apply import extract_application_emails
+                        found_emails = extract_application_emails(job.raw_description)
+                        if found_emails:
+                            job.application_emails = ", ".join(found_emails)
 
                     # Enrich HR contacts if missing (only once)
                     hr_attempted = False
@@ -5075,7 +5590,7 @@ def api_action_apply_pending_matches(request: Request, _: bool = Depends(_auth))
 
                     job_dict = {
                         "id": job.id,
-                        "user_id": job.user_id,
+                        "user_id": job.user_id or effective_uid,
                         "title": job.title,
                         "company": job.company,
                         "location": job.location,
@@ -5458,6 +5973,8 @@ def api_dynamic_stats(request: Request, _: bool = Depends(_auth)):
     with get_session() as session:
         def _scope_st(stmt):
             if user_id is not None:
+                if user and user.role == "admin":
+                    return stmt.where(or_(JobPosting.user_id == user_id, JobPosting.user_id.is_(None)))
                 return stmt.where(JobPosting.user_id == user_id)
             return stmt
 
@@ -5744,7 +6261,10 @@ def api_freelance_leads(request: Request, q: str | None = None, stage: str | Non
     with get_session() as session:
         query = select(FreelanceLead)
         if user_id is not None:
-            query = query.where(FreelanceLead.user_id == user_id)
+            if user and user.role == "admin":
+                query = query.where(or_(FreelanceLead.user_id == user_id, FreelanceLead.user_id.is_(None)))
+            else:
+                query = query.where(FreelanceLead.user_id == user_id)
         if needs_follow_up:
             from src.freelance.outreach import get_leads_needing_follow_up
             due_ids = get_leads_needing_follow_up(session, user_id=user_id)
@@ -6061,7 +6581,7 @@ def api_freelance_update_deal(lead_id: int, payload: DealUpdate, request: Reques
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 
 
-def _render_template(default_tab: str = "jobs") -> str:
+def _render_template(default_tab: str = "jobs", user: Any | None = None) -> str:
     tpl_file = TEMPLATES_DIR / "dashboard.html"
     if tpl_file.exists():
         raw = tpl_file.read_text(encoding="utf-8")
@@ -6071,6 +6591,41 @@ def _render_template(default_tab: str = "jobs") -> str:
             raw = raw.replace('id="modeJobs" class="mode-btn"', 'id="modeJobs" class="mode-btn active"')
             raw = raw.replace('id="freelanceView" class="view-section active"', 'id="freelanceView" class="view-section"')
             raw = raw.replace('id="jobsView" class="view-section"', 'id="jobsView" class="view-section active"')
+
+        if user:
+            # Pre-render user badge so navbar never flashes "Loading... | USER | FREE TIER"
+            raw = raw.replace(
+                '<div style="font-size:12px;font-weight:700" id="navUserName">Loading...</div>',
+                f'<div style="font-size:12px;font-weight:700" id="navUserName">{user.full_name or user.email}</div>'
+            )
+            role_str = (user.role or "USER").upper()
+            if user.role == "admin":
+                raw = raw.replace(
+                    '<span id="navRoleBadge" class="pill" style="font-size:10px;background:rgba(56,189,248,0.15);color:var(--cyan-light)">USER</span>',
+                    '<span id="navRoleBadge" class="pill" style="font-size:10px;background:rgba(168,85,247,0.2);color:var(--purple-light);border:1px solid rgba(168,85,247,0.4)">ADMIN</span>'
+                )
+            else:
+                raw = raw.replace(
+                    '<span id="navRoleBadge" class="pill" style="font-size:10px;background:rgba(56,189,248,0.15);color:var(--cyan-light)">USER</span>',
+                    f'<span id="navRoleBadge" class="pill" style="font-size:10px;background:rgba(56,189,248,0.15);color:var(--cyan-light)">{role_str}</span>'
+                )
+
+            p = (user.current_plan or "free").lower()
+            if p == "ultra":
+                raw = raw.replace(
+                    '>FREE TIER</span>',
+                    ' style="font-size:10px;font-weight:800;background:linear-gradient(135deg, rgba(234, 179, 8, 0.28) 0%, rgba(249, 115, 22, 0.28) 100%);color:#facc15;border:1px solid rgba(234, 179, 8, 0.65);box-shadow:0 0 10px rgba(234, 179, 8, 0.35)">ULTRA 🚀</span>'
+                )
+            elif p in ("pro", "pro_499"):
+                raw = raw.replace(
+                    '>FREE TIER</span>',
+                    ' style="font-size:10px;font-weight:800;background:rgba(168, 85, 247, 0.22);color:#c084fc;border:1px solid rgba(168, 85, 247, 0.55);box-shadow:0 0 10px rgba(168, 85, 247, 0.25)">PRO ⭐</span>'
+                )
+            elif p in ("starter", "starter_99"):
+                raw = raw.replace(
+                    '>FREE TIER</span>',
+                    ' style="font-size:10px;font-weight:800;background:rgba(6, 182, 212, 0.2);color:#22d3ee;border:1px solid rgba(6, 182, 212, 0.55)">STARTER ⚡</span>'
+                )
         return raw
     return DASHBOARD_HTML if default_tab == "jobs" else FREELANCE_HTML
 
@@ -6104,6 +6659,8 @@ def api_stats_dynamic(request: Request, _: bool = Depends(_auth)):
     with get_session() as session:
         def _scope_st(stmt):
             if user_id is not None:
+                if user and user.role == "admin":
+                    return stmt.where(or_(JobPosting.user_id == user_id, JobPosting.user_id.is_(None)))
                 return stmt.where(JobPosting.user_id == user_id)
             return stmt
 
@@ -6404,22 +6961,30 @@ def landing_page(request: Request):
 
 @app.get("/app", response_class=HTMLResponse)
 def dashboard_app(request: Request):
-    from src.auth.service import get_current_user_optional
+    from src.auth.service import get_current_user_optional, create_session_token
     from fastapi.responses import RedirectResponse
     user = get_current_user_optional(request)
     if not user:
         return RedirectResponse(url="/", status_code=302)
-    return HTMLResponse(_render_template(default_tab="jobs"))
+    resp = HTMLResponse(_render_template(default_tab="jobs", user=user))
+    if not request.cookies.get("session_token"):
+        token = create_session_token(user.id, user.email, user.role)
+        _set_auth_cookie(resp, token, request=request)
+    return resp
 
 
 @app.get("/freelance", response_class=HTMLResponse)
 def freelance_dashboard(request: Request):
-    from src.auth.service import get_current_user_optional
+    from src.auth.service import get_current_user_optional, create_session_token
     from fastapi.responses import RedirectResponse
     user = get_current_user_optional(request)
     if not user:
         return RedirectResponse(url="/", status_code=302)
-    return HTMLResponse(_render_template(default_tab="freelance"))
+    resp = HTMLResponse(_render_template(default_tab="freelance", user=user))
+    if not request.cookies.get("session_token"):
+        token = create_session_token(user.id, user.email, user.role)
+        _set_auth_cookie(resp, token, request=request)
+    return resp
 
 
 DASHBOARD_HTML = r'''<!doctype html>

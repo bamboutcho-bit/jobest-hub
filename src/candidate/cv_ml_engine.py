@@ -62,18 +62,35 @@ FLATTENED_SKILLS = [skill for sublist in TECH_TAXONOMY.values() for skill in sub
 
 
 def extract_text_from_pdf(pdf_path: str | Path) -> str:
-    """Extract plain text from a PDF file using standard library stream decoders.
+    """Extract plain text from a PDF file using standard library stream decoders and ToUnicode CMaps.
     
     Handles:
-    - ReportLab ASCII85 + FlateDecode streams
+    - High-fidelity ToUnicode CMap font mapping for TrueType / Type0 / CID fonts
+    - Standard Page /Contents streams and arrays
+    - ReportLab / Adobe ASCII85 + FlateDecode streams
     - Pure FlateDecode zlib streams
-    - ASCIIHexDecode
-    - Uncompressed PDF text operators (Tj, TJ, TD)
+    - String literals (text) and Hex encoded strings <hex>
+    - Excludes font binary tables (/FontFile2) and raster images to prevent binary noise
     """
     path = Path(pdf_path)
     if not path.is_file():
         logger.warning("PDF file not found: %s", pdf_path)
         return ""
+
+    # 1. Try pypdf / pypdf2 if installed
+    try:
+        from pypdf import PdfReader
+        reader = PdfReader(str(path))
+        extracted = []
+        for p in reader.pages:
+            pt = p.extract_text()
+            if pt:
+                extracted.append(pt)
+        full = "\n".join(extracted).strip()
+        if len(full) > 50:
+            return full
+    except Exception:
+        pass
 
     try:
         content = path.read_bytes()
@@ -81,67 +98,179 @@ def extract_text_from_pdf(pdf_path: str | Path) -> str:
         logger.error("Failed to read PDF file %s: %s", pdf_path, e)
         return ""
 
-    extracted_parts: list[str] = []
+    # 2. Parse PDF Objects
+    obj_pattern = re.compile(rb'(\d+)\s+(\d+)\s+obj\s*(.*?)endobj', re.DOTALL)
+    objects: dict[int, bytes] = {}
+    for m in obj_pattern.finditer(content):
+        objects[int(m.group(1))] = m.group(3)
 
-    # Method 1: ReportLab / Adobe ASCII85 + FlateDecode stream extraction
-    try:
-        if b"/ASCII85Decode" in content and b"/FlateDecode" in content:
-            # Match stream block ending with ~>
-            stream_blocks = re.findall(rb'stream[\r\n]+(.*?)(?:~>|endstream)', content, re.DOTALL)
-            for raw_block in stream_blocks:
+    def _get_decompressed_stream(raw_obj: bytes) -> bytes:
+        if not raw_obj:
+            return b""
+        sm = re.search(rb'stream\r?\n(.*?)\r?\nendstream', raw_obj, re.DOTALL)
+        if not sm:
+            return b""
+        data = sm.group(1)
+        if b"/FlateDecode" in raw_obj:
+            try:
+                data = zlib.decompress(data)
+            except Exception:
                 try:
-                    a85_data = raw_block.strip()
-                    if not a85_data.endswith(b"~>"):
-                        a85_data = a85_data + b"~>"
-                    decomp = zlib.decompress(base64.a85decode(a85_data, adobe=True))
-                    # Parse PDF string literals: (text)
-                    strings = re.findall(rb'\((.*?)\)', decomp)
-                    for s in strings:
-                        t = s.decode("latin1", errors="ignore")
-                        t_clean = _clean_pdf_string(t)
-                        if t_clean:
-                            extracted_parts.append(t_clean)
-                except Exception as inner_e:
-                    logger.debug("ASCII85 stream segment failed: %s", inner_e)
-    except Exception as e:
-        logger.debug("Method 1 ASCII85 decode failed: %s", e)
-
-    # Method 2: Standard pure FlateDecode zlib streams
-    if not extracted_parts:
-        try:
-            streams = re.findall(rb'stream[\r\n]+(.*?)[\r\n]+endstream', content, re.DOTALL)
-            for s in streams:
-                try:
-                    decomp = zlib.decompress(s.strip())
-                    strings = re.findall(rb'\((.*?)\)', decomp)
-                    for st in strings:
-                        t = st.decode("latin1", errors="ignore")
-                        t_clean = _clean_pdf_string(t)
-                        if t_clean:
-                            extracted_parts.append(t_clean)
+                    data = zlib.decompress(data, -15)
                 except Exception:
                     pass
-        except Exception as e:
-            logger.debug("Method 2 FlateDecode failed: %s", e)
+        elif b"/ASCII85Decode" in raw_obj:
+            try:
+                a85 = data.strip()
+                if not a85.endswith(b"~>"):
+                    a85 += b"~>"
+                data = base64.a85decode(a85, adobe=True)
+                if b"/FlateDecode" in raw_obj:
+                    data = zlib.decompress(data)
+            except Exception:
+                pass
+        return data
 
-    # Method 3: Uncompressed string operator extraction
-    if not extracted_parts:
-        try:
-            strings = re.findall(rb'\((.*?)\)', content)
-            for st in strings:
-                t = st.decode("latin1", errors="ignore")
-                t_clean = _clean_pdf_string(t)
-                if len(t_clean) > 2:
-                    extracted_parts.append(t_clean)
-        except Exception as e:
-            logger.debug("Method 3 text extraction failed: %s", e)
+    def _parse_cmap(cmap_data: bytes) -> dict[int, str]:
+        mapping: dict[int, str] = {}
+        if not cmap_data:
+            return mapping
+        # 1. Parse beginbfchar blocks only
+        for block in re.finditer(rb'beginbfchar\s*(.*?)\s*endbfchar', cmap_data, re.DOTALL):
+            for bfc in re.finditer(rb'<([0-9a-fA-F]+)>\s+<([0-9a-fA-F]+)>', block.group(1)):
+                try:
+                    src_code = int(bfc.group(1), 16)
+                    dst_hex = bfc.group(2).decode("ascii")
+                    mapping[src_code] = bytes.fromhex(dst_hex).decode("utf-16-be", errors="ignore")
+                except Exception:
+                    pass
+        # 2. Parse beginbfrange blocks only
+        for block in re.finditer(rb'beginbfrange\s*(.*?)\s*endbfrange', cmap_data, re.DOTALL):
+            for bfr in re.finditer(rb'<([0-9a-fA-F]+)>\s+<([0-9a-fA-F]+)>\s+<([0-9a-fA-F]+)>', block.group(1)):
+                try:
+                    s_code = int(bfr.group(1), 16)
+                    e_code = int(bfr.group(2), 16)
+                    dst_start = int(bfr.group(3), 16)
+                    for c in range(s_code, e_code + 1):
+                        target = dst_start + (c - s_code)
+                        h = f"{target:04x}" if target <= 0xffff else f"{target:08x}"
+                        mapping[c] = bytes.fromhex(h).decode("utf-16-be", errors="ignore")
+                except Exception:
+                    pass
+        return mapping
 
-    full_text = " ".join(extracted_parts)
-    # Normalize common escaped characters & formatting artifacts
-    full_text = re.sub(r'\\([0-9]{3})', lambda m: chr(int(m.group(1), 8)) if int(m.group(1), 8) < 128 else ' ', full_text)
-    full_text = re.sub(r'\\[nrtfb()]', ' ', full_text)
-    full_text = re.sub(r'\s+', ' ', full_text).strip()
-    return full_text
+    # Parse all ToUnicode CMaps for font objects
+    font_cmaps: dict[int, dict[int, str]] = {}
+    for num, obj_raw in objects.items():
+        if b"/ToUnicode" in obj_raw:
+            m_tu = re.search(rb'/ToUnicode\s+(\d+)\s+\d+\s+R', obj_raw)
+            if m_tu:
+                tu_id = int(m_tu.group(1))
+                tu_stream = _get_decompressed_stream(objects.get(tu_id, b""))
+                if tu_stream:
+                    font_cmaps[num] = _parse_cmap(tu_stream)
+
+    # 3. Process Page objects and their content streams
+    page_texts: list[str] = []
+
+    for num, obj_raw in objects.items():
+        if re.search(rb'/Type\s*/Page(?!\w)', obj_raw):
+            content_ids: list[int] = []
+            m_c = re.search(rb'/Contents\s+(\d+)\s+\d+\s+R', obj_raw)
+            if m_c:
+                content_ids.append(int(m_c.group(1)))
+            else:
+                m_c_arr = re.search(rb'/Contents\s*\[(.*?)\]', obj_raw)
+                if m_c_arr:
+                    content_ids.extend([int(x) for x in re.findall(rb'(\d+)\s+\d+\s+R', m_c_arr.group(1))])
+
+            res_raw = obj_raw
+            m_res = re.search(rb'/Resources\s+(\d+)\s+\d+\s+R', obj_raw)
+            if m_res:
+                res_raw = objects.get(int(m_res.group(1)), b"")
+
+            font_name_map: dict[str, dict[int, str]] = {}
+            m_font_dict = re.search(rb'/Font\s*<<\s*(.*?)\s*>>', res_raw, re.DOTALL)
+            if not m_font_dict:
+                m_font_ref = re.search(rb'/Font\s+(\d+)\s+\d+\s+R', res_raw)
+                if m_font_ref:
+                    font_dict_obj = objects.get(int(m_font_ref.group(1)), b"")
+                    m_font_dict = re.search(rb'<<\s*(.*?)\s*>>', font_dict_obj, re.DOTALL)
+
+            if m_font_dict:
+                for f_match in re.finditer(rb'/(F\w+)\s+(\d+)\s+\d+\s+R', m_font_dict.group(1)):
+                    fn = "/" + f_match.group(1).decode("ascii")
+                    f_id = int(f_match.group(2))
+                    if f_id in font_cmaps:
+                        font_name_map[fn] = font_cmaps[f_id]
+
+            # Decode content stream(s) for this page
+            page_lines: list[str] = []
+            for cid in content_ids:
+                stream_bytes = _get_decompressed_stream(objects.get(cid, b""))
+                if not stream_bytes:
+                    continue
+                content_str = stream_bytes.decode("latin1", errors="ignore")
+                current_font = ""
+
+                for bt in re.finditer(r'BT(.*?)ET', content_str, re.DOTALL):
+                    block = bt.group(1)
+                    for op in re.finditer(r'(/F\w+)\s+[\d\.]+\s+Tf|(\[[^\]]*\])\s*TJ|(<[0-9a-fA-F]+>)\s*Tj|(\([^)]*\))\s*Tj', block):
+                        if op.group(1):
+                            current_font = op.group(1)
+                        elif op.group(2):
+                            cmap = font_name_map.get(current_font, {})
+                            chars: list[str] = []
+                            for item in re.finditer(r'<([0-9a-fA-F]+)>|\(([^)]*)\)', op.group(2)):
+                                if item.group(1):
+                                    hex_str = item.group(1)
+                                    for i in range(0, len(hex_str), 2):
+                                        bval = int(hex_str[i:i+2], 16)
+                                        chars.append(cmap.get(bval, chr(bval) if 32 <= bval < 127 else " "))
+                                elif item.group(2):
+                                    chars.append(_clean_pdf_string(item.group(2)))
+                            line_text = "".join(chars).strip()
+                            if line_text:
+                                page_lines.append(line_text)
+                        elif op.group(3):
+                            hex_str = op.group(3)[1:-1]
+                            cmap = font_name_map.get(current_font, {})
+                            chars = []
+                            for i in range(0, len(hex_str), 2):
+                                bval = int(hex_str[i:i+2], 16)
+                                chars.append(cmap.get(bval, chr(bval) if 32 <= bval < 127 else " "))
+                            line_text = "".join(chars).strip()
+                            if line_text:
+                                page_lines.append(line_text)
+                        elif op.group(4):
+                            line_text = _clean_pdf_string(op.group(4)[1:-1])
+                            if line_text:
+                                page_lines.append(line_text)
+
+            if page_lines:
+                page_texts.append("\n".join(page_lines))
+
+    if page_texts:
+        full_result = "\n".join(page_texts).strip()
+        if len(full_result) > 40:
+            return full_result
+
+    # 4. Fallback for flat unformatted or ReportLab streams (excluding font/image binaries)
+    fallback_parts: list[str] = []
+    for num, obj_raw in objects.items():
+        if any(bad in obj_raw for bad in (b"/FontFile", b"/FontFile2", b"/FontFile3", b"/Length1", b"/Length2", b"/Subtype/Image", b"/Metadata")):
+            continue
+        stream_bytes = _get_decompressed_stream(obj_raw)
+        if not stream_bytes or len(stream_bytes) < 10:
+            continue
+        for s in re.findall(rb'\((.*?)\)', stream_bytes):
+            t = _clean_pdf_string(s.decode("latin1", errors="ignore"))
+            if len(t) >= 2:
+                fallback_parts.append(t)
+
+    fallback_text = " ".join(fallback_parts)
+    fallback_text = re.sub(r'\s+', ' ', fallback_text).strip()
+    return fallback_text
 
 
 def _clean_pdf_string(raw: str) -> str:

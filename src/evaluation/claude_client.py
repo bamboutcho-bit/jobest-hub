@@ -154,7 +154,23 @@ def evaluate_job(job: Any, *, profile: dict[str, Any] | None = None, session=Non
     )
 
     desc_text = str(job.get("raw_description") or job.get("description") or "")
-    if not result.get("continent"):
+    continent_val = result.get("continent")
+    continent_norm = {
+        "europe": "Europe",
+        "north_america": "North America",
+        "north america": "North America",
+        "mena": "MENA",
+        "asia_pacific": "Asia-Pacific",
+        "asia pacific": "Asia-Pacific",
+        "global_remote": "Global Remote",
+        "global remote": "Global Remote",
+        "remote_worldwide": "Global Remote",
+        "remote": "Global Remote",
+        "worldwide": "Global Remote",
+    }
+    if continent_val and str(continent_val).strip().lower().replace("-", "_") in continent_norm:
+        result["continent"] = continent_norm[str(continent_val).strip().lower().replace("-", "_")]
+    elif not continent_val:
         result["continent"] = extract_continent(job.get("location") or "", is_remote=job.get("is_remote", False), full_text=desc_text)
 
     if not result.get("experience_level") or result.get("experience_level") == "not_specified":

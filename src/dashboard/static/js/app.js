@@ -732,14 +732,22 @@
         }
 
         switchModalTab(defaultTab);
-        document.getElementById('leadModal').classList.add('open');
+        const lm = document.getElementById('leadModal');
+        if (lm) {
+          lm.style.display = 'flex';
+          lm.classList.add('open');
+        }
       } catch (err) {
         showToast('Error opening lead: ' + err.message, 'error');
       }
     }
 
     function closeLeadModal() {
-      document.getElementById('leadModal').classList.remove('open');
+      const lm = document.getElementById('leadModal');
+      if (lm) {
+        lm.classList.remove('open');
+        lm.style.display = 'none';
+      }
     }
 
     function switchModalTab(tab) {
@@ -1837,11 +1845,23 @@
         } else if (method.includes('linkedin')) {
           return `
             <div style="display:flex;flex-direction:column;gap:3px;align-items:flex-start">
-              <span class="pill" style="font-weight:800;font-size:11px;background:#0284c7;color:#ffffff;border:1px solid #38bdf8;padding:3px 9px;border-radius:6px" title="Manual Application via LinkedIn">
-                🔗 LINKEDIN
+              <span class="pill" style="font-weight:800;font-size:11px;background:#0a66c2;color:#ffffff;border:1px solid #38bdf8;padding:3px 9px;border-radius:6px;box-shadow:0 0 8px rgba(10,102,194,0.3)" title="Application made via LinkedIn">
+                💼 LINKEDIN
               </span>
               <span style="font-size:11px;color:#bae6fd;font-weight:600">
-                Manual Apply
+                Applied on LinkedIn ✓
+              </span>
+              ${appDateBadge}
+            </div>
+          `;
+        } else if (method.includes('indeed')) {
+          return `
+            <div style="display:flex;flex-direction:column;gap:3px;align-items:flex-start">
+              <span class="pill" style="font-weight:800;font-size:11px;background:#2563eb;color:#ffffff;border:1px solid #60a5fa;padding:3px 9px;border-radius:6px;box-shadow:0 0 8px rgba(37,99,235,0.3)" title="Application made via Indeed">
+                🔵 INDEED
+              </span>
+              <span style="font-size:11px;color:#bfdbfe;font-weight:600">
+                Applied on Indeed ✓
               </span>
               ${appDateBadge}
             </div>
@@ -1892,11 +1912,17 @@
     function setJobQuickFilter(type) {
       const stageSelect = document.getElementById('jobsStageFilter');
       const hrSelect = document.getElementById('jobsHrFilter');
-      ['qfAll', 'qfApplied', 'qfEmail', 'qfPortal'].forEach(id => {
+      ['qfAll', 'qfApplied', 'qfLinkedIn', 'qfIndeed', 'qfEmail', 'qfPortal'].forEach(id => {
         const btn = document.getElementById(id);
         if (btn) btn.classList.remove('btn-cyan');
       });
-      const activeBtn = document.getElementById(type === 'all' ? 'qfAll' : type === 'applied' ? 'qfApplied' : type === 'email' ? 'qfEmail' : 'qfPortal');
+      const activeBtn = document.getElementById(
+        type === 'all' ? 'qfAll' :
+        type === 'applied' ? 'qfApplied' :
+        type === 'linkedin' ? 'qfLinkedIn' :
+        type === 'indeed' ? 'qfIndeed' :
+        type === 'email' ? 'qfEmail' : 'qfPortal'
+      );
       if (activeBtn) activeBtn.classList.add('btn-cyan');
 
       if (type === 'all') {
@@ -1905,6 +1931,12 @@
       } else if (type === 'applied') {
         if (stageSelect) stageSelect.value = 'applied';
         if (hrSelect) hrSelect.value = '';
+      } else if (type === 'linkedin') {
+        if (stageSelect) stageSelect.value = '';
+        if (hrSelect) hrSelect.value = 'linkedin';
+      } else if (type === 'indeed') {
+        if (stageSelect) stageSelect.value = '';
+        if (hrSelect) hrSelect.value = 'indeed';
       } else if (type === 'email') {
         if (hrSelect) hrSelect.value = 'has_hr';
       } else if (type === 'portal') {
@@ -1938,6 +1970,18 @@
         allJobsList = allJobsList.filter(j => (j.application_emails && j.application_emails.trim() !== '') || (j.application_email && j.application_email.trim() !== '') || (j.application_method && j.application_method.includes('email')));
       } else if (hrFilter === 'web_form') {
         allJobsList = allJobsList.filter(j => (!j.application_emails || j.application_emails.trim() === '') && (!j.application_email || j.application_email.trim() === '') && (!j.application_method || !j.application_method.includes('email')));
+      } else if (hrFilter === 'linkedin') {
+        allJobsList = allJobsList.filter(j => {
+          const m = (j.application_method || '').toLowerCase();
+          if (m) return m.includes('linkedin');
+          return (j.source_site && j.source_site.toLowerCase().includes('linkedin')) || (j.job_url && j.job_url.includes('linkedin.com'));
+        });
+      } else if (hrFilter === 'indeed') {
+        allJobsList = allJobsList.filter(j => {
+          const m = (j.application_method || '').toLowerCase();
+          if (m) return m.includes('indeed');
+          return (j.source_site && j.source_site.toLowerCase().includes('indeed')) || (j.job_url && j.job_url.includes('indeed.com'));
+        });
       }
 
       const appliedCount = allJobsList.filter(j => j.stage === 'applied' || j.application_status === 'sent' || j.application_status === 'submitted' || Boolean(j.applied_at)).length;
@@ -1957,9 +2001,12 @@
         tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-faint);padding:24px">No job postings found matching your precision filters.</td></tr>';
         return;
       }
+
       tbody.innerHTML = allJobsList.map(j => {
+        const viewBtn = `<button class="btn btn-sm" onclick="event.stopPropagation(); openJobModal(${j.id})" title="View job posting and AI match analysis" style="padding:2px 8px;font-size:11px;font-weight:700">👁️ View</button>`;
         const directUrl = j.application_url || j.job_url || '';
         const applyBtn = directUrl ? `<a href="${esc(directUrl)}" target="_blank" rel="noopener" class="btn btn-sm btn-cyan" onclick="event.stopPropagation()" style="padding:2px 8px;font-size:11px">Direct Apply ↗</a>` : '';
+        const logBtn = `<button class="btn btn-sm" onclick="event.stopPropagation(); openSpecifyAppModal(${j.id})" title="Specify or log application via LinkedIn, Indeed, etc." style="padding:2px 7px;font-size:11px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15)">📌 Log</button>`;
         const skillsPreview = (j.skills || []).slice(0, 3).map(s => `<span class="pill" style="font-size:10px;padding:1px 5px;background:rgba(255,255,255,0.06)">${esc(s)}</span>`).join(' ');
         
         const contBadge = getContinentBadge(j.continent, j.location, j.is_remote);
@@ -1985,7 +2032,7 @@
           <td>${visaBadge}</td>
           <td style="font-family:'JetBrains Mono';font-weight:700;color:${j.score >= 70 ? 'var(--good)' : j.score >= 50 ? 'var(--warn)' : 'var(--text)'}">${j.score ?? 0}%</td>
           <td>${getApplicationBadge(j)}</td>
-          <td><div style="display:flex;align-items:center;gap:6px">${applyBtn}</div></td>
+          <td><div style="display:flex;align-items:center;gap:6px">${viewBtn}${applyBtn}${logBtn}</div></td>
         </tr>
       `}).join('');
     }
@@ -1995,6 +2042,7 @@
       container.innerHTML = allJobsList.map(j => {
         const directUrl = j.application_url || j.job_url || '';
         const applyBtn = directUrl ? `<a href="${esc(directUrl)}" target="_blank" rel="noopener" class="btn btn-sm btn-cyan" onclick="event.stopPropagation()" style="padding:3px 9px;font-size:11px">Direct Apply ↗</a>` : '';
+        const logBtn = `<button class="btn btn-sm" onclick="event.stopPropagation(); openSpecifyAppModal(${j.id})" title="Specify or log application via LinkedIn, Indeed, etc." style="padding:3px 8px;font-size:11px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15)">📌 Log</button>`;
         const methodBadge = j.evaluation_method ? `<span class="pill" style="font-size:10px;background:rgba(139,92,246,0.15);color:var(--purple-light)">${esc(j.evaluation_method)}</span>` : '';
         const expBadge = getExpBadge(j.experience_level, j.experience_years_required);
         const degBadge = getDegreeBadge(j.degree_required);
@@ -2028,7 +2076,10 @@
               ${getApplicationBadge(j)}
               ${methodBadge}
             </div>
-            ${applyBtn}
+            <div style="display:flex;align-items:center;gap:6px">
+              ${logBtn}
+              ${applyBtn}
+            </div>
           </div>
         </div>
       `}).join('') || '<div style="color:var(--text-faint)">No jobs to display matching filters.</div>';
@@ -2153,12 +2204,14 @@
         const elAppMethod = document.getElementById('mJobAppMethod');
         if (elAppMethod) {
           const m = (j.application_method || '').toLowerCase();
-          if (m.includes('email') || j.application_status === 'sent') {
+          if (m.includes('linkedin')) {
+            elAppMethod.innerHTML = `<span class="pill" style="font-size:11px;background:rgba(10,102,194,0.22);color:#60a5fa;border:1px solid rgba(10,102,194,0.45);font-weight:700">💼 LinkedIn</span>`;
+          } else if (m.includes('indeed')) {
+            elAppMethod.innerHTML = `<span class="pill" style="font-size:11px;background:rgba(37,99,235,0.22);color:#93c5fd;border:1px solid rgba(37,99,235,0.45);font-weight:700">🔵 Indeed</span>`;
+          } else if (m.includes('email') || j.application_status === 'sent') {
             elAppMethod.innerHTML = `<span class="pill pill-stage-deal_won" style="font-size:11px">✉️ Recruiter Email</span> ${j.application_email ? `<span style="font-size:11px;color:var(--text-muted);font-family:'JetBrains Mono'">(${esc(j.application_email)})</span>` : ''}`;
           } else if (m.includes('portal') || m.includes('web') || m.includes('browser') || j.application_status === 'submitted') {
             elAppMethod.innerHTML = `<span class="pill" style="font-size:11px;background:rgba(6,182,212,0.18);color:#06b6d4;border:1px solid rgba(6,182,212,0.4)">🌐 Web Portal / ATS</span>`;
-          } else if (m.includes('linkedin')) {
-            elAppMethod.innerHTML = `<span class="pill" style="font-size:11px;background:rgba(10,102,194,0.18);color:#38bdf8;border:1px solid rgba(10,102,194,0.35)">🔗 LinkedIn (Manual)</span>`;
           } else {
             elAppMethod.textContent = j.application_method || 'not_applied';
           }
@@ -2259,9 +2312,33 @@
           ? `<span class="pill pill-stage-deal_won" style="padding:4px 10px;font-size:12px">✓ Applied (${esc(j.application_method || 'sent')})</span>`
           : `<button class="btn btn-sm btn-primary" id="btnModalApplySingle" onclick="applySingleJob(${j.id})">🚀 Auto-Apply to This Job</button>`;
 
+        const chanSelect = document.getElementById('modalJobChannelSelect');
+        if (chanSelect) {
+          const m = (j.application_method || '').toLowerCase();
+          if (m.includes('linkedin')) chanSelect.value = 'linkedin';
+          else if (m.includes('indeed')) chanSelect.value = 'indeed';
+          else if (m.includes('email')) chanSelect.value = 'recruiter_email';
+          else if (m.includes('portal') || m.includes('web') || m.includes('ats')) chanSelect.value = 'web_portal';
+          else chanSelect.value = '';
+        }
+
+        const channelBtns = !isApplied ? `
+          <button class="btn btn-sm" onclick="specifyApplicationChannel(${j.id}, 'linkedin')" style="border-color:rgba(10,102,194,0.5);color:#60a5fa;font-weight:700" title="Specify applied via LinkedIn">
+            💼 Apply via LinkedIn
+          </button>
+          <button class="btn btn-sm" onclick="specifyApplicationChannel(${j.id}, 'indeed')" style="border-color:rgba(37,99,235,0.5);color:#93c5fd;font-weight:700" title="Specify applied via Indeed">
+            🔵 Apply via Indeed
+          </button>
+        ` : `
+          <button class="btn btn-sm" onclick="openSpecifyAppModal(${j.id})" style="border-color:rgba(56,189,248,0.4);color:var(--cyan-light);font-size:11px" title="Change or specify application channel">
+            📌 Change Channel
+          </button>
+        `;
+
         const linksWrap = document.getElementById('modalJobLinks');
         linksWrap.innerHTML = `
           ${applyBtn}
+          ${channelBtns}
           <a href="/api/jobs/${j.id}/motivation_letter/download" target="_blank" download class="btn btn-sm" style="background:rgba(59,130,246,0.18);border:1px solid rgba(59,130,246,0.4);color:#60a5fa;display:inline-flex;align-items:center;gap:5px" title="Download dedicated company motivation letter (.docx)">
             <span>📝</span> Motivation Letter (.docx)
           </a>
@@ -2306,7 +2383,11 @@
           `).join('');
         }
 
-        document.getElementById('jobModal').classList.add('open');
+        const jm = document.getElementById('jobModal');
+        if (jm) {
+          jm.style.display = 'flex';
+          jm.classList.add('open');
+        }
       } catch (err) {
         showToast('Error opening job details: ' + err.message, 'error');
       }
@@ -2339,7 +2420,11 @@
     }
 
     function closeJobModal() {
-      document.getElementById('jobModal').classList.remove('open');
+      const jm = document.getElementById('jobModal');
+      if (jm) {
+        jm.classList.remove('open');
+        jm.style.display = 'none';
+      }
     }
 
     async function saveJobStage() {
@@ -2355,6 +2440,206 @@
         showToast('Error updating stage: ' + e.message, 'error');
       }
     }
+
+    async function saveJobChannel(channel) {
+      if (!currentActiveJob) return;
+      if (!channel) return;
+      try {
+        await apiSend(`/api/jobs/${currentActiveJob.id}/record_application`, 'POST', {
+          channel: channel,
+          status: 'submitted'
+        });
+        currentActiveJob.application_method = channel;
+        currentActiveJob.stage = 'applied';
+        showToast(`Application recorded via ${channel === 'linkedin' ? 'LinkedIn' : channel === 'indeed' ? 'Indeed' : channel}!`, 'success');
+        await openJobModal(currentActiveJob.id);
+        loadJobs();
+        loadOutbound();
+      } catch (e) {
+        showToast('Error updating channel: ' + e.message, 'error');
+      }
+    }
+
+    async function specifyApplicationChannel(jobId, channel) {
+      try {
+        showToast(`Recording application via ${channel === 'linkedin' ? 'LinkedIn' : channel === 'indeed' ? 'Indeed' : channel}...`, 'normal');
+        await apiSend(`/api/jobs/${jobId}/record_application`, 'POST', {
+          channel: channel,
+          status: 'submitted'
+        });
+        showToast(`✓ Marked as applied via ${channel === 'linkedin' ? 'LinkedIn' : channel === 'indeed' ? 'Indeed' : channel}!`, 'success');
+        if (currentActiveJob && currentActiveJob.id === jobId) {
+          await openJobModal(jobId);
+        }
+        loadJobs();
+        loadOutbound();
+      } catch (e) {
+        showToast('Error recording application: ' + e.message, 'error');
+      }
+    }
+
+    let _activeSpecifyAppJobId = null;
+
+    function openSpecifyAppModal(jobId) {
+      _activeSpecifyAppJobId = jobId;
+      const modal = document.getElementById('specifyAppModal');
+      if (!modal) return;
+      const hiddenInput = document.getElementById('specifyAppJobId');
+      if (hiddenInput) hiddenInput.value = jobId || '';
+
+      const job = (Array.isArray(allJobsList) ? allJobsList.find(j => j.id === jobId) : null) || currentActiveJob;
+      const sub = document.getElementById('specifyAppModalSub');
+      if (sub && job) {
+        sub.textContent = `${job.title} at ${job.company}`;
+      }
+
+      const existingMethod = (job?.application_method || 'linkedin').toLowerCase();
+      let initChan = 'linkedin';
+      if (existingMethod.includes('indeed')) initChan = 'indeed';
+      else if (existingMethod.includes('email')) initChan = 'recruiter_email';
+      else if (existingMethod.includes('portal') || existingMethod.includes('web')) initChan = 'web_portal';
+      setSpecifyChannelChoice(initChan);
+
+      const urlInput = document.getElementById('specifyAppUrlInput');
+      if (urlInput && job) {
+        urlInput.value = job.application_url || job.job_url || '';
+      }
+      const notesInput = document.getElementById('specifyAppNotesInput');
+      if (notesInput) notesInput.value = '';
+
+      modal.style.display = 'flex';
+      (window.requestAnimationFrame || setTimeout)(() => modal.classList.add('open'), 16);
+    }
+
+    function closeSpecifyAppModal() {
+      const modal = document.getElementById('specifyAppModal');
+      if (modal) {
+        modal.classList.remove('open');
+        setTimeout(() => {
+          if (!modal.classList.contains('open')) modal.style.display = 'none';
+        }, 220);
+      }
+      _activeSpecifyAppJobId = null;
+    }
+
+    function setSpecifyChannelChoice(ch) {
+      const valInput = document.getElementById('specifyAppChannelVal');
+      if (valInput) valInput.value = ch;
+      const map = {
+        'linkedin': 'btnSpecChanLinkedin',
+        'indeed': 'btnSpecChanIndeed',
+        'web_portal': 'btnSpecChanPortal',
+        'recruiter_email': 'btnSpecChanEmail',
+      };
+      Object.keys(map).forEach(k => {
+        const btn = document.getElementById(map[k]);
+        if (btn) {
+          if (k === ch) btn.classList.add('btn-cyan');
+          else btn.classList.remove('btn-cyan');
+        }
+      });
+    }
+
+    async function submitSpecifyApplication() {
+      const jobId = _activeSpecifyAppJobId || parseInt(document.getElementById('specifyAppJobId')?.value);
+      if (!jobId) {
+        showToast('No job selected', 'error');
+        return;
+      }
+      const channel = document.getElementById('specifyAppChannelVal')?.value || 'linkedin';
+      const status = document.getElementById('specifyAppStatusSelect')?.value || 'submitted';
+      const appUrl = document.getElementById('specifyAppUrlInput')?.value.trim() || null;
+      const notes = document.getElementById('specifyAppNotesInput')?.value.trim() || null;
+
+      try {
+        await apiSend(`/api/jobs/${jobId}/record_application`, 'POST', {
+          channel,
+          status,
+          application_url: appUrl,
+          notes
+        });
+        showToast(`Application successfully recorded as applied via ${channel === 'linkedin' ? 'LinkedIn' : channel === 'indeed' ? 'Indeed' : channel}!`, 'success');
+        closeSpecifyAppModal();
+        if (currentActiveJob && currentActiveJob.id === jobId) {
+          await openJobModal(jobId);
+        }
+        loadJobs();
+        loadOutbound();
+      } catch (e) {
+        showToast('Failed to record application: ' + e.message, 'error');
+      }
+    }
+
+    function openRecordExternalModal() {
+      const modal = document.getElementById('recordExternalModal');
+      if (!modal) return;
+      document.getElementById('extAppCompany').value = '';
+      document.getElementById('extAppTitle').value = '';
+      document.getElementById('extAppUrl').value = '';
+      document.getElementById('extAppNotes').value = '';
+      setExtChannelChoice('linkedin');
+
+      modal.style.display = 'flex';
+      (window.requestAnimationFrame || setTimeout)(() => modal.classList.add('open'), 16);
+    }
+
+    function closeRecordExternalModal() {
+      const modal = document.getElementById('recordExternalModal');
+      if (modal) {
+        modal.classList.remove('open');
+        setTimeout(() => {
+          if (!modal.classList.contains('open')) modal.style.display = 'none';
+        }, 220);
+      }
+    }
+
+    function setExtChannelChoice(ch) {
+      const valInput = document.getElementById('extAppChannelVal');
+      if (valInput) valInput.value = ch;
+      const map = {
+        'linkedin': 'btnExtChanLinkedin',
+        'indeed': 'btnExtChanIndeed',
+        'web_portal': 'btnExtChanPortal',
+        'recruiter_email': 'btnExtChanEmail',
+      };
+      Object.keys(map).forEach(k => {
+        const btn = document.getElementById(map[k]);
+        if (btn) {
+          if (k === ch) btn.classList.add('btn-cyan');
+          else btn.classList.remove('btn-cyan');
+        }
+      });
+    }
+
+    async function submitRecordExternalApplication() {
+      const company = document.getElementById('extAppCompany')?.value.trim();
+      const title = document.getElementById('extAppTitle')?.value.trim();
+      if (!company || !title) {
+        showToast('Please provide both Company and Job Title', 'error');
+        return;
+      }
+      const channel = document.getElementById('extAppChannelVal')?.value || 'linkedin';
+      const appUrl = document.getElementById('extAppUrl')?.value.trim() || null;
+      const notes = document.getElementById('extAppNotes')?.value.trim() || null;
+
+      try {
+        await apiSend('/api/outbound/record_external', 'POST', {
+          company,
+          job_title: title,
+          channel,
+          job_url: appUrl,
+          notes,
+          status: 'submitted'
+        });
+        showToast(`Application to ${company} logged in Outreach Ledger via ${channel === 'linkedin' ? 'LinkedIn' : channel === 'indeed' ? 'Indeed' : channel}!`, 'success');
+        closeRecordExternalModal();
+        loadOutbound();
+        loadJobs();
+      } catch (e) {
+        showToast('Failed to log application: ' + e.message, 'error');
+      }
+    }
+
 
     async function triggerJobPipeline() {
       const btn = document.getElementById('btnRunJobPipeline');
@@ -2433,41 +2718,51 @@
     let _activeInboxModalItem = null;
     let _activeOutboundModalItem = null;
 
-    function setInboxFilter(filter) {
-      const select = document.getElementById('inboxStatusFilter');
-      if (select) select.value = filter;
+    function syncInboxChips(filter) {
+      if (filter === 'bounced') filter = 'bounce';
       const chips = [
-        { id: 'inboxChipAll', val: '' },
-        { id: 'inboxChipInterview', val: 'interview' },
-        { id: 'inboxChipMatched', val: 'matched' },
-        { id: 'inboxChipRejection', val: 'rejection' },
-        { id: 'inboxChipBounce', val: 'bounce' },
+        { id: 'inboxChipAll', vals: ['', 'all'] },
+        { id: 'inboxChipInterview', vals: ['interview', 'interviews', 'offer'] },
+        { id: 'inboxChipMatched', vals: ['matched', 'job_matched'] },
+        { id: 'inboxChipRejection', vals: ['rejection', 'rejected'] },
+        { id: 'inboxChipBounce', vals: ['bounce', 'bounced'] },
+        { id: 'inboxChipUnmatched', vals: ['unmatched'] },
       ];
       chips.forEach(c => {
         const btn = document.getElementById(c.id);
         if (btn) {
-          if (c.val === filter) {
+          if (c.vals.includes(filter || '')) {
             btn.classList.add('btn-cyan');
           } else {
             btn.classList.remove('btn-cyan');
           }
         }
       });
+    }
+
+    function setInboxFilter(filter) {
+      if (filter === 'bounced') filter = 'bounce';
+      const select = document.getElementById('inboxStatusFilter');
+      if (select) select.value = filter;
+      syncInboxChips(filter);
       loadInbox();
     }
 
     async function loadInbox() {
-      const st = encodeURIComponent(document.getElementById('inboxStatusFilter')?.value || '');
+      const select = document.getElementById('inboxStatusFilter');
+      let st = select ? select.value : '';
+      if (st === 'bounced') st = 'bounce';
+      syncInboxChips(st);
       const search = encodeURIComponent(document.getElementById('inboxSearchInput')?.value || '');
       let url = `/api/inbox?limit=250`;
-      if (st) url += `&status_filter=${st}`;
+      if (st) url += `&status_filter=${encodeURIComponent(st)}`;
       if (search) url += `&search=${search}`;
 
       apiGet('/api/inbox/stats').then(stats => {
         if (!stats) return;
         if (document.getElementById('inboxKpiTotal')) document.getElementById('inboxKpiTotal').textContent = stats.total_replies ?? 0;
         if (document.getElementById('inboxKpiInterviews')) document.getElementById('inboxKpiInterviews').textContent = stats.interviews ?? 0;
-        if (document.getElementById('inboxKpiAction')) document.getElementById('inboxKpiAction').textContent = stats.action_required ?? 0;
+        if (document.getElementById('inboxKpiAction')) document.getElementById('inboxKpiAction').textContent = stats.matched ?? stats.action_required ?? 0;
         if (document.getElementById('inboxKpiRejections')) document.getElementById('inboxKpiRejections').textContent = stats.rejections ?? 0;
         if (document.getElementById('inboxKpiBounces')) document.getElementById('inboxKpiBounces').textContent = stats.bounces ?? 0;
       }).catch(() => {});
@@ -2500,8 +2795,10 @@
           intentPill = `<span class="pill pill-stage-deal_won" style="background:rgba(234,179,8,0.2);color:#fde047;font-weight:700">🏆 Job Offer!</span>`;
         } else if (intent === 'rejection') {
           intentPill = `<span class="pill pill-stage-lost">⛔ Rejection</span>`;
-        } else if (intent === 'bounce' || x.status === 'bounced') {
+        } else if (intent === 'bounce' || x.status === 'bounced' || x.status === 'bounced_unmatched') {
           intentPill = `<span class="pill" style="background:rgba(245,158,11,0.2);color:#fbbf24">⚠️ Mailer Bounce</span>`;
+        } else if (intent === 'unmatched' || x.status === 'unmatched') {
+          intentPill = `<span class="pill" style="background:rgba(148,163,184,0.15);color:var(--text-muted)">❓ Unmatched</span>`;
         } else if (intent === 'screening' || intent === 'info_request') {
           intentPill = `<span class="pill" style="background:rgba(56,189,248,0.2);color:#38bdf8">📝 Info Needed</span>`;
         }
@@ -2531,8 +2828,8 @@
             </td>
             <td style="text-align:right;white-space:nowrap">
               <div style="display:inline-flex;gap:6px">
-                <button class="btn btn-sm btn-cyan" onclick="openInboxModal(${idx})" title="Read incoming email and AI action points">
-                  <span>👁️</span> Read
+                <button class="btn btn-sm btn-cyan" onclick="openInboxModal(${idx})" title="View incoming email and AI action points">
+                  <span>👁️</span> View
                 </button>
                 ${x.job_id ? `<button class="btn btn-sm" onclick="openJobModal(${x.job_id})" title="View original job posting"><span>💼</span></button>` : ''}
               </div>
@@ -2557,7 +2854,7 @@
       if (document.getElementById('inboxModalDate')) document.getElementById('inboxModalDate').textContent = fmt(item.created_at);
       if (document.getElementById('inboxModalSubject')) document.getElementById('inboxModalSubject').textContent = item.subject || 'Recruiter Response';
       if (document.getElementById('inboxModalSender')) document.getElementById('inboxModalSender').textContent = item.sender_email || 'Direct Recruiter';
-      if (document.getElementById('inboxModalTargetJob')) document.getElementById('inboxModalTargetJob').textContent = `${item.company} · ${item.job_title}`;
+      if (document.getElementById('inboxModalTargetJob')) document.getElementById('inboxModalTargetJob').textContent = `${item.company || 'Direct Contact'} · ${item.job_title || 'General Inbound'}`;
 
       const summaryCard = document.getElementById('inboxModalSummaryCard');
       const summaryText = document.getElementById('inboxModalSummaryText');
@@ -2593,12 +2890,18 @@
       }
 
       const modal = document.getElementById('inboxMessageModal');
-      if (modal) modal.style.display = 'flex';
+      if (modal) {
+        modal.style.display = 'flex';
+        modal.classList.add('open');
+      }
     }
 
     function closeInboxModal() {
       const modal = document.getElementById('inboxMessageModal');
-      if (modal) modal.style.display = 'none';
+      if (modal) {
+        modal.classList.remove('open');
+        modal.style.display = 'none';
+      }
       _activeInboxModalItem = null;
     }
 
@@ -2609,35 +2912,43 @@
       }
     }
 
-    function setOutboundFilter(filter) {
-      const select = document.getElementById('outboundStatusFilter');
-      if (select) select.value = filter;
+    function syncOutboundChips(filter) {
       const chips = [
-        { id: 'outboundChipAll', val: '' },
-        { id: 'outboundChipSent', val: 'sent' },
-        { id: 'outboundChipDraft', val: 'draft' },
-        { id: 'outboundChipEmail', val: 'email' },
-        { id: 'outboundChipPortal', val: 'portal' },
-        { id: 'outboundChipBlocked', val: 'blocked' },
+        { id: 'outboundChipAll', vals: ['', 'all'] },
+        { id: 'outboundChipSent', vals: ['sent', 'submitted'] },
+        { id: 'outboundChipLinkedIn', vals: ['linkedin'] },
+        { id: 'outboundChipIndeed', vals: ['indeed'] },
+        { id: 'outboundChipDraft', vals: ['draft'] },
+        { id: 'outboundChipEmail', vals: ['email'] },
+        { id: 'outboundChipPortal', vals: ['portal', 'ats', 'web_portal'] },
+        { id: 'outboundChipBlocked', vals: ['blocked', 'failed', 'recruiter_email_blocked'] },
       ];
       chips.forEach(c => {
         const btn = document.getElementById(c.id);
         if (btn) {
-          if (c.val === filter) {
+          if (c.vals.includes(filter || '')) {
             btn.classList.add('btn-cyan');
           } else {
             btn.classList.remove('btn-cyan');
           }
         }
       });
+    }
+
+    function setOutboundFilter(filter) {
+      const select = document.getElementById('outboundStatusFilter');
+      if (select) select.value = filter;
+      syncOutboundChips(filter);
       loadOutbound();
     }
 
     async function loadOutbound() {
-      const st = encodeURIComponent(document.getElementById('outboundStatusFilter')?.value || '');
+      const select = document.getElementById('outboundStatusFilter');
+      const st = select ? select.value : '';
+      syncOutboundChips(st);
       const search = encodeURIComponent(document.getElementById('outboundSearchInput')?.value || '');
       let url = `/api/outbound?limit=250`;
-      if (st) url += `&status_filter=${st}`;
+      if (st) url += `&status_filter=${encodeURIComponent(st)}`;
       if (search) url += `&search=${search}`;
 
       apiGet('/api/outbound/stats').then(stats => {
@@ -2670,14 +2981,16 @@
 
       tbody.innerHTML = _cachedOutbound.map((x, idx) => {
         let stBadge = `<span class="pill pill-stage-discovered">${esc(x.status)}</span>`;
-        if (x.status === 'sent' || x.status === 'submitted') {
-          stBadge = `<span class="pill pill-stage-deal_won" style="font-weight:700">✓ ${x.status === 'submitted' ? 'Submitted' : 'Sent'}</span>`;
+        if (x.status === 'sent' || x.status === 'submitted' || x.status === 'submitted_unverified') {
+          stBadge = `<span class="pill pill-stage-deal_won" style="font-weight:700">✓ ${x.status === 'submitted' || x.status === 'submitted_unverified' ? 'Submitted' : 'Sent'}</span>`;
         } else if (x.status === 'draft') {
           stBadge = `<span class="pill" style="background:rgba(56,189,248,0.15);color:var(--cyan-light);font-weight:600">📝 Draft Ready</span>`;
         } else if (x.status === 'blocked' || x.status === 'recruiter_email_blocked') {
           stBadge = `<span class="pill" style="background:rgba(245,158,11,0.2);color:#fbbf24">⚠️ Blocked</span>`;
-        } else if (x.status === 'failed') {
+        } else if (x.status === 'failed' || x.status === 'application_error') {
           stBadge = `<span class="pill pill-stage-lost">❌ Failed</span>`;
+        } else if (x.status && (x.status.startsWith('manual') || x.status === 'manual_action')) {
+          stBadge = `<span class="pill" style="background:rgba(168,85,247,0.15);color:var(--purple-light)">🖐️ Portal Action</span>`;
         }
 
         let chanBadge = `<span class="pill" style="background:#1e293b;border:1px solid var(--border)">${esc(x.channel_label || x.channel || 'Outbound')}</span>`;
@@ -2842,12 +3155,18 @@
       }
 
       const modal = document.getElementById('outboundDetailModal');
-      if (modal) modal.style.display = 'flex';
+      if (modal) {
+        modal.style.display = 'flex';
+        modal.classList.add('open');
+      }
     }
 
     function closeOutboundModal() {
       const modal = document.getElementById('outboundDetailModal');
-      if (modal) modal.style.display = 'none';
+      if (modal) {
+        modal.classList.remove('open');
+        modal.style.display = 'none';
+      }
       _activeOutboundModalItem = null;
     }
 
@@ -3390,27 +3709,6 @@
       }
     }
 
-    async function triggerCheckInbox() {
-      const btn = document.getElementById('btnCheckInbox');
-      btn.disabled = true;
-      showToast('Polling email inbox for recruiter replies...', 'normal');
-      try {
-        const res = await apiSend('/api/actions/check_inbox', 'POST');
-        showToast(`Inbox checked! Processed ${res.processed ?? 0} messages.`, 'success');
-        loadInbox();
-        loadJobSummary();
-      } catch (e) {
-        showToast('Inbox check failed: ' + e.message, 'error');
-      } finally {
-        btn.disabled = false;
-      }
-    }
-
-    function toggleExportMenu() {
-      const menu = document.getElementById('exportDropdown');
-      menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
-    }
-
     document.addEventListener('click', (e) => {
       const menu = document.getElementById('exportDropdown');
       if (menu && !e.target.closest('#jobsView') && menu.style.display === 'block') {
@@ -3430,9 +3728,9 @@
 
     async function initAuth() {
       try {
-        const res = await fetch('/api/auth/me');
+        const res = await fetch('/api/auth/me', { credentials: 'include' });
         if (!res.ok) {
-          if (res.status === 401) {
+          if (res.status === 401 && window.location.pathname !== '/' && window.location.pathname !== '') {
             window.location.href = '/';
             return;
           }
@@ -7115,11 +7413,8 @@
           }
         }
 
-        // Auto-Trigger Onboarding Modal if incomplete and not dismissed for this session
-        const modalDismissed = sessionStorage.getItem('onboarding_modal_shown') === 'true';
-        if ((res.is_first_time || res.completion_percent < 80) && !modalDismissed) {
-          openOnboardingModal(res);
-        }
+        // Auto-trigger disabled so modal never blocks the screen
+        // Users can open it at any time by clicking the top bar Setup button
       } catch (err) {
         console.debug('Setup status check error:', err);
       }
@@ -7566,6 +7861,29 @@
     window.testPortalConnection = testPortalConnection;
     window.toggleGuide = toggleGuide;
     window.togglePasswordVisibility = togglePasswordVisibility;
+
+    // Expose Inbox & Outreach Ledger Modals & Application Channel Handlers Globally
+    window.openOutboundModal = openOutboundModal;
+    window.closeOutboundModal = closeOutboundModal;
+    window.retryOutboundModalApplication = retryOutboundModalApplication;
+    window.resendJobApplication = resendJobApplication;
+    window.openInboxModal = openInboxModal;
+    window.closeInboxModal = closeInboxModal;
+    window.copyInboxSender = copyInboxSender;
+    window.syncOutboundChips = syncOutboundChips;
+    window.syncInboxChips = syncInboxChips;
+    window.setInboxFilter = setInboxFilter;
+    window.setOutboundFilter = setOutboundFilter;
+    window.saveJobChannel = saveJobChannel;
+    window.specifyApplicationChannel = specifyApplicationChannel;
+    window.openSpecifyAppModal = openSpecifyAppModal;
+    window.closeSpecifyAppModal = closeSpecifyAppModal;
+    window.setSpecifyChannelChoice = setSpecifyChannelChoice;
+    window.submitSpecifyApplication = submitSpecifyApplication;
+    window.openRecordExternalModal = openRecordExternalModal;
+    window.closeRecordExternalModal = closeRecordExternalModal;
+    window.setExtChannelChoice = setExtChannelChoice;
+    window.submitRecordExternalApplication = submitRecordExternalApplication;
 
 
 

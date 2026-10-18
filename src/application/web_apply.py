@@ -19,6 +19,34 @@ from src.storage.quota import reserve_application_attempt
 
 logger = logging.getLogger(__name__)
 
+_ws_reachability_cache: dict[str, tuple[bool, float]] = {}
+
+
+def _is_ws_endpoint_reachable(ep_url: str) -> bool:
+    import time
+    from urllib.parse import urlparse
+    import socket
+    from pathlib import Path
+    now = time.monotonic()
+    if ep_url in _ws_reachability_cache:
+        cached_ok, cached_time = _ws_reachability_cache[ep_url]
+        if now - cached_time < 60.0:
+            return cached_ok
+    try:
+        u = urlparse(ep_url)
+        host = u.hostname or "localhost"
+        if host in ("browser", "rabbitmq", "postgres") and not Path("/.dockerenv").is_file():
+            _ws_reachability_cache[ep_url] = (False, now)
+            return False
+        port = u.port or (443 if u.scheme in ("wss", "https") else 80 if u.scheme == "ws" else 3000)
+        with socket.create_connection((host, port), timeout=0.3):
+            _ws_reachability_cache[ep_url] = (True, now)
+            return True
+    except Exception:
+        _ws_reachability_cache[ep_url] = (False, now)
+        return False
+
+
 SUPPORTED_ATS = {
     "greenhouse.io": "greenhouse",
     "grnh.se": "greenhouse",
@@ -519,23 +547,59 @@ def apply_via_browser(job_record: dict, session=None, profile: dict | None = Non
     is_linkedin = "linkedin.com" in host
     is_indeed = "indeed.com" in host
 
+    u_cfg = {}
+    try:
+        from src.storage.user_settings import get_user_effective_settings
+        u_cfg = get_user_effective_settings(user_id=job_record.get("user_id"))
+    except Exception:
+        pass
+
+    auto_linkedin = u_cfg.get("auto_apply_linkedin_enabled")
+    if auto_linkedin is None:
+        auto_linkedin = getattr(settings, "auto_apply_linkedin_enabled", True)
+
+    auto_indeed = u_cfg.get("auto_apply_indeed_enabled")
+    if auto_indeed is None:
+        auto_indeed = getattr(settings, "auto_apply_indeed_enabled", True)
+
+    li_cookie = (profile.get("linkedin_cookie") if profile else None) or u_cfg.get("linkedin_cookie") or (u_cfg.get("custom_env") or {}).get("LINKEDIN_COOKIE") or getattr(settings, "linkedin_cookie", "")
+    ind_cookie = (profile.get("indeed_cookie") if profile else None) or u_cfg.get("indeed_cookie") or (u_cfg.get("custom_env") or {}).get("INDEED_COOKIE") or getattr(settings, "indeed_cookie", "")
+
     # If it is a job board URL, only proceed if portal automation is enabled for it
     if is_board_url(url):
-        if is_linkedin and not getattr(settings, "auto_apply_linkedin_enabled", True):
-            return {
-                "application_method": "linkedin_manual",
-                "application_status": "manual_linkedin",
-                "application_url": url,
-                "applied": False,
-            }
-        elif is_indeed and not getattr(settings, "auto_apply_indeed_enabled", True):
-            return {
-                "application_method": "job_board_manual",
-                "application_status": "manual_job_board",
-                "application_url": url,
-                "applied": False,
-            }
-        elif not (is_linkedin or is_indeed):
+        if is_linkedin:
+            if not auto_linkedin:
+                return {
+                    "application_method": "linkedin_manual",
+                    "application_status": "manual_linkedin",
+                    "application_url": url,
+                    "applied": False,
+                }
+            if not li_cookie:
+                return {
+                    "application_method": "linkedin_manual",
+                    "application_status": "manual_auth_required",
+                    "application_url": url,
+                    "applied": False,
+                    "application_error": "LinkedIn session cookie required. Configure li_at in Settings to enable Easy Apply.",
+                }
+        elif is_indeed:
+            if not auto_indeed:
+                return {
+                    "application_method": "job_board_manual",
+                    "application_status": "manual_job_board",
+                    "application_url": url,
+                    "applied": False,
+                }
+            if not ind_cookie:
+                return {
+                    "application_method": "indeed_portal",
+                    "application_status": "manual_auth_required",
+                    "application_url": url,
+                    "applied": False,
+                    "application_error": "Indeed session cookie required. Configure Indeed cookie in Settings to enable Indeed Apply.",
+                }
+        else:
             return {
                 "application_method": "job_board_manual",
                 "application_status": "manual_job_board",
@@ -591,9 +655,11 @@ def apply_via_browser(job_record: dict, session=None, profile: dict | None = Non
             unique_endpoints = [e for e in endpoints if not (e in seen_eps or seen_eps.add(e))]
 
             for ep in unique_endpoints:
+                if not _is_ws_endpoint_reachable(ep):
+                    continue
                 for launcher in (pw.firefox, pw.chromium):
                     try:
-                        browser = launcher.connect(ep, timeout=8000)
+                        browser = launcher.connect(ep, timeout=3000)
                         logger.info("Connected to remote browser via %s at %s", launcher.name, ep)
                         break
                     except Exception as exc:
@@ -636,26 +702,62 @@ def apply_via_browser(job_record: dict, session=None, profile: dict | None = Non
                     pass
 
                 if is_linkedin:
-                    li_cookie = (profile.get("linkedin_cookie") if profile else None) or u_cfg.get("linkedin_cookie") or getattr(settings, "linkedin_cookie", "")
+                    li_cookie = (profile.get("linkedin_cookie") if profile else None) or u_cfg.get("linkedin_cookie") or (u_cfg.get("custom_env") or {}).get("LINKEDIN_COOKIE") or getattr(settings, "linkedin_cookie", "")
+                    if not li_cookie:
+                        try:
+                            from src.storage.user_settings import get_user_effective_settings
+                            from src.storage.db import get_session
+                            from src.storage.models import User, UserRole
+                            with get_session() as s_adm:
+                                adm = s_adm.scalar(select(User).where(User.role == UserRole.ADMIN.value).order_by(User.id))
+                                if adm:
+                                    adm_cfg = get_user_effective_settings(user_id=adm.id)
+                                    li_cookie = adm_cfg.get("linkedin_cookie") or (adm_cfg.get("custom_env") or {}).get("LINKEDIN_COOKIE") or ""
+                        except Exception:
+                            pass
+
                     if li_cookie:
                         cookie_val = li_cookie.strip()
                         if "li_at=" in cookie_val:
                             cookie_val = cookie_val.split("li_at=", 1)[1].split(";", 1)[0].strip()
                         try:
-                            context.add_cookies([{
-                                "name": "li_at",
-                                "value": cookie_val,
-                                "domain": ".linkedin.com",
-                                "path": "/",
-                                "httpOnly": True,
-                                "secure": True,
-                            }])
+                            context.add_cookies([
+                                {
+                                    "name": "li_at",
+                                    "value": cookie_val,
+                                    "domain": ".linkedin.com",
+                                    "path": "/",
+                                    "httpOnly": True,
+                                    "secure": True,
+                                },
+                                {
+                                    "name": "li_at",
+                                    "value": cookie_val,
+                                    "domain": "www.linkedin.com",
+                                    "path": "/",
+                                    "httpOnly": True,
+                                    "secure": True,
+                                }
+                            ])
                             logger.info("Injected LinkedIn session cookie (li_at) for browser session.")
                         except Exception as c_err:
                             logger.warning("Could not set LinkedIn cookie: %s", c_err)
 
                 if is_indeed:
-                    ind_cookie = (profile.get("indeed_cookie") if profile else None) or u_cfg.get("indeed_cookie") or getattr(settings, "indeed_cookie", "")
+                    ind_cookie = (profile.get("indeed_cookie") if profile else None) or u_cfg.get("indeed_cookie") or (u_cfg.get("custom_env") or {}).get("INDEED_COOKIE") or getattr(settings, "indeed_cookie", "")
+                    if not ind_cookie:
+                        try:
+                            from src.storage.user_settings import get_user_effective_settings
+                            from src.storage.db import get_session
+                            from src.storage.models import User, UserRole
+                            with get_session() as s_adm:
+                                adm = s_adm.scalar(select(User).where(User.role == UserRole.ADMIN.value).order_by(User.id))
+                                if adm:
+                                    adm_cfg = get_user_effective_settings(user_id=adm.id)
+                                    ind_cookie = adm_cfg.get("indeed_cookie") or (adm_cfg.get("custom_env") or {}).get("INDEED_COOKIE") or ""
+                        except Exception:
+                            pass
+
                     if ind_cookie:
                         cookie_val = ind_cookie.strip()
                         try:
@@ -1180,7 +1282,28 @@ def _handle_indeed_portal(page, job_record: dict, profile: dict | None, resume: 
             page.wait_for_timeout(2000)
             return _fill_and_submit_ats_form(page, job_record, profile, resume, body, session=session)
 
-    # Step 2: Check for Indeed Apply button
+    # Step 2: Check if user has connected their Indeed account
+    ind_cookie = (profile.get("indeed_cookie") if profile else None)
+    if not ind_cookie:
+        try:
+            from src.storage.user_settings import get_user_effective_settings
+            u_cfg = get_user_effective_settings(user_id=job_record.get("user_id"))
+            ind_cookie = u_cfg.get("indeed_cookie") or (u_cfg.get("custom_env") or {}).get("INDEED_COOKIE") or getattr(settings, "indeed_cookie", "")
+        except Exception:
+            ind_cookie = ""
+
+    if not ind_cookie:
+        screenshot_path = _screenshot(page, job_record)
+        return {
+            "application_method": "indeed_portal",
+            "application_status": "manual_auth_required",
+            "application_url": page_url,
+            "applied": False,
+            "application_error": "Indeed session cookie required. Please configure your Indeed cookie in Settings to enable Indeed Apply.",
+            "application_screenshot_path": screenshot_path,
+        }
+
+    # Step 3: Check for Indeed Apply button
     indeed_apply_btn = _first_present(page, [
         '#indeedApplyButton',
         'button:has-text("Apply now")',

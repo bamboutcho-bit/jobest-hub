@@ -39,14 +39,23 @@ def build_company_motivation_letter_text(
 
     # Candidate details
     p = profile or {}
-    candidate_name = _clean_str(p.get("name") or "Candidate")
+    candidate_name = _clean_str(p.get("name") or "")
+    if not candidate_name or candidate_name.lower() in ("candidate", "python ai architect", "ss", "unknown"):
+        try:
+            from src.candidate.profile_manager import get_active_profile
+            ap = get_active_profile()
+            candidate_name = _clean_str(ap.get("name") or "")
+        except Exception:
+            candidate_name = ""
+    if not candidate_name or candidate_name.lower() in ("candidate", "python ai architect", "ss", "unknown"):
+        candidate_name = "Hamza Oukhouya"
     if " - " in candidate_name:
         candidate_name = candidate_name.split(" - ")[0].strip()
     headline = _clean_str(p.get("headline") or "Software Engineer")
     email = _clean_str(p.get("email") or "")
     phone = _clean_str(p.get("phone") or "")
     location = _clean_str(p.get("location") or p.get("current_location") or "Remote")
-    core_stack = p.get("core_stack") or ["Python", "FastAPI", "PostgreSQL", "Docker"]
+    core_stack = p.get("core_stack") or ["Java", "Spring Boot", "React", "PostgreSQL", "Docker"]
     if isinstance(core_stack, str):
         try:
             import json
@@ -75,6 +84,8 @@ def build_company_motivation_letter_text(
         salutation = f"Madame, Monsieur, Équipe Recrutement de {company},"
 
         if custom_fr and len(custom_fr) > 80:
+            for bad in ("Python AI Architect", "Candidate Name", "Candidate", "ss"):
+                custom_fr = re.sub(rf"\b{re.escape(bad)}\b", candidate_name, custom_fr, flags=re.I)
             # Clean AI-generated message into paragraphs
             paragraphs = [p.strip() for p in custom_fr.split("\n\n") if p.strip()]
             # Filter greeting and signoff if already present
@@ -97,6 +108,8 @@ def build_company_motivation_letter_text(
         salutation = f"Dear {company} Hiring Team,"
 
         if custom_en and len(custom_en) > 80:
+            for bad in ("Python AI Architect", "Candidate Name", "Candidate", "ss"):
+                custom_en = re.sub(rf"\b{re.escape(bad)}\b", candidate_name, custom_en, flags=re.I)
             paragraphs = [p.strip() for p in custom_en.split("\n\n") if p.strip()]
             paragraphs = [
                 p for p in paragraphs 

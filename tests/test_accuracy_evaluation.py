@@ -203,3 +203,61 @@ def test_entry_level_moroccan_engineer_scoring():
     assert res3["continent"] == "Global Remote"
     assert res3["visa_category"] == "remote_global"
     assert res3["score"] >= 70, f"Expected >= 70 for global remote match, got {res3['score']}"
+
+
+def test_api_jobs_multidimensional_filtering():
+    from fastapi.testclient import TestClient
+    from src.dashboard.app import app, _auth
+    from src.storage.db import get_session, init_db
+    from src.storage.models import JobPosting, PipelineStage
+
+    import uuid
+    init_db()
+    with get_session() as s:
+        test_job = JobPosting(
+            dedup_hash=f"test_cloud_euro_{uuid.uuid4().hex[:8]}",
+            title="Junior Cloud Engineer",
+            company="EuroCloud SA",
+            location="Zurich, Switzerland",
+            continent="Europe",
+            experience_level="entry",
+            experience_years_required=1,
+            degree_required="bachelor",
+            degree_matched=True,
+            visa_category="sponsored",
+            relocation_detected=True,
+            match_score=85,
+            pipeline_stage=PipelineStage.DISCOVERED,
+        )
+        s.add(test_job)
+        s.commit()
+        job_id = test_job.id
+
+    app.dependency_overrides[_auth] = lambda: True
+    try:
+        client = TestClient(app)
+
+        # 1. Matching filter (case-insensitive)
+        resp = client.get("/api/jobs?continent=europe&experience=entry&visa=sponsored&degree=bachelor")
+        assert resp.status_code == 200
+        jobs = resp.json()
+        assert any(j["id"] == job_id for j in jobs)
+
+        # 2. Non-matching continent
+        resp_mismatch = client.get("/api/jobs?continent=north_america")
+        assert resp_mismatch.status_code == 200
+        jobs_mismatch = resp_mismatch.json()
+        assert not any(j["id"] == job_id for j in jobs_mismatch)
+
+        # 3. Batch re-evaluation endpoint
+        batch_resp = client.post("/api/jobs/re_evaluate_batch?force_all=true")
+        assert batch_resp.status_code == 200
+        assert batch_resp.json().get("ok") is True
+    finally:
+        app.dependency_overrides.pop(_auth, None)
+        with get_session() as s:
+            j = s.get(JobPosting, job_id)
+            if j:
+                s.delete(j)
+                s.commit()
+

@@ -223,11 +223,15 @@ def extract_degree_requirement(text: str) -> DegreeResult:
     if re.search(r"\b(phd|doctorate|doctoral|thèse|docteur)\b", low):
         return DegreeResult("phd")
 
-    if re.search(r"\b(master'?s?|m\.?sc|m\.?s\.|bac\s*\+\s*5|diplôme d'ingénieur|ingénieur d'état|postgraduate)\b", low):
-        return DegreeResult("master")
+    # If both Bachelor and Master are mentioned (e.g. "Bachelor or Master degree", "B.Sc or M.Sc"):
+    # The requirement is Bachelor (the minimum acceptable degree)!
+    has_bachelor = bool(re.search(r"\b(bachelor'?s?|b\.?sc|b\.?s\.|bac\s*\+\s*3|licence|undergraduate|university degree|degree in computer science|bs in cs)\b", low))
+    has_master = bool(re.search(r"\b(master'?s?|m\.?sc|m\.?s\.|bac\s*\+\s*5|diplôme d'ingénieur|ingénieur d'état|postgraduate)\b", low))
 
-    if re.search(r"\b(bachelor'?s?|b\.?sc|b\.?s\.|bac\s*\+\s*3|licence|undergraduate|university degree|degree in computer science|bs in cs)\b", low):
+    if has_bachelor:
         return DegreeResult("bachelor")
+    if has_master:
+        return DegreeResult("master")
 
     if any(k in low for k in ["degree not required", "no degree required", "or equivalent practical experience", "or equivalent experience", "self-taught"]):
         return DegreeResult("none")
@@ -338,31 +342,87 @@ def evaluate_heuristic(job: dict[str, Any], profile: dict[str, Any] | None = Non
     desc = str(job.get("raw_description") or job.get("description") or "").lower()
     full_text = f"{title.lower()} {company.lower()} {location.lower()} {desc}"
 
-    # 1. Target Title Matching
+    # 1. Target Title Matching (with multilingual & spelling normalization)
     title_lower = title.lower()
+    norm_title = (title_lower
+                  .replace("entwickler", "developer")
+                  .replace("développeur", "developer")
+                  .replace("developpeur", "developer")
+                  .replace("ingénieur", "engineer")
+                  .replace("ingenieur", "engineer")
+                  .replace("full-stack", "fullstack")
+                  .replace("full stack", "fullstack")
+                  .replace("back-end", "backend")
+                  .replace("back end", "backend"))
+
     target_titles = profile.get("target_titles") or []
     title_score = 0
 
     for target in target_titles:
-        t_low = target.lower()
-        if t_low in title_lower:
+        t_low = target.lower().replace("full-stack", "fullstack").replace("full stack", "fullstack").replace("back-end", "backend").replace("back end", "backend")
+        if t_low in norm_title or t_low in title_lower:
             title_score = 35
             break
         words = [w for w in t_low.split() if len(w) > 3]
-        matches = sum(1 for w in words if w in title_lower)
+        matches = sum(1 for w in words if w in norm_title or w in title_lower)
         if words and (matches / len(words)) >= 0.5:
             title_score = max(title_score, 25)
 
-    # 2. Core Stack & Keywords Matching
+    # 2. Core Stack & Keywords Matching (with canonical variants and punctuation robustness)
     core_stack = profile.get("core_stack") or []
     custom_keywords = profile.get("keywords") or []
-    all_candidate_skills = list(dict.fromkeys(core_stack + custom_keywords))
+    seen_skills_lower = set()
+    all_candidate_skills = []
+    for s in (core_stack + custom_keywords):
+        if not s or not isinstance(s, str):
+            continue
+        s_clean = s.strip()
+        s_lower = s_clean.lower()
+        if s_lower not in seen_skills_lower:
+            seen_skills_lower.add(s_lower)
+            all_candidate_skills.append(s_clean)
+
+    SKILL_SYNONYMS = {
+        "reactjs": ["react", "reactjs", "react.js"],
+        "angular": ["angular", "angularjs"],
+        "postgresql": ["postgresql", "postgres"],
+        "kubernetes": ["kubernetes", "k8s"],
+        "ci/cd": ["ci/cd", "ci / cd", "cicd", "continuous integration"],
+        "rest apis": ["rest api", "rest apis", "restful", "rest"],
+        "spring boot": ["spring boot", "spring framework", "spring"],
+        "spring security": ["spring security", "spring"],
+        "spring data jpa": ["spring data", "spring data jpa", "jpa", "hibernate"],
+        "machine learning": ["machine learning", "ml"],
+        "artificial intelligence": ["artificial intelligence", "ai"],
+    }
 
     matched_skills: list[str] = []
+    matched_skills_lower = set()
     for skill in all_candidate_skills:
-        pattern = r"\b" + re.escape(skill.lower()) + r"\b"
-        if re.search(pattern, full_text):
-            matched_skills.append(skill)
+        s_low = skill.lower()
+        variants = [s_low]
+        if s_low in SKILL_SYNONYMS:
+            variants.extend(SKILL_SYNONYMS[s_low])
+        if "/" in s_low:
+            parts = [p.strip() for p in s_low.split("/") if p.strip()]
+            first_word = parts[0].split()[0] if parts and parts[0] else ""
+            if first_word and len(first_word) >= 3:
+                variants.append(first_word)
+            variants.extend(parts)
+
+        found = False
+        for var in variants:
+            if "/" in var or "." in var:
+                pattern = rf"(?:^|[\s,;/()\[\]\-])" + re.escape(var) + rf"(?:$|[\s,;/()\[\]\-])"
+            else:
+                pattern = r"\b" + re.escape(var) + r"\b"
+            if re.search(pattern, full_text):
+                found = True
+                break
+        if found:
+            if s_low not in matched_skills_lower:
+                matched_skills_lower.add(s_low)
+                matched_skills.append(skill)
 
     skill_score = min(40, len(matched_skills) * 8)
 
@@ -381,22 +441,41 @@ def evaluate_heuristic(job: dict[str, Any], profile: dict[str, Any] | None = Non
     experience_level = exp_res["experience_level"]
     experience_years_required = exp_res["experience_years_required"]
 
-    exp_specified = ("experience_years" in profile and profile.get("experience_years") is not None) or bool(profile.get("target_experience_level"))
     candidate_exp_years = int(profile.get("experience_years") or 0)
-    candidate_is_entry = (candidate_exp_years <= 2 or profile.get("target_experience_level") in ("entry", "junior")) if exp_specified else False
+    target_exp_lvl = (profile.get("target_experience_level") or "").lower()
+
+    # Determine candidate profile seniority accurately
+    if candidate_exp_years <= 2 and target_exp_lvl in ("entry", "junior"):
+        candidate_seniority = "entry"
+    elif candidate_exp_years <= 5:
+        candidate_seniority = "mid"
+    elif candidate_exp_years <= 8:
+        candidate_seniority = "senior"
+    else:
+        candidate_seniority = "lead"
 
     exp_score_mod = 0
-    if candidate_is_entry:
+    if candidate_seniority == "entry":
         if experience_level in ("senior", "lead") or (experience_years_required and experience_years_required >= 5):
-            # Heavy penalty for senior roles when candidate is junior
-            exp_score_mod = -40
+            exp_score_mod = -30
         elif experience_level == "entry" or (experience_years_required is not None and experience_years_required <= 2):
-            # Priority bonus for true entry level / junior roles
             exp_score_mod = +20
         elif experience_level == "mid" or (experience_years_required and experience_years_required in (3, 4)):
-            exp_score_mod = -10
-    elif exp_specified:
-        if experience_years_required and abs(candidate_exp_years - experience_years_required) <= 2:
+            exp_score_mod = -5
+    elif candidate_seniority == "mid":
+        # Candidate has 3-5 years experience (e.g. 4 years)
+        if experience_level == "mid" or (experience_years_required and experience_years_required in (2, 3, 4, 5)):
+            exp_score_mod = +20
+        elif experience_level == "entry" or (experience_years_required is not None and experience_years_required <= 2):
+            exp_score_mod = +15  # Easily qualified for junior/entry
+        elif experience_level == "senior" or (experience_years_required and experience_years_required in (5, 6)):
+            exp_score_mod = +5   # Borderline senior is approachable for 4y exp
+        elif experience_level == "lead" or (experience_years_required and experience_years_required >= 8):
+            exp_score_mod = -20
+    elif candidate_seniority in ("senior", "lead"):
+        if experience_level in ("senior", "lead"):
+            exp_score_mod = +20
+        elif experience_level == "mid":
             exp_score_mod = +15
 
     # 6. Degree Requirement & Candidate Matching
@@ -428,10 +507,12 @@ def evaluate_heuristic(job: dict[str, Any], profile: dict[str, Any] | None = Non
     total_score = max(0, min(100, title_score + skill_score + exp_score_mod + deg_score_mod - neg_penalty))
 
     reasons: list[str] = []
-    if candidate_is_entry and (experience_level == "entry" or (experience_years_required is not None and experience_years_required <= 2)):
+    if candidate_seniority == "entry" and (experience_level == "entry" or (experience_years_required is not None and experience_years_required <= 2)):
         reasons.append("🟢 Entry-Level Match")
-    elif candidate_is_entry and (experience_level in ("senior", "lead") or (experience_years_required and experience_years_required >= 5)):
-        reasons.append("🔴 Senior / Overqualified Penalty (-40)")
+    elif candidate_seniority == "entry" and (experience_level in ("senior", "lead") or (experience_years_required and experience_years_required >= 5)):
+        reasons.append("🔴 Senior / Overqualified Penalty")
+    elif candidate_seniority == "mid" and (experience_level in ("mid", "entry") or (experience_years_required and experience_years_required in (1, 2, 3, 4, 5))):
+        reasons.append("🟢 Experience Level Match")
     
     if visa_category == "restricted":
         reasons.append("⚠️ Restricted Work Authorization (No Visa)")
@@ -447,7 +528,16 @@ def evaluate_heuristic(job: dict[str, Any], profile: dict[str, Any] | None = Non
 
     reason_str = " · ".join(reasons) if reasons else f"Heuristic match score: {total_score}% based on stack and target title alignment."
 
-    candidate_name = profile.get("name") or "Candidate"
+    candidate_name = (profile.get("name") or "").strip()
+    if not candidate_name or candidate_name.lower() in ("candidate", "python ai architect", "ss", "unknown"):
+        try:
+            from src.candidate.profile_manager import get_active_profile
+            ap = get_active_profile()
+            candidate_name = (ap.get("name") or "").strip()
+        except Exception:
+            candidate_name = ""
+    if not candidate_name or candidate_name.lower() in ("candidate", "python ai architect", "ss", "unknown"):
+        candidate_name = getattr(settings, "sender_display_name", "") or "Hamza Oukhouya"
     skills_summary = ", ".join(matched_skills[:4]) if matched_skills else ", ".join(core_stack[:3])
 
     pitch_en = (

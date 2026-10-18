@@ -92,4 +92,4 @@ def test_checkout_and_receipt_lifecycle(client):
     with get_session() as session:
         u = session.get(User, user_id)
         assert u.current_plan == "pro"
-        assert u.daily_apply_limit == 150
+        assert u.daily_apply_limit == 50

@@ -7,12 +7,19 @@ from __future__ import annotations
 
 import logging
 import math
+import socket
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as FutureTimeoutError
 from datetime import datetime, timezone
 from typing import Any, Callable
 
-import pandas as pd
+# Set global socket timeout to prevent indefinite hangs in underlying requests
+socket.setdefaulttimeout(45)
+
+try:
+    import pandas as pd
+except ImportError:
+    pd = None
 
 from config.candidate_profile import SEARCH_MATRIX, DEFAULT_DISCOVERY_SITES
 from config.settings import settings
@@ -68,6 +75,14 @@ def _configured_sites(query: dict[str, Any]) -> list[str]:
     else:
         sites = [x.strip().lower() for x in settings.scrape_sites.split(",") if x.strip()] or list(DEFAULT_DISCOVERY_SITES)
 
+    # Without proxies, Indeed GraphQL endpoint (apis.indeed.com) times out indefinitely (4500s+)
+    # and Google 429s. Automatically prune them if unproxied to protect pipeline throughput.
+    has_proxies = bool(settings.jobspy_proxies and settings.jobspy_proxies.strip())
+    if not has_proxies:
+        sites = [s for s in sites if s not in {"indeed", "google"}]
+        if not sites:
+            sites = ["linkedin"]
+
     if "glassdoor" in sites:
         country = str(query.get("country") or query.get("location") or "").strip().lower()
         if country not in _GLASSDOOR_SUPPORTED_COUNTRIES:
@@ -92,6 +107,29 @@ def _safe_scalar(value: Any) -> Any:
     except TypeError:
         pass
     return value
+
+
+def _run_scrape_with_timeout(kwargs: dict[str, Any], timeout_seconds: float = 45.0) -> pd.DataFrame:
+    """Run scrape_jobs in a thread with a hard timeout to prevent indefinite hangs in underlying network calls."""
+    import threading
+    res_box: list[pd.DataFrame] = []
+    err_box: list[Exception] = []
+
+    def _worker():
+        try:
+            df = scrape_jobs(**kwargs)
+            res_box.append(df if df is not None else pd.DataFrame())
+        except Exception as e:
+            err_box.append(e)
+
+    th = threading.Thread(target=_worker, daemon=True)
+    th.start()
+    th.join(timeout=timeout_seconds)
+    if th.is_alive():
+        raise TimeoutError(f"JobSpy scrape exceeded hard deadline of {timeout_seconds}s")
+    if err_box:
+        raise err_box[0]
+    return res_box[0] if res_box else pd.DataFrame()
 
 
 def _scrape_one_query(query: dict[str, Any]) -> tuple[pd.DataFrame, bool, str, float]:
@@ -132,7 +170,7 @@ def _scrape_one_query(query: dict[str, Any]) -> tuple[pd.DataFrame, bool, str, f
         if settings.jobspy_delay_seconds > 0:
             time.sleep(settings.jobspy_delay_seconds)
 
-        df = scrape_jobs(**kwargs)
+        df = _run_scrape_with_timeout(kwargs, timeout_seconds=45.0)
         duration = round(time.perf_counter() - started, 2)
         return (df if df is not None else pd.DataFrame()), False, "", duration
     except Exception as exc:
@@ -146,7 +184,7 @@ def _scrape_one_query(query: dict[str, Any]) -> tuple[pd.DataFrame, bool, str, f
                 kwargs_retry["site_name"] = fallback_sites
                 if "google_search_term" in kwargs_retry:
                     del kwargs_retry["google_search_term"]
-                df = scrape_jobs(**kwargs_retry)
+                df = _run_scrape_with_timeout(kwargs_retry, timeout_seconds=30.0)
                 duration = round(time.perf_counter() - started, 2)
                 return (df if df is not None else pd.DataFrame()), False, "", duration
             except Exception as retry_exc:
@@ -213,7 +251,7 @@ def run_ingestion(progress_callback: ProgressCallback | None = None, queries: li
                 label = f"{query.get('term', '')} @ {query.get('location') or 'Global remote'}"
                 sites = _configured_sites(query)
                 try:
-                    df, had_error, error, duration = future.result()
+                    df, had_error, error, duration = future.result(timeout=180)
                 except Exception as exc:
                     df, had_error, error, duration = pd.DataFrame(), True, str(exc)[:1000], 0.0
                 row_count = int(len(df.index)) if not df.empty else 0
@@ -235,7 +273,7 @@ def run_ingestion(progress_callback: ProgressCallback | None = None, queries: li
             else:
                 source = task["term"]
                 try:
-                    rows, error, duration = future.result()
+                    rows, error, duration = future.result(timeout=180)
                 except Exception as exc:
                     rows, error, duration = [], str(exc)[:1000], 0.0
                 row_count = len(rows)

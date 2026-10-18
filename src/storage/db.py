@@ -7,15 +7,37 @@ from sqlalchemy.orm import sessionmaker
 from config.settings import settings
 from src.storage.models import Base
 
+import socket
+from pathlib import Path
+from urllib.parse import urlparse
+
+def _is_db_reachable(url: str) -> bool:
+    if not url or url.startswith("sqlite"):
+        return True
+    try:
+        parsed = urlparse(url)
+        host = parsed.hostname
+        if not host:
+            return False
+        if host in ("postgres", "db", "database") and not Path("/.dockerenv").is_file():
+            return False
+        port = parsed.port or (5432 if "postgres" in (parsed.scheme or "") else 3306)
+        with socket.create_connection((host, port), timeout=0.3):
+            return True
+    except Exception:
+        return False
+
+_target_url = settings.database_url if _is_db_reachable(settings.database_url) else "sqlite:///./jobsearch_local.db"
+
 try:
     _engine = create_engine(
-        settings.database_url,
+        _target_url,
         pool_pre_ping=True,
-        connect_args={"check_same_thread": False, "timeout": 30} if settings.database_url.startswith("sqlite") else {"connect_timeout": 2},
+        connect_args={"check_same_thread": False, "timeout": 30} if _target_url.startswith("sqlite") else {"connect_timeout": 2},
     )
-    # Validate driver availability
-    if not settings.database_url.startswith("sqlite"):
-        _engine.dialect.initialize(_engine.connect())
+    if not _target_url.startswith("sqlite"):
+        with _engine.connect() as _test_conn:
+            _engine.dialect.initialize(_test_conn)
 except Exception:
     _engine = create_engine(
         "sqlite:///./jobsearch_local.db",
@@ -143,11 +165,11 @@ _db_initialized = False
 
 def init_db() -> None:
     global _engine, _SessionLocal, _db_initialized
-    try:
-        with _engine.connect() as conn:
-            pass
-    except Exception as exc:
-        if "postgres" in settings.database_url or "5432" in settings.database_url:
+    if not str(_engine.url).startswith("sqlite"):
+        try:
+            with _engine.connect() as conn:
+                pass
+        except Exception as exc:
             import logging
             logging.getLogger("src.storage.db").warning(
                 "PostgreSQL server unreachable (%s). Falling back to local SQLite database (jobsearch_local.db).",
@@ -155,6 +177,7 @@ def init_db() -> None:
             )
             _engine = create_engine(
                 "sqlite:///jobsearch_local.db",
+                pool_pre_ping=True,
                 connect_args={"check_same_thread": False, "timeout": 30},
             )
             _SessionLocal = sessionmaker(bind=_engine, autoflush=False, autocommit=False)

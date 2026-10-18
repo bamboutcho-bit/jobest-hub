@@ -11,11 +11,27 @@ from config.settings import settings
 
 logger = logging.getLogger(__name__)
 
+_sent_alert_ids: set[int] = set()
+_sent_alert_signatures: set[str] = set()
+
 
 def send_email_alert(job: dict) -> bool:
     if not getattr(settings, "email_alerts_enabled", False):
         logger.debug("Email alerts are disabled (EMAIL_ALERTS_ENABLED=false) — skipping email alert.")
         return False
+
+    job_id = job.get("id")
+    title = str(job.get("title") or "").strip().lower()
+    company = str(job.get("company") or "").strip().lower()
+    sig = f"{company}::{title}"
+
+    if job_id and job_id in _sent_alert_ids:
+        logger.debug("Email alert already sent for job %s — skipping duplicate.", job_id)
+        return True
+
+    if sig and sig != "::" and sig in _sent_alert_signatures:
+        logger.debug("Email alert already sent for signature %s — skipping duplicate.", sig)
+        return True
 
     target_email = settings.alert_email_to
     if not target_email:
@@ -51,6 +67,10 @@ def send_email_alert(job: dict) -> bool:
             server.starttls()
             server.login(settings.smtp_user, settings.smtp_password)
             server.sendmail(settings.smtp_user, [target_email], msg.as_string())
+        if job_id:
+            _sent_alert_ids.add(job_id)
+        if sig and sig != "::":
+            _sent_alert_signatures.add(sig)
         return True
     except Exception as exc:
         logger.error("Email alert failed: %s", exc)
