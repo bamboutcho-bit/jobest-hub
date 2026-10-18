@@ -1936,9 +1936,13 @@
       } else if (type === 'linkedin') {
         if (stageSelect) stageSelect.value = '';
         if (hrSelect) hrSelect.value = 'linkedin';
+        const minScore = document.getElementById('jobsMinScoreFilter');
+        if (minScore) minScore.value = '';
       } else if (type === 'indeed') {
         if (stageSelect) stageSelect.value = '';
         if (hrSelect) hrSelect.value = 'indeed';
+        const minScore = document.getElementById('jobsMinScoreFilter');
+        if (minScore) minScore.value = '';
       } else if (type === 'email') {
         if (hrSelect) hrSelect.value = 'has_hr';
       } else if (type === 'portal') {
