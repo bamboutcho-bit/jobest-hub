@@ -1842,26 +1842,28 @@
               ${appDateBadge}
             </div>
           `;
-        } else if (method.includes('linkedin')) {
+        } else if (method.includes('linkedin') || (j.source_site && j.source_site.toLowerCase().includes('linkedin')) || (j.job_url && j.job_url.includes('linkedin.com'))) {
+          const mLabel = method.includes('linkedin') ? 'Applied on LinkedIn ✓' : method.includes('email') ? 'Recruiter Email ✓' : `Applied (${esc(j.application_method || 'LinkedIn')}) ✓`;
           return `
             <div style="display:flex;flex-direction:column;gap:3px;align-items:flex-start">
-              <span class="pill" style="font-weight:800;font-size:11px;background:#0a66c2;color:#ffffff;border:1px solid #38bdf8;padding:3px 9px;border-radius:6px;box-shadow:0 0 8px rgba(10,102,194,0.3)" title="Application made via LinkedIn">
+              <span class="pill" style="font-weight:800;font-size:11px;background:#0a66c2;color:#ffffff;border:1px solid #38bdf8;padding:3px 9px;border-radius:6px;box-shadow:0 0 8px rgba(10,102,194,0.3)" title="Application sourced via LinkedIn">
                 💼 LINKEDIN
               </span>
               <span style="font-size:11px;color:#bae6fd;font-weight:600">
-                Applied on LinkedIn ✓
+                ${mLabel}
               </span>
               ${appDateBadge}
             </div>
           `;
-        } else if (method.includes('indeed')) {
+        } else if (method.includes('indeed') || (j.source_site && j.source_site.toLowerCase().includes('indeed')) || (j.job_url && j.job_url.includes('indeed.com'))) {
+          const mLabel = method.includes('indeed') ? 'Applied on Indeed ✓' : method.includes('email') ? 'Recruiter Email ✓' : `Applied (${esc(j.application_method || 'Indeed Sourced')}) ✓`;
           return `
             <div style="display:flex;flex-direction:column;gap:3px;align-items:flex-start">
-              <span class="pill" style="font-weight:800;font-size:11px;background:#2563eb;color:#ffffff;border:1px solid #60a5fa;padding:3px 9px;border-radius:6px;box-shadow:0 0 8px rgba(37,99,235,0.3)" title="Application made via Indeed">
+              <span class="pill" style="font-weight:800;font-size:11px;background:#2563eb;color:#ffffff;border:1px solid #60a5fa;padding:3px 9px;border-radius:6px;box-shadow:0 0 8px rgba(37,99,235,0.3)" title="Application sourced via Indeed">
                 🔵 INDEED
               </span>
               <span style="font-size:11px;color:#bfdbfe;font-weight:600">
-                Applied on Indeed ✓
+                ${mLabel}
               </span>
               ${appDateBadge}
             </div>
@@ -1973,14 +1975,18 @@
       } else if (hrFilter === 'linkedin') {
         allJobsList = allJobsList.filter(j => {
           const m = (j.application_method || '').toLowerCase();
-          if (m) return m.includes('linkedin');
-          return (j.source_site && j.source_site.toLowerCase().includes('linkedin')) || (j.job_url && j.job_url.includes('linkedin.com'));
+          const s = (j.source_site || '').toLowerCase();
+          const u = (j.job_url || '').toLowerCase();
+          const au = (j.application_url || '').toLowerCase();
+          return m.includes('linkedin') || s.includes('linkedin') || u.includes('linkedin.com') || au.includes('linkedin.com');
         });
       } else if (hrFilter === 'indeed') {
         allJobsList = allJobsList.filter(j => {
           const m = (j.application_method || '').toLowerCase();
-          if (m) return m.includes('indeed');
-          return (j.source_site && j.source_site.toLowerCase().includes('indeed')) || (j.job_url && j.job_url.includes('indeed.com'));
+          const s = (j.source_site || '').toLowerCase();
+          const u = (j.job_url || '').toLowerCase();
+          const au = (j.application_url || '').toLowerCase();
+          return m.includes('indeed') || s.includes('indeed') || u.includes('indeed.com') || au.includes('indeed.com');
         });
       }
 
@@ -2958,6 +2964,12 @@
         if (document.getElementById('outboundKpiWeb')) document.getElementById('outboundKpiWeb').textContent = stats.web_submitted ?? 0;
         if (document.getElementById('outboundKpiDrafts')) document.getElementById('outboundKpiDrafts').textContent = stats.drafts_ready ?? 0;
         if (document.getElementById('outboundKpiBlocked')) document.getElementById('outboundKpiBlocked').textContent = stats.blocked ?? 0;
+        if (stats.linkedin_applications != null && document.getElementById('outboundChipLinkedIn')) {
+          document.getElementById('outboundChipLinkedIn').textContent = `💼 LinkedIn (${stats.linkedin_applications})`;
+        }
+        if (stats.indeed_applications != null && document.getElementById('outboundChipIndeed')) {
+          document.getElementById('outboundChipIndeed').textContent = `🔵 Indeed (${stats.indeed_applications})`;
+        }
       }).catch(() => {});
 
       const rows = await apiGet(url);
@@ -2994,12 +3006,14 @@
         }
 
         let chanBadge = `<span class="pill" style="background:#1e293b;border:1px solid var(--border)">${esc(x.channel_label || x.channel || 'Outbound')}</span>`;
-        if (x.channel === 'email') {
+        if (x.channel === 'indeed' || x.source_portal === 'indeed') {
+          const mode = x.recipient && x.recipient.includes('@') ? 'Email' : 'Portal';
+          chanBadge = `<span class="pill" style="background:rgba(37,99,235,0.25);color:#93c5fd;border:1px solid rgba(37,99,235,0.5);font-weight:700">🔵 Indeed (${mode})</span>`;
+        } else if (x.channel === 'linkedin' || x.source_portal === 'linkedin') {
+          const mode = x.recipient && x.recipient.includes('@') ? 'Email' : 'Easy Apply';
+          chanBadge = `<span class="pill" style="background:rgba(10,102,194,0.25);color:#60a5fa;border:1px solid rgba(10,102,194,0.5);font-weight:700">💼 LinkedIn (${mode})</span>`;
+        } else if (x.channel === 'email') {
           chanBadge = `<span class="pill" style="background:rgba(56,189,248,0.15);color:var(--cyan-light);border:1px solid rgba(56,189,248,0.3)">✉️ Direct Email</span>`;
-        } else if (x.channel === 'linkedin') {
-          chanBadge = `<span class="pill" style="background:rgba(10,102,194,0.2);color:#60a5fa;border:1px solid rgba(10,102,194,0.4)">💼 LinkedIn</span>`;
-        } else if (x.channel === 'indeed') {
-          chanBadge = `<span class="pill" style="background:rgba(37,99,235,0.2);color:#93c5fd;border:1px solid rgba(37,99,235,0.4)">🔵 Indeed</span>`;
         } else if (x.channel === 'ats' || x.channel === 'web_portal') {
           chanBadge = `<span class="pill" style="background:rgba(168,85,247,0.15);color:var(--purple-light);border:1px solid rgba(168,85,247,0.3)">🌐 Web Portal</span>`;
         }

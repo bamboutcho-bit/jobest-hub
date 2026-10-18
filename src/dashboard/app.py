@@ -1164,19 +1164,43 @@ def api_outbound(request: Request, limit: int = 250, status_filter: str | None =
         seen_jobs = set()
         items = []
 
-        query_out = sf in ("", "sent", "submitted", "email")
+        query_out = sf in ("", "sent", "submitted", "email", "linkedin", "indeed")
         query_apps = sf in ("", "sent", "submitted", "portal", "ats", "web_portal", "linkedin", "indeed")
         query_jobs = True
 
         out_rows = []
         if query_out:
             q_out = select(OutboundMessage)
+            joined_job = False
             if not (is_admin and all_users) and user_id is not None:
                 q_out = q_out.outerjoin(JobPosting, OutboundMessage.job_id == JobPosting.id).where(
                     or_(OutboundMessage.user_id == user_id, JobPosting.user_id == user_id, OutboundMessage.user_id.is_(None))
                 )
+                joined_job = True
             if sf in ("sent", "submitted"):
                 q_out = q_out.where(OutboundMessage.status == "sent")
+            elif sf == "linkedin":
+                if not joined_job:
+                    q_out = q_out.outerjoin(JobPosting, OutboundMessage.job_id == JobPosting.id)
+                    joined_job = True
+                q_out = q_out.where(
+                    or_(
+                        JobPosting.source_site.ilike("%linkedin%"),
+                        JobPosting.job_url.ilike("%linkedin.com%"),
+                        JobPosting.application_url.ilike("%linkedin.com%"),
+                    )
+                )
+            elif sf == "indeed":
+                if not joined_job:
+                    q_out = q_out.outerjoin(JobPosting, OutboundMessage.job_id == JobPosting.id)
+                    joined_job = True
+                q_out = q_out.where(
+                    or_(
+                        JobPosting.source_site.ilike("%indeed%"),
+                        JobPosting.job_url.ilike("%indeed.com%"),
+                        JobPosting.application_url.ilike("%indeed.com%"),
+                    )
+                )
             if search:
                 s_like = f"%{search.strip()}%"
                 q_out = q_out.where(or_(OutboundMessage.recipient_email.ilike(s_like), OutboundMessage.subject.ilike(s_like)))
@@ -1190,9 +1214,23 @@ def api_outbound(request: Request, limit: int = 250, status_filter: str | None =
             if sf in ("sent", "submitted"):
                 q_apps = q_apps.where(UserJobApplication.status.in_(["submitted", "sent", "submitted_unverified"]))
             elif sf == "linkedin":
-                q_apps = q_apps.where(UserJobApplication.application_method.ilike("%linkedin%"))
+                q_apps = q_apps.outerjoin(JobPosting, UserJobApplication.job_id == JobPosting.id).where(
+                    or_(
+                        UserJobApplication.application_method.ilike("%linkedin%"),
+                        JobPosting.source_site.ilike("%linkedin%"),
+                        JobPosting.job_url.ilike("%linkedin.com%"),
+                        JobPosting.application_url.ilike("%linkedin.com%"),
+                    )
+                )
             elif sf == "indeed":
-                q_apps = q_apps.where(UserJobApplication.application_method.ilike("%indeed%"))
+                q_apps = q_apps.outerjoin(JobPosting, UserJobApplication.job_id == JobPosting.id).where(
+                    or_(
+                        UserJobApplication.application_method.ilike("%indeed%"),
+                        JobPosting.source_site.ilike("%indeed%"),
+                        JobPosting.job_url.ilike("%indeed.com%"),
+                        JobPosting.application_url.ilike("%indeed.com%"),
+                    )
+                )
             elif sf in ("portal", "ats", "web_portal"):
                 q_apps = q_apps.where(UserJobApplication.application_method != "recruiter_email")
             app_rows = session.scalars(q_apps.order_by(desc(UserJobApplication.applied_at)).limit(fetch_limit)).all()
@@ -1242,14 +1280,9 @@ def api_outbound(request: Request, limit: int = 250, status_filter: str | None =
                         ),
                         or_(
                             JobPosting.application_method.ilike("%linkedin%"),
-                            and_(
-                                or_(JobPosting.application_method.is_(None), JobPosting.application_method == ""),
-                                or_(
-                                    JobPosting.source_site.ilike("%linkedin%"),
-                                    JobPosting.job_url.ilike("%linkedin.com%"),
-                                    JobPosting.application_url.ilike("%linkedin.com%"),
-                                )
-                            )
+                            JobPosting.source_site.ilike("%linkedin%"),
+                            JobPosting.job_url.ilike("%linkedin.com%"),
+                            JobPosting.application_url.ilike("%linkedin.com%"),
                         )
                     )
                 ).order_by(desc(JobPosting.applied_at), desc(JobPosting.id))
@@ -1264,14 +1297,9 @@ def api_outbound(request: Request, limit: int = 250, status_filter: str | None =
                         ),
                         or_(
                             JobPosting.application_method.ilike("%indeed%"),
-                            and_(
-                                or_(JobPosting.application_method.is_(None), JobPosting.application_method == ""),
-                                or_(
-                                    JobPosting.source_site.ilike("%indeed%"),
-                                    JobPosting.job_url.ilike("%indeed.com%"),
-                                    JobPosting.application_url.ilike("%indeed.com%"),
-                                )
-                            )
+                            JobPosting.source_site.ilike("%indeed%"),
+                            JobPosting.job_url.ilike("%indeed.com%"),
+                            JobPosting.application_url.ilike("%indeed.com%"),
                         )
                     )
                 ).order_by(desc(JobPosting.applied_at), desc(JobPosting.id))
@@ -1320,6 +1348,20 @@ def api_outbound(request: Request, limit: int = 250, status_filter: str | None =
             st = om.status or "sent"
             pitch = (job.application_email_body or job.recruiter_pitch_fr or job.recruiter_pitch_en or "") if job else ""
             clean_pitch = " ".join(pitch.split())
+            
+            src_portal = ""
+            if job:
+                s_site = (job.source_site or "").lower()
+                j_url = (job.job_url or "").lower()
+                a_url = (job.application_url or "").lower()
+                if "indeed" in s_site or "indeed.com" in j_url or "indeed.com" in a_url:
+                    src_portal = "indeed"
+                elif "linkedin" in s_site or "linkedin.com" in j_url or "linkedin.com" in a_url:
+                    src_portal = "linkedin"
+
+            chan = "indeed" if src_portal == "indeed" else ("linkedin" if src_portal == "linkedin" else "email")
+            chan_lbl = "🔵 Indeed (Email Outreach)" if src_portal == "indeed" else ("💼 LinkedIn (Email Outreach)" if src_portal == "linkedin" else "✉️ Direct Recruiter Email")
+
             items.append({
                 "id": f"email_{om.id}",
                 "job_id": om.job_id,
@@ -1327,8 +1369,9 @@ def api_outbound(request: Request, limit: int = 250, status_filter: str | None =
                 "company": job.company if job else "Hiring Company",
                 "job_title": job.title if job else (om.subject or "Direct Application"),
                 "match_score": getattr(job, "match_score", None),
-                "channel": "email",
-                "channel_label": "✉️ Direct Recruiter Email",
+                "channel": chan,
+                "source_portal": src_portal,
+                "channel_label": chan_lbl,
                 "recipient": om.recipient_email,
                 "subject": om.subject or (job.application_subject if job else "Application"),
                 "status": st,
@@ -1351,10 +1394,17 @@ def api_outbound(request: Request, limit: int = 250, status_filter: str | None =
             method = (ua.application_method or "").lower()
             src = ((job.source_site if job else "") or (job.source if job else "") or "").lower()
             jurl = ((job.job_url if job else "") or (job.application_url if job else "") or "").lower()
-            if "linkedin" in method:
+
+            src_portal = ""
+            if "indeed" in src or "indeed.com" in jurl:
+                src_portal = "indeed"
+            elif "linkedin" in src or "linkedin.com" in jurl:
+                src_portal = "linkedin"
+
+            if "linkedin" in method or src_portal == "linkedin":
                 chan = "linkedin"
                 chan_lbl = "💼 LinkedIn Application"
-            elif "indeed" in method:
+            elif "indeed" in method or src_portal == "indeed":
                 chan = "indeed"
                 chan_lbl = "🔵 Indeed Application"
             elif "email" in method:
@@ -1364,17 +1414,8 @@ def api_outbound(request: Request, limit: int = 250, status_filter: str | None =
                 chan = "ats"
                 chan_lbl = "🌐 Web ATS Portal"
             else:
-                src = ((job.source_site if job else "") or (job.source if job else "") or "").lower()
-                jurl = ((job.job_url if job else "") or (job.application_url if job else "") or "").lower()
-                if "linkedin" in src or "linkedin.com" in jurl:
-                    chan = "linkedin"
-                    chan_lbl = "💼 LinkedIn Application"
-                elif "indeed" in src or "indeed.com" in jurl:
-                    chan = "indeed"
-                    chan_lbl = "🔵 Indeed Application"
-                else:
-                    chan = "web_portal"
-                    chan_lbl = "🌐 Online Career Portal"
+                chan = "web_portal"
+                chan_lbl = "🌐 Online Career Portal"
 
             pitch = (job.application_email_body or job.recruiter_pitch_fr or job.recruiter_pitch_en or "") if job else ""
             clean_pitch = " ".join(pitch.split())
@@ -1387,6 +1428,7 @@ def api_outbound(request: Request, limit: int = 250, status_filter: str | None =
                 "job_title": job.title if job else "Application",
                 "match_score": getattr(job, "match_score", None),
                 "channel": chan,
+                "source_portal": src_portal,
                 "channel_label": chan_lbl,
                 "recipient": recip,
                 "subject": getattr(job, "application_subject", None) or f"Application for {job.title if job else 'Position'}",
@@ -1419,30 +1461,34 @@ def api_outbound(request: Request, limit: int = 250, status_filter: str | None =
             method = (getattr(job, "application_method", "") or "").lower()
             src = (getattr(job, "source_site", "") or getattr(job, "source", "") or "").lower()
             jurl = (getattr(job, "job_url", "") or getattr(job, "application_url", "") or "").lower()
-            if "linkedin" in method:
-                chan = "linkedin"
-                chan_lbl = "💼 LinkedIn Application"
-            elif "indeed" in method:
+
+            src_portal = ""
+            if "indeed" in src or "indeed.com" in jurl:
+                src_portal = "indeed"
+            elif "linkedin" in src or "linkedin.com" in jurl:
+                src_portal = "linkedin"
+
+            if sf == "indeed" or (src_portal == "indeed" and "indeed" in method):
                 chan = "indeed"
                 chan_lbl = "🔵 Indeed Application"
+            elif sf == "linkedin" or (src_portal == "linkedin" and "linkedin" in method):
+                chan = "linkedin"
+                chan_lbl = "💼 LinkedIn Application"
             elif "email" in method or (job.application_email and not method):
-                chan = "email"
-                chan_lbl = "✉️ Direct Recruiter Email"
+                chan = "indeed" if (sf == "indeed" or src_portal == "indeed") else ("linkedin" if (sf == "linkedin" or src_portal == "linkedin") else "email")
+                chan_lbl = "🔵 Indeed (Email Outreach)" if src_portal == "indeed" else ("💼 LinkedIn (Email Outreach)" if src_portal == "linkedin" else "✉️ Direct Recruiter Email")
             elif "ats" in method or "greenhouse" in method or "lever" in method:
                 chan = "ats"
                 chan_lbl = "🌐 Web ATS Portal"
+            elif src_portal == "indeed":
+                chan = "indeed"
+                chan_lbl = "🔵 Indeed Application"
+            elif src_portal == "linkedin":
+                chan = "linkedin"
+                chan_lbl = "💼 LinkedIn Application"
             else:
-                src = (getattr(job, "source_site", "") or getattr(job, "source", "") or "").lower()
-                jurl = (getattr(job, "job_url", "") or getattr(job, "application_url", "") or "").lower()
-                if "linkedin" in src or "linkedin.com" in jurl:
-                    chan = "linkedin"
-                    chan_lbl = "💼 LinkedIn Application"
-                elif "indeed" in src or "indeed.com" in jurl:
-                    chan = "indeed"
-                    chan_lbl = "🔵 Indeed Application"
-                else:
-                    chan = "web_portal"
-                    chan_lbl = "🌐 Online Career Portal"
+                chan = "web_portal"
+                chan_lbl = "🌐 Online Career Portal"
 
             recip = job.application_email or job.application_url or job.job_url or "Company Portal"
             pitch = (job.application_email_body or job.recruiter_pitch_fr or job.recruiter_pitch_en or "")
@@ -1455,6 +1501,7 @@ def api_outbound(request: Request, limit: int = 250, status_filter: str | None =
                 "job_title": job.title,
                 "match_score": job.match_score,
                 "channel": chan,
+                "source_portal": src_portal,
                 "channel_label": chan_lbl,
                 "recipient": recip,
                 "subject": job.application_subject or f"Application for {job.title}",
@@ -1530,10 +1577,9 @@ def api_outbound_stats(request: Request, _: bool = Depends(_auth)):
                 or_(JobPosting.pipeline_stage == PipelineStage.APPLIED, JobPosting.applied_at.isnot(None), JobPosting.application_status.in_(["sent", "submitted"])),
                 or_(
                     JobPosting.application_method.ilike("%linkedin%"),
-                    and_(
-                        or_(JobPosting.application_method.is_(None), JobPosting.application_method == ""),
-                        or_(JobPosting.source_site.ilike("%linkedin%"), JobPosting.job_url.ilike("%linkedin.com%")),
-                    )
+                    JobPosting.source_site.ilike("%linkedin%"),
+                    JobPosting.job_url.ilike("%linkedin.com%"),
+                    JobPosting.application_url.ilike("%linkedin.com%"),
                 )
             )
         ) or 0
@@ -1542,15 +1588,34 @@ def api_outbound_stats(request: Request, _: bool = Depends(_auth)):
                 or_(JobPosting.pipeline_stage == PipelineStage.APPLIED, JobPosting.applied_at.isnot(None), JobPosting.application_status.in_(["sent", "submitted"])),
                 or_(
                     JobPosting.application_method.ilike("%indeed%"),
-                    and_(
-                        or_(JobPosting.application_method.is_(None), JobPosting.application_method == ""),
-                        or_(JobPosting.source_site.ilike("%indeed%"), JobPosting.job_url.ilike("%indeed.com%")),
-                    )
+                    JobPosting.source_site.ilike("%indeed%"),
+                    JobPosting.job_url.ilike("%indeed.com%"),
+                    JobPosting.application_url.ilike("%indeed.com%"),
                 )
             )
         ) or 0
-        ua_li = session.scalar(select(func.count(UserJobApplication.id)).where(UserJobApplication.application_method.ilike("%linkedin%"))) or 0
-        ua_in = session.scalar(select(func.count(UserJobApplication.id)).where(UserJobApplication.application_method.ilike("%indeed%"))) or 0
+        ua_li = session.scalar(
+            select(func.count(UserJobApplication.id))
+            .outerjoin(JobPosting, UserJobApplication.job_id == JobPosting.id)
+            .where(
+                or_(
+                    UserJobApplication.application_method.ilike("%linkedin%"),
+                    JobPosting.source_site.ilike("%linkedin%"),
+                    JobPosting.job_url.ilike("%linkedin.com%"),
+                )
+            )
+        ) or 0
+        ua_in = session.scalar(
+            select(func.count(UserJobApplication.id))
+            .outerjoin(JobPosting, UserJobApplication.job_id == JobPosting.id)
+            .where(
+                or_(
+                    UserJobApplication.application_method.ilike("%indeed%"),
+                    JobPosting.source_site.ilike("%indeed%"),
+                    JobPosting.job_url.ilike("%indeed.com%"),
+                )
+            )
+        ) or 0
         linkedin_count = max(linkedin_count, ua_li)
         indeed_count = max(indeed_count, ua_in)
 
