@@ -224,6 +224,13 @@ def publish_notification(
     except Exception as exc:
         logger.debug("Local hub broadcast: %s", exc)
 
+    try:
+        from src.storage.cache import invalidate_summary_cache, invalidate_freelance_cache
+        invalidate_summary_cache(user_id)
+        invalidate_freelance_cache(user_id)
+    except Exception:
+        pass
+
     logger.info("Published notification #%s [%s]: '%s' (User: %s, AdminOnly: %s)", notification_id, event_type, title, user_id or "All", is_admin_event)
     return notification_id
 

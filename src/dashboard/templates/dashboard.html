@@ -101,9 +101,10 @@
           <div class="pulse-dot"></div>
           <span id="liveStatusText">Live Sync</span>
           <select id="syncIntervalSelect" onchange="changeSyncInterval(this.value)" style="background:transparent;border:none;color:var(--text-faint);font-size:11px;padding:0 2px;cursor:pointer">
-            <option value="5000">5s</option>
-            <option value="10000" selected>10s</option>
+            <option value="60000" selected>Live Push (60s)</option>
             <option value="30000">30s</option>
+            <option value="10000">10s</option>
+            <option value="5000">5s</option>
             <option value="0">Pause</option>
           </select>
         </div>
@@ -3769,7 +3770,7 @@
     </div>
   </div>
 
-  <script src="/static/js/app.js?v=6.6.4"></script>
+  <script src="/static/js/app.js?v=6.7.0"></script>
   <!-- Real-Time Floating Notification Toasts -->
   <div id="notifToastContainer" style="position:fixed;bottom:96px;right:24px;display:flex;flex-direction:column-reverse;gap:10px;z-index:99999;pointer-events:none"></div>
 

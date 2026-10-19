@@ -7477,9 +7477,18 @@
           console.log('[NotificationWS] Connected to real-time broker hub');
           const dot = document.getElementById('notifStatusDot');
           if (dot) dot.style.background = '#10b981';
+          const liveStatus = document.getElementById('liveStatusText');
+          if (liveStatus) liveStatus.textContent = '⚡ Live (Real-Time)';
           if (notifReconnectTimer) {
             clearTimeout(notifReconnectTimer);
             notifReconnectTimer = null;
+          }
+          // Relax background polling to 60s when real-time WebSocket is active
+          if (syncDelayMs < 60000 && syncDelayMs > 0) {
+            syncDelayMs = 60000;
+            const sel = document.getElementById('syncIntervalSelect');
+            if (sel) sel.value = "60000";
+            startAutoSync();
           }
           // Start keepalive ping every 25s
           if (notifHeartbeatTimer) clearInterval(notifHeartbeatTimer);
@@ -7512,7 +7521,14 @@
           console.debug('[NotificationWS] Connection closed. Retrying in 5s…');
           const dot = document.getElementById('notifStatusDot');
           if (dot) dot.style.background = '#f59e0b';
+          const liveStatus = document.getElementById('liveStatusText');
+          if (liveStatus) liveStatus.textContent = 'Reconnecting (Fallback)';
           if (notifHeartbeatTimer) clearInterval(notifHeartbeatTimer);
+          // Restore 15s fallback polling during disconnect
+          if (syncDelayMs > 15000) {
+            syncDelayMs = 15000;
+            startAutoSync();
+          }
           if (!notifReconnectTimer) {
             notifReconnectTimer = setTimeout(initNotificationsWebSocket, 5000);
           }
@@ -7556,7 +7572,7 @@
       // 4. Update badge counter
       fetchUnreadNotificationCount();
 
-      // 5. If this is a high job match, trigger job refresh if viewing jobs tab
+      // 5. If this is a high job match or pipeline complete, trigger job refresh if viewing jobs tab
       if (notif.event_type === 'job_match' || notif.event_type === 'pipeline_completed') {
         if (currentJobsTab === 'postings') {
           loadJobs();
@@ -7571,6 +7587,81 @@
         }
       } else if (notif.event_type === 'quota_updated' || notif.event_type === 'quota_warning' || notif.event_type === 'payment_approved') {
         initAuth();
+      }
+
+      // 7. Event-Driven Real-Time Domain Model Updates (Sub-10ms UI sync)
+      const jobId = notif.job_id || notif.data?.job_id;
+      if (jobId && Array.isArray(allJobsList)) {
+        const targetJob = allJobsList.find(j => j && j.id === jobId);
+        if (targetJob) {
+          if (notif.event_type === 'app_sent' || notif.event === 'application_recorded') {
+            targetJob.pipeline_stage = 'applied';
+            targetJob.application_status = notif.status || notif.data?.status || 'submitted';
+            if (notif.channel || notif.data?.channel) {
+              targetJob.application_method = notif.channel || notif.data?.channel;
+            }
+            if (notif.screenshot_url || notif.data?.screenshot_url) {
+              targetJob.application_screenshot_path = notif.screenshot_url || notif.data?.screenshot_url;
+            }
+          } else if (notif.event_type === 'stage_changed' || notif.event === 'stage_changed') {
+            if (notif.stage || notif.data?.stage) {
+              targetJob.pipeline_stage = notif.stage || notif.data?.stage;
+            }
+          } else if (notif.event_type === 'screenshot_uploaded' || notif.event === 'screenshot_uploaded') {
+            targetJob.application_screenshot_path = notif.screenshot_url || notif.data?.screenshot_url || `/api/jobs/${jobId}/screenshot`;
+          }
+
+          // Reactive DOM update: find row or card and update immediately without refetch
+          const row = document.querySelector(`tr[data-job-id="${jobId}"]`);
+          if (row) {
+            const badgeCell = row.querySelector('.col-application, td:nth-child(5)');
+            if (badgeCell && typeof getApplicationBadge === 'function') badgeCell.innerHTML = getApplicationBadge(targetJob);
+            const stageCell = row.querySelector('.col-stage, td:nth-child(4)');
+            if (stageCell) stageCell.innerHTML = `<span class="stage-pill stage-${esc(targetJob.pipeline_stage)}">${esc(targetJob.pipeline_stage)}</span>`;
+          }
+          const card = document.querySelector(`.job-card[data-job-id="${jobId}"]`);
+          if (card) {
+            const cardBadge = card.querySelector('.job-badge-container');
+            if (cardBadge && typeof getApplicationBadge === 'function') cardBadge.innerHTML = getApplicationBadge(targetJob);
+            const cardStage = card.querySelector('.stage-pill');
+            if (cardStage) {
+              cardStage.className = `stage-pill stage-${esc(targetJob.pipeline_stage)}`;
+              cardStage.textContent = targetJob.pipeline_stage;
+            }
+          }
+          // If modal is open for this active job, update in-place
+          if (currentActiveJob && currentActiveJob.id === jobId) {
+            currentActiveJob = { ...currentActiveJob, ...targetJob };
+            if (typeof updateModalScreenshotSection === 'function') {
+              updateModalScreenshotSection(currentActiveJob);
+            }
+          }
+        }
+      }
+
+      // Freelance real-time lead updates
+      const leadId = notif.lead_id || notif.data?.lead_id;
+      if (leadId && Array.isArray(allFreelanceLeads)) {
+        const targetLead = allFreelanceLeads.find(l => l && l.id === leadId);
+        if (targetLead) {
+          if (notif.stage || notif.data?.stage) {
+            targetLead.stage = notif.stage || notif.data?.stage;
+          }
+          if (currentFreelanceTab === 'kanban' && typeof renderKanbanBoard === 'function') {
+            renderKanbanBoard();
+          } else if (currentFreelanceTab === 'table' && typeof renderFreelanceTable === 'function') {
+            renderFreelanceTable();
+          }
+        }
+      }
+
+      // Real-time KPI counter increment
+      if (notif.event_type === 'app_sent' || notif.event === 'application_recorded') {
+        const kpiApp = document.getElementById('kpiAppsToday');
+        if (kpiApp) {
+          let cur = parseInt(kpiApp.textContent.replace(/[^0-9]/g, '')) || 0;
+          animateValue('kpiAppsToday', cur + 1);
+        }
       }
     }
 

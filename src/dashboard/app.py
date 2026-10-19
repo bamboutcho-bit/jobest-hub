@@ -20,7 +20,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse, Fil
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from sqlalchemy import and_, case, desc, func, or_, select
+from sqlalchemy import and_, case, desc, func, not_, or_, select
 
 from config.settings import settings
 from src.dashboard.log_capture import system_log_buffer
@@ -340,9 +340,15 @@ def health():
 def api_summary(request: Request, _: bool = Depends(_auth)):
     from src.auth.service import get_current_user_optional
     from src.storage.models import User, UserJobApplication
+    from src.storage.cache import app_cache
     user = get_current_user_optional(request)
     user_id = user.id if user else None
     is_admin = bool(user and user.role == "admin")
+
+    cache_key = f"summary:{user_id}:{is_admin}"
+    cached = app_cache.get(cache_key)
+    if cached is not None:
+        return cached
 
     with get_session() as session:
         now = datetime.now(timezone.utc)
@@ -534,7 +540,7 @@ def api_summary(request: Request, _: bool = Depends(_auth)):
             "error": r.error,
         } for r in recent_runs_objs]
 
-        return {
+        result_payload = {
             "server_utc": now.isoformat(),
             "configured_timezone": settings.candidate_timezone,
             "is_admin": is_admin,
@@ -601,6 +607,8 @@ def api_summary(request: Request, _: bool = Depends(_auth)):
             "active_profile": active_profile_info,
             "recent_runs": recent_runs_list,
         }
+        app_cache.set(cache_key, result_payload, ttl=15.0)
+        return result_payload
 
 
 
@@ -792,6 +800,25 @@ async def api_upload_job_screenshot(job_id: int, request: Request, _: bool = Dep
 
         job.application_screenshot_path = str(path)
         session.commit()
+
+        from src.storage.cache import invalidate_summary_cache
+        invalidate_summary_cache(job.user_id)
+        try:
+            from src.notifications.hub import notification_hub
+            notification_hub.broadcast_sync(
+                user_id=job.user_id,
+                payload={
+                    "event": "screenshot_uploaded",
+                    "event_type": "screenshot_uploaded",
+                    "job_id": job.id,
+                    "title": "Screenshot Proof Attached",
+                    "message": f"Verified screenshot proof saved for {job.company or 'job'}",
+                    "screenshot_url": f"/api/jobs/{job.id}/screenshot",
+                }
+            )
+        except Exception:
+            pass
+
         return {"ok": True, "screenshot_url": f"/api/jobs/{job.id}/screenshot", "path": str(path)}
 
 
@@ -855,6 +882,26 @@ def update_stage(job_id: int, payload: StageUpdate, request: Request, _: bool = 
             except Exception as e:
                 logging.getLogger("src.dashboard").debug("Failed to send stage change Telegram alert: %s", e)
         session.commit()
+
+        from src.storage.cache import invalidate_summary_cache
+        invalidate_summary_cache(job.user_id)
+        try:
+            from src.notifications.hub import notification_hub
+            notification_hub.broadcast_sync(
+                user_id=job.user_id,
+                payload={
+                    "event": "stage_changed",
+                    "event_type": "stage_changed",
+                    "job_id": job.id,
+                    "stage": stage.value,
+                    "title": "Job Stage Updated",
+                    "message": f"{job.company or 'Job'} moved to {stage.value.replace('_', ' ').title()}",
+                    "job": _job_dict(job),
+                }
+            )
+        except Exception:
+            pass
+
         return {"ok": True, "job": _job_dict(job)}
 
 
@@ -905,6 +952,27 @@ def record_job_application(job_id: int, payload: RecordApplicationPayload, reque
             user_app.status = payload.status or "submitted"
 
         session.commit()
+
+        from src.storage.cache import invalidate_summary_cache
+        invalidate_summary_cache(uid)
+        try:
+            from src.notifications.hub import notification_hub
+            notification_hub.broadcast_sync(
+                user_id=uid,
+                payload={
+                    "event": "application_recorded",
+                    "event_type": "app_sent",
+                    "job_id": job.id,
+                    "channel": channel,
+                    "status": payload.status or "submitted",
+                    "title": "Application Recorded",
+                    "message": f"Application to {job.company or 'Company'} recorded via {channel}",
+                    "job": _job_dict(job),
+                }
+            )
+        except Exception:
+            pass
+
         return {"ok": True, "job": _job_dict(job), "channel": channel}
 
 
@@ -1226,9 +1294,15 @@ def api_outbound(request: Request, limit: int = 250, status_filter: str | None =
                     joined_job = True
                 q_out = q_out.where(
                     or_(
-                        JobPosting.source_site.ilike("%linkedin%"),
-                        JobPosting.job_url.ilike("%linkedin.com%"),
-                        JobPosting.application_url.ilike("%linkedin.com%"),
+                        JobPosting.application_method.ilike("%linkedin%"),
+                        and_(
+                            or_(JobPosting.application_method.is_(None), not_(JobPosting.application_method.ilike("%indeed%"))),
+                            or_(
+                                JobPosting.source_site.ilike("%linkedin%"),
+                                JobPosting.job_url.ilike("%linkedin.com%"),
+                                JobPosting.application_url.ilike("%linkedin.com%"),
+                            ),
+                        ),
                     )
                 )
             elif sf == "indeed":
@@ -1237,9 +1311,15 @@ def api_outbound(request: Request, limit: int = 250, status_filter: str | None =
                     joined_job = True
                 q_out = q_out.where(
                     or_(
-                        JobPosting.source_site.ilike("%indeed%"),
-                        JobPosting.job_url.ilike("%indeed.com%"),
-                        JobPosting.application_url.ilike("%indeed.com%"),
+                        JobPosting.application_method.ilike("%indeed%"),
+                        and_(
+                            or_(JobPosting.application_method.is_(None), not_(JobPosting.application_method.ilike("%linkedin%"))),
+                            or_(
+                                JobPosting.source_site.ilike("%indeed%"),
+                                JobPosting.job_url.ilike("%indeed.com%"),
+                                JobPosting.application_url.ilike("%indeed.com%"),
+                            ),
+                        ),
                     )
                 )
             if search:
@@ -1258,18 +1338,28 @@ def api_outbound(request: Request, limit: int = 250, status_filter: str | None =
                 q_apps = q_apps.outerjoin(JobPosting, UserJobApplication.job_id == JobPosting.id).where(
                     or_(
                         UserJobApplication.application_method.ilike("%linkedin%"),
-                        JobPosting.source_site.ilike("%linkedin%"),
-                        JobPosting.job_url.ilike("%linkedin.com%"),
-                        JobPosting.application_url.ilike("%linkedin.com%"),
+                        and_(
+                            or_(UserJobApplication.application_method.is_(None), not_(UserJobApplication.application_method.ilike("%indeed%"))),
+                            or_(
+                                JobPosting.source_site.ilike("%linkedin%"),
+                                JobPosting.job_url.ilike("%linkedin.com%"),
+                                JobPosting.application_url.ilike("%linkedin.com%"),
+                            ),
+                        ),
                     )
                 )
             elif sf == "indeed":
                 q_apps = q_apps.outerjoin(JobPosting, UserJobApplication.job_id == JobPosting.id).where(
                     or_(
                         UserJobApplication.application_method.ilike("%indeed%"),
-                        JobPosting.source_site.ilike("%indeed%"),
-                        JobPosting.job_url.ilike("%indeed.com%"),
-                        JobPosting.application_url.ilike("%indeed.com%"),
+                        and_(
+                            or_(UserJobApplication.application_method.is_(None), not_(UserJobApplication.application_method.ilike("%linkedin%"))),
+                            or_(
+                                JobPosting.source_site.ilike("%indeed%"),
+                                JobPosting.job_url.ilike("%indeed.com%"),
+                                JobPosting.application_url.ilike("%indeed.com%"),
+                            ),
+                        ),
                     )
                 )
             elif sf in ("portal", "ats", "web_portal"):
@@ -1321,10 +1411,15 @@ def api_outbound(request: Request, limit: int = 250, status_filter: str | None =
                         ),
                         or_(
                             JobPosting.application_method.ilike("%linkedin%"),
-                            JobPosting.source_site.ilike("%linkedin%"),
-                            JobPosting.job_url.ilike("%linkedin.com%"),
-                            JobPosting.application_url.ilike("%linkedin.com%"),
-                        )
+                            and_(
+                                or_(JobPosting.application_method.is_(None), not_(JobPosting.application_method.ilike("%indeed%"))),
+                                or_(
+                                    JobPosting.source_site.ilike("%linkedin%"),
+                                    JobPosting.job_url.ilike("%linkedin.com%"),
+                                    JobPosting.application_url.ilike("%linkedin.com%"),
+                                ),
+                            ),
+                        ),
                     )
                 ).order_by(desc(JobPosting.applied_at), desc(JobPosting.id))
             elif sf == "indeed":
@@ -1338,10 +1433,15 @@ def api_outbound(request: Request, limit: int = 250, status_filter: str | None =
                         ),
                         or_(
                             JobPosting.application_method.ilike("%indeed%"),
-                            JobPosting.source_site.ilike("%indeed%"),
-                            JobPosting.job_url.ilike("%indeed.com%"),
-                            JobPosting.application_url.ilike("%indeed.com%"),
-                        )
+                            and_(
+                                or_(JobPosting.application_method.is_(None), not_(JobPosting.application_method.ilike("%linkedin%"))),
+                                or_(
+                                    JobPosting.source_site.ilike("%indeed%"),
+                                    JobPosting.job_url.ilike("%indeed.com%"),
+                                    JobPosting.application_url.ilike("%indeed.com%"),
+                                ),
+                            ),
+                        ),
                     )
                 ).order_by(desc(JobPosting.applied_at), desc(JobPosting.id))
             elif sf in ("portal", "ats", "web_portal"):
@@ -1618,10 +1718,15 @@ def api_outbound_stats(request: Request, _: bool = Depends(_auth)):
                 or_(JobPosting.pipeline_stage == PipelineStage.APPLIED, JobPosting.applied_at.isnot(None), JobPosting.application_status.in_(["sent", "submitted"])),
                 or_(
                     JobPosting.application_method.ilike("%linkedin%"),
-                    JobPosting.source_site.ilike("%linkedin%"),
-                    JobPosting.job_url.ilike("%linkedin.com%"),
-                    JobPosting.application_url.ilike("%linkedin.com%"),
-                )
+                    and_(
+                        or_(JobPosting.application_method.is_(None), not_(JobPosting.application_method.ilike("%indeed%"))),
+                        or_(
+                            JobPosting.source_site.ilike("%linkedin%"),
+                            JobPosting.job_url.ilike("%linkedin.com%"),
+                            JobPosting.application_url.ilike("%linkedin.com%"),
+                        ),
+                    ),
+                ),
             )
         ) or 0
         indeed_count = session.scalar(
@@ -1629,10 +1734,15 @@ def api_outbound_stats(request: Request, _: bool = Depends(_auth)):
                 or_(JobPosting.pipeline_stage == PipelineStage.APPLIED, JobPosting.applied_at.isnot(None), JobPosting.application_status.in_(["sent", "submitted"])),
                 or_(
                     JobPosting.application_method.ilike("%indeed%"),
-                    JobPosting.source_site.ilike("%indeed%"),
-                    JobPosting.job_url.ilike("%indeed.com%"),
-                    JobPosting.application_url.ilike("%indeed.com%"),
-                )
+                    and_(
+                        or_(JobPosting.application_method.is_(None), not_(JobPosting.application_method.ilike("%linkedin%"))),
+                        or_(
+                            JobPosting.source_site.ilike("%indeed%"),
+                            JobPosting.job_url.ilike("%indeed.com%"),
+                            JobPosting.application_url.ilike("%indeed.com%"),
+                        ),
+                    ),
+                ),
             )
         ) or 0
         ua_li = session.scalar(
@@ -1641,8 +1751,13 @@ def api_outbound_stats(request: Request, _: bool = Depends(_auth)):
             .where(
                 or_(
                     UserJobApplication.application_method.ilike("%linkedin%"),
-                    JobPosting.source_site.ilike("%linkedin%"),
-                    JobPosting.job_url.ilike("%linkedin.com%"),
+                    and_(
+                        or_(UserJobApplication.application_method.is_(None), not_(UserJobApplication.application_method.ilike("%indeed%"))),
+                        or_(
+                            JobPosting.source_site.ilike("%linkedin%"),
+                            JobPosting.job_url.ilike("%linkedin.com%"),
+                        ),
+                    ),
                 )
             )
         ) or 0
@@ -1652,8 +1767,13 @@ def api_outbound_stats(request: Request, _: bool = Depends(_auth)):
             .where(
                 or_(
                     UserJobApplication.application_method.ilike("%indeed%"),
-                    JobPosting.source_site.ilike("%indeed%"),
-                    JobPosting.job_url.ilike("%indeed.com%"),
+                    and_(
+                        or_(UserJobApplication.application_method.is_(None), not_(UserJobApplication.application_method.ilike("%linkedin%"))),
+                        or_(
+                            JobPosting.source_site.ilike("%indeed%"),
+                            JobPosting.job_url.ilike("%indeed.com%"),
+                        ),
+                    ),
                 )
             )
         ) or 0
@@ -5887,6 +6007,29 @@ def api_apply_single_job(job_id: int, request: Request, _: bool = Depends(_auth)
                     email_type="application",
                 ))
         session.commit()
+
+        target_uid = target_u.id if 'target_u' in locals() and target_u else (user.id if user else None)
+        from src.storage.cache import invalidate_summary_cache
+        invalidate_summary_cache(target_uid)
+        try:
+            from src.notifications.hub import notification_hub
+            notification_hub.broadcast_sync(
+                user_id=target_uid,
+                payload={
+                    "event": "application_recorded",
+                    "event_type": "app_sent",
+                    "job_id": job.id,
+                    "title": f"Applied to {job.company or 'Job'}",
+                    "message": f"Application via {job.application_method or 'portal'} ({job.application_status})",
+                    "status": job.application_status,
+                    "method": job.application_method,
+                    "screenshot_url": f"/api/jobs/{job.id}/screenshot" if job.application_screenshot_path else None,
+                    "job": _job_dict(job),
+                }
+            )
+        except Exception:
+            pass
+
         return {
             "ok": True,
             "applied": bool(res.get("applied")),
@@ -6318,8 +6461,15 @@ def _lead_dict(lead: FreelanceLead) -> dict:
 def api_freelance_stats(request: Request, _: bool = Depends(_auth)):
     from src.auth.service import get_current_user_optional
     from src.freelance.outreach import get_leads_needing_follow_up
+    from src.storage.cache import app_cache
     user = get_current_user_optional(request)
     user_id = user.id if user else None
+
+    cache_key = f"freelance_stats:{user_id}"
+    cached = app_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     with get_session() as session:
         def _scope_fl(stmt):
             if user_id is not None:
@@ -6342,7 +6492,7 @@ def api_freelance_stats(request: Request, _: bool = Depends(_auth)):
         won = by_stage.get("deal_won", 0)
         avg_score = session.scalar(_scope_fl(select(func.avg(FreelanceLead.match_score)).where(FreelanceLead.evaluated.is_(True)))) or 0
         due_follow_ups = len(get_leads_needing_follow_up(session, user_id=user_id))
-        return {
+        stats_payload = {
             "total_leads": total,
             "by_stage": by_stage,
             "evaluated": evaluated,
@@ -6354,6 +6504,8 @@ def api_freelance_stats(request: Request, _: bool = Depends(_auth)):
             "average_score": round(float(avg_score), 1),
             "needs_follow_up": due_follow_ups,
         }
+        app_cache.set(cache_key, stats_payload, ttl=15.0)
+        return stats_payload
 
 
 @app.get("/api/freelance/leads")
@@ -6634,6 +6786,25 @@ def api_freelance_stage(lead_id: int, payload: FreelanceStageUpdate, request: Re
             raise HTTPException(403, "Not authorized to access this lead")
         lead.stage = stage
         lead.updated_at = datetime.now(timezone.utc)
+        session.commit()
+
+        from src.storage.cache import invalidate_freelance_cache
+        invalidate_freelance_cache(user_id)
+        try:
+            from src.notifications.hub import notification_hub
+            notification_hub.broadcast_sync(
+                user_id=user_id,
+                payload={
+                    "event": "freelance_stage_changed",
+                    "event_type": "freelance_stage_changed",
+                    "lead_id": lead.id,
+                    "stage": stage.value,
+                    "lead": _lead_dict(lead),
+                }
+            )
+        except Exception:
+            pass
+
         return {"ok": True, "lead": _lead_dict(lead)}
 
 
