@@ -143,6 +143,8 @@
       checkStripePaymentReturn();
       initNotificationsWebSocket();
       loadNotifications();
+      updateDesktopAlertsBtn();
+      fetchSystemMetrics();
       checkAutoOpenPlanModal();
 
       // Close notification dropdown when clicking outside
@@ -243,9 +245,9 @@
       try {
         if (currentAppMode === 'freelance') {
           if (currentFreelanceTab === 'kanban' || currentFreelanceTab === 'leads') {
-            await Promise.allSettled([loadFreelanceStats(), loadFreelanceLeads()]);
+            await Promise.allSettled([loadFreelanceStats(), loadFreelanceLeads(), fetchSystemMetrics()]);
           } else {
-            await loadFreelanceStats();
+            await Promise.allSettled([loadFreelanceStats(), fetchSystemMetrics()]);
           }
         } else {
           // Smart sub-tab refresh: only refresh what is currently visible on screen
@@ -259,6 +261,7 @@
           } else if (currentJobsTab === 'pipeline') {
             tasks.push(loadPipelineRuns());
           }
+          tasks.push(fetchSystemMetrics());
           await Promise.allSettled(tasks);
         }
       } catch (err) {
@@ -274,7 +277,7 @@
       if (icon) icon.style.animation = 'spinRefresh 0.7s linear infinite';
       if (text) text.textContent = 'Refreshing...';
       try {
-        await refreshCurrentView();
+        await Promise.all([refreshCurrentView(), fetchSystemMetrics()]);
         showToast('Dashboard refreshed successfully ✓', 'success');
       } catch (err) {
         showToast('Refresh error: ' + (err.message || err), 'error');
@@ -7563,6 +7566,9 @@
       // 1. Show floating toast
       showNotificationToast(notif);
 
+      // 1.5. Dispatch OS Desktop Alert if enabled
+      dispatchDesktopAlert(notif);
+
       // 2. Prepend to in-memory notification list (STRICT NEWEST-FIRST)
       allNotifications.unshift(notif);
 
@@ -7693,6 +7699,88 @@
       } catch (err) {
         console.debug('Failed to fetch unread count:', err);
       }
+    }
+
+    function dispatchDesktopAlert(notif) {
+      if (!('Notification' in window) || Notification.permission !== 'granted') return;
+      const isHighPriority = ['job_match', 'reply_received', 'interview_invite', 'quota_warning', 'app_sent'].includes(notif.event_type);
+      if (document.hidden || isHighPriority) {
+        try {
+          const n = new Notification(notif.title || 'AutoHunt Notification', {
+            body: notif.message || '',
+            icon: '/static/favicon.ico',
+            tag: String(notif.id || notif.event_type || Date.now()),
+          });
+          n.onclick = () => {
+            window.focus();
+            if (notif.job_id && typeof openJobModal === 'function') openJobModal(notif.job_id);
+          };
+        } catch (_) {}
+      }
+    }
+
+    async function toggleDesktopAlerts() {
+      if (!('Notification' in window)) {
+        showNotificationToast({ title: 'Alerts', message: 'Desktop notifications are not supported in this browser.', event_type: 'quota_warning' });
+        return;
+      }
+      if (Notification.permission === 'granted') {
+        showNotificationToast({ title: 'Desktop Alerts Active', message: 'Real-time OS desktop notifications are already active! ✓', event_type: 'job_match' });
+        updateDesktopAlertsBtn();
+        return;
+      }
+      try {
+        const perm = await Notification.requestPermission();
+        updateDesktopAlertsBtn();
+        if (perm === 'granted') {
+          showNotificationToast({ title: 'Desktop Alerts Enabled', message: 'You will receive real-time alerts even when the browser is minimized! ✓', event_type: 'job_match' });
+          try {
+            new Notification('AutoHunt Desktop Alerts Enabled', {
+              body: 'Real-time alerts enabled for high job matches and recruiter replies.',
+              icon: '/static/favicon.ico'
+            });
+          } catch (_) {}
+        }
+      } catch (e) {
+        console.debug('Notification permission error:', e);
+      }
+    }
+
+    function updateDesktopAlertsBtn() {
+      const btn = document.getElementById('osAlertsBtn');
+      if (!btn) return;
+      if ('Notification' in window && Notification.permission === 'granted') {
+        btn.textContent = 'OS Alerts ✓';
+        btn.style.color = '#34d399';
+      } else {
+        btn.textContent = 'OS Alerts';
+        btn.style.color = 'var(--cyan-light)';
+      }
+    }
+
+    async function fetchSystemMetrics(interactive = false) {
+      try {
+        const m = await apiGet('/api/system/metrics');
+        if (m && m.cache) {
+          const chip = document.getElementById('cacheTelemetryChip');
+          const txt = document.getElementById('cacheTelemetryText');
+          const hitRate = Math.round((m.cache.hit_ratio || 1.0) * 100);
+          const backend = (m.cache.backend || 'memory').toUpperCase();
+          if (txt) {
+            txt.textContent = `⚡ ${backend}: ${hitRate}%`;
+          }
+          if (chip) {
+            chip.title = `Cache Status (${backend}): ${m.cache.hits} hits, ${m.cache.misses} misses (${hitRate}% hit rate)\nActive WebSockets: ${m.active_websockets || 1}\nBroker: ${m.broker || 'rabbitmq'}`;
+          }
+          if (interactive) {
+            showNotificationToast({
+              title: `Cache-Aside Telemetry [${backend}]`,
+              message: `${hitRate}% hit rate (${m.cache.hits} hits / ${m.cache.misses} misses)\nBroker: ${m.broker} | WebSockets: ${m.active_websockets}`,
+              event_type: 'pipeline_completed'
+            });
+          }
+        }
+      } catch (_) {}
     }
 
     function toggleNotificationDropdown() {

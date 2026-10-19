@@ -108,6 +108,10 @@
             <option value="0">Pause</option>
           </select>
         </div>
+        <div id="cacheTelemetryChip" onclick="fetchSystemMetrics(true)" style="display:flex;align-items:center;gap:4px;background:rgba(16,185,129,0.12);color:#34d399;border:1px solid rgba(16,185,129,0.25);padding:2px 7px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer" title="Cache-Aside Layer Telemetry (Click to inspect)">
+          <span style="font-size:10px">⚡</span>
+          <span id="cacheTelemetryText">Cache: 100%</span>
+        </div>
         <button id="globalRefreshBtn" class="btn btn-sm" onclick="manualRefresh()" title="Refresh data now" style="display:flex;align-items:center;gap:6px">
           <span id="globalRefreshIcon" style="display:inline-block">↻</span>
           <span id="globalRefreshText">Refresh</span>
@@ -127,7 +131,8 @@
                 <span>🔔 Notifications</span>
                 <span id="notifStatusDot" style="width:7px;height:7px;border-radius:50%;background:#10b981;display:inline-block" title="Real-Time Broker Connected"></span>
               </div>
-              <div style="display:flex;gap:8px">
+              <div style="display:flex;gap:8px;align-items:center">
+                <button id="osAlertsBtn" onclick="toggleDesktopAlerts()" style="background:none;border:none;color:var(--cyan-light);font-size:11px;cursor:pointer;padding:0" title="Toggle Desktop OS Notifications">OS Alerts</button>
                 <button onclick="triggerTestNotification()" style="background:none;border:none;color:var(--cyan-light);font-size:11px;cursor:pointer;padding:0" title="Send Broker Test Event">Test</button>
                 <button onclick="markAllNotificationsRead()" style="background:none;border:none;color:var(--text-muted);font-size:11px;cursor:pointer;padding:0">Mark all read</button>
               </div>
@@ -3770,7 +3775,7 @@
     </div>
   </div>
 
-  <script src="/static/js/app.js?v=6.7.0"></script>
+  <script src="/static/js/app.js?v=6.8.0"></script>
   <!-- Real-Time Floating Notification Toasts -->
   <div id="notifToastContainer" style="position:fixed;bottom:96px;right:24px;display:flex;flex-direction:column-reverse;gap:10px;z-index:99999;pointer-events:none"></div>
 

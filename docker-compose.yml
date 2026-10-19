@@ -86,6 +86,21 @@ services:
       retries: 5
       start_period: 15s
 
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   app:
     image: jobsearch-final2:local
     build:
@@ -108,6 +123,7 @@ services:
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:3b}
       PLAYWRIGHT_WS_ENDPOINT: ${PLAYWRIGHT_WS_ENDPOINT:-ws://browser:3000/browser}
       APP_ENVIRONMENT: ${APP_ENVIRONMENT:-production}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       DASHBOARD_USERNAME: ${DASHBOARD_USERNAME:-admin}
       DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD:-local-admin-change-me}
     command: ["python", "scripts/run_pipeline.py", "--loop"]
@@ -173,6 +189,7 @@ services:
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:3b}
       PLAYWRIGHT_WS_ENDPOINT: ${PLAYWRIGHT_WS_ENDPOINT:-ws://browser:3000/browser}
       APP_ENVIRONMENT: ${APP_ENVIRONMENT:-production}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       DASHBOARD_USERNAME: ${DASHBOARD_USERNAME:-admin}
       DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD:-local-admin-change-me}
       N8N_WEBHOOK_SECRET: ${N8N_WEBHOOK_SECRET:-n8n-secret-token}
@@ -220,3 +237,4 @@ volumes:
   outreach_drafts:
   n8n_data:
   rabbitmq_data:
+  redis_data:

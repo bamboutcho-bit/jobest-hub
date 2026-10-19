@@ -79,6 +79,9 @@ class Settings(BaseSettings):
     kafka_bootstrap_servers: str = "localhost:9092"
     kafka_topic: str = "autohunt_notifications"
 
+    # Distributed Cache (Redis / In-Memory TTLCache Fallback)
+    redis_url: str = ""
+
     # Discovery: broad but bounded. JobSpy itself fans out to supported boards.
     min_match_score: int = 65
     min_visa_confidence: bool = False

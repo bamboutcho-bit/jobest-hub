@@ -225,9 +225,11 @@ def publish_notification(
         logger.debug("Local hub broadcast: %s", exc)
 
     try:
-        from src.storage.cache import invalidate_summary_cache, invalidate_freelance_cache
+        from src.storage.cache import invalidate_summary_cache, invalidate_freelance_cache, invalidate_outbound_cache, invalidate_stats_cache
         invalidate_summary_cache(user_id)
         invalidate_freelance_cache(user_id)
+        invalidate_outbound_cache(user_id)
+        invalidate_stats_cache(user_id)
     except Exception:
         pass
 

@@ -625,6 +625,7 @@ def api_jobs(
     min_score: int | None = None,
     sort_by: str = "latest",
     limit: int = 100,
+    cursor: int | None = None,
     _: bool = Depends(_auth)
 ):
     limit = max(1, min(limit, 500))
@@ -678,6 +679,8 @@ def api_jobs(
         if q:
             needle = f"%{q.strip()}%"
             query = query.where(or_(JobPosting.title.ilike(needle), JobPosting.company.ilike(needle), JobPosting.location.ilike(needle), JobPosting.application_email.ilike(needle), JobPosting.application_emails.ilike(needle)))
+        if cursor is not None and cursor > 0:
+            query = query.where(JobPosting.id < cursor)
 
         # "Keep the last thing up" — default order is latest scraped/discovered jobs first
         if sort_by == "score":
@@ -1693,11 +1696,17 @@ def api_outbound(request: Request, limit: int = 250, status_filter: str | None =
 @app.get("/api/outbound/stats")
 def api_outbound_stats(request: Request, _: bool = Depends(_auth)):
     from src.auth.service import get_current_user_optional
+    from src.storage.cache import app_cache
     from src.storage.models import UserJobApplication
     user = get_current_user_optional(request)
     user_id = user.id if user else None
     is_admin = user and user.role == "admin"
     all_users = bool(request.query_params.get("all_users"))
+
+    cache_key = f"outbound_stats:{user_id}:{is_admin}:{all_users}"
+    cached = app_cache.get(cache_key)
+    if cached is not None:
+        return cached
 
     with get_session() as session:
         sent_emails = session.scalar(
@@ -1782,7 +1791,7 @@ def api_outbound_stats(request: Request, _: bool = Depends(_auth)):
 
         applied_jobs = session.scalar(select(func.count(JobPosting.id)).where(or_(JobPosting.pipeline_stage == PipelineStage.APPLIED, JobPosting.applied_at.isnot(None)))) or 0
         total_apps = max(sent_emails + web_submitted, applied_jobs)
-        return {
+        stats_payload = {
             "total_applications": total_apps,
             "sent_emails": sent_emails,
             "web_submitted": web_submitted,
@@ -1791,6 +1800,8 @@ def api_outbound_stats(request: Request, _: bool = Depends(_auth)):
             "linkedin_applications": linkedin_count,
             "indeed_applications": indeed_count,
         }
+        app_cache.set(cache_key, stats_payload, ttl=15.0)
+        return stats_payload
 
 
 @app.post("/api/actions/resend_application")
@@ -6930,8 +6941,14 @@ def _verify_n8n_secret(request: Request):
 def api_stats_dynamic(request: Request, _: bool = Depends(_auth)):
     """Rich, real-time stats for dynamic KPI dashboards and n8n polling."""
     from src.auth.service import get_current_user_optional
+    from src.storage.cache import app_cache
     user = get_current_user_optional(request)
     user_id = user.id if user else None
+
+    cache_key = f"stats_dynamic:{user_id}"
+    cached = app_cache.get(cache_key)
+    if cached is not None:
+        return cached
 
     with get_session() as session:
         def _scope_st(stmt):
@@ -7019,7 +7036,7 @@ def api_stats_dynamic(request: Request, _: bool = Depends(_auth)):
                 "evaluated": latest_run.evaluated,
             }
 
-        return {
+        stats_payload = {
             "server_utc": now.isoformat(),
             "kpis": {
                 "total_postings": total,
@@ -7042,6 +7059,25 @@ def api_stats_dynamic(request: Request, _: bool = Depends(_auth)):
             "quota": quota,
             "latest_run": run_info,
         }
+        app_cache.set(cache_key, stats_payload, ttl=15.0)
+        return stats_payload
+
+
+@app.get("/api/system/metrics")
+def api_system_metrics(request: Request, _: bool = Depends(_auth)):
+    """System Design 101 Telemetry: Cache-aside performance, active WebSocket connections, and broker status."""
+    from src.storage.cache import app_cache
+    from src.notifications.hub import notification_hub
+    from config.settings import settings
+
+    ws_count = len(notification_hub._connections) if hasattr(notification_hub, "_connections") else 0
+    return {
+        "ok": True,
+        "server_utc": datetime.now(timezone.utc).isoformat(),
+        "cache": app_cache.stats(),
+        "active_websockets": ws_count,
+        "broker": getattr(settings, "message_broker", "rabbitmq"),
+    }
 
 
 @app.post("/api/webhook/n8n/notify")
