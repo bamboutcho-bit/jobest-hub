@@ -2400,11 +2400,25 @@
           </div>
           <div id="mJobAtsErrorNote" style="font-size:12px;color:var(--text-muted);margin-bottom:10px;background:rgba(0,0,0,0.25);padding:8px 10px;border-radius:6px;border-left:3px solid var(--accent)"></div>
           <div id="mJobScreenshotWrap" style="display:none;margin-top:8px">
-            <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">📸 Playwright Full-Page Submission Screenshot:</div>
-            <a id="mJobScreenshotLink" href="" target="_blank" title="Click to view full size screenshot in new tab">
-              <img id="mJobScreenshotImg" src="" style="width:100%;max-height:280px;object-fit:cover;object-position:top;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:#020617;cursor:zoom-in" alt="Playwright Application Screenshot">
-            </a>
-            <div style="font-size:10px;color:var(--text-faint);margin-top:4px">👆 Click screenshot to expand full page verification evidence in a new tab.</div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+              <span style="font-size:11px;color:var(--text-muted);font-weight:700">📸 Application Verification Screenshot Evidence:</span>
+              <button type="button" class="btn btn-sm" onclick="document.getElementById('mJobScreenshotUploadInput').click()" style="font-size:10px;padding:2px 8px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.2)">
+                📎 Attach / Replace Proof
+              </button>
+              <input type="file" id="mJobScreenshotUploadInput" accept="image/*" style="display:none" onchange="uploadScreenshotFromFileInput(this)">
+            </div>
+            <div id="mJobScreenshotPreviewBox">
+              <a id="mJobScreenshotLink" href="" target="_blank" title="Click to view full size screenshot in new tab">
+                <img id="mJobScreenshotImg" src="" style="width:100%;max-height:280px;object-fit:cover;object-position:top;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:#020617;cursor:zoom-in" alt="Application Screenshot">
+              </a>
+              <div style="font-size:10px;color:var(--text-faint);margin-top:4px">👆 Click screenshot to expand full page verification evidence in a new tab. Tip: Press <b>Ctrl+V</b> anywhere to paste screenshot proof directly from clipboard!</div>
+            </div>
+            <div id="mJobScreenshotEmptyBox" style="display:none;padding:16px;border:1px dashed rgba(255,255,255,0.15);border-radius:6px;text-align:center;background:rgba(0,0,0,0.2)">
+              <div style="font-size:20px;margin-bottom:4px">📸</div>
+              <div style="font-size:12px;color:#fff;font-weight:600">No screenshot proof attached yet</div>
+              <div style="font-size:11px;color:var(--text-muted);margin:4px 0 8px">Snip your application screen (Win+Shift+S) and press <b>Ctrl+V</b> here or click below:</div>
+              <button type="button" class="btn btn-sm btn-cyan" onclick="document.getElementById('mJobScreenshotUploadInput').click()">Upload Screenshot</button>
+            </div>
           </div>
         </div>
 
@@ -3755,7 +3769,7 @@
     </div>
   </div>
 
-  <script src="/static/js/app.js?v=6.6.3"></script>
+  <script src="/static/js/app.js?v=6.6.4"></script>
   <!-- Real-Time Floating Notification Toasts -->
   <div id="notifToastContainer" style="position:fixed;bottom:96px;right:24px;display:flex;flex-direction:column-reverse;gap:10px;z-index:99999;pointer-events:none"></div>
 

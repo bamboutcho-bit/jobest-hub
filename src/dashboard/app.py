@@ -755,6 +755,47 @@ def api_job_screenshot(job_id: int, _: bool = Depends(_auth)):
         return FileResponse(path_str, media_type="image/png")
 
 
+@app.post("/api/jobs/{job_id}/screenshot")
+async def api_upload_job_screenshot(job_id: int, request: Request, _: bool = Depends(_auth)):
+    content_type = request.headers.get("content-type", "")
+    image_bytes = None
+    if "application/json" in content_type:
+        body = await request.json()
+        b64 = body.get("image_base64", "")
+        if b64:
+            if "," in b64:
+                b64 = b64.split(",", 1)[1]
+            image_bytes = base64.b64decode(b64)
+    elif "multipart/form-data" in content_type:
+        form = await request.form()
+        file = form.get("file")
+        if file and hasattr(file, "read"):
+            image_bytes = await file.read()
+    else:
+        image_bytes = await request.body()
+
+    if not image_bytes:
+        raise HTTPException(400, "No image data provided")
+
+    with get_session() as session:
+        job = session.get(JobPosting, job_id)
+        if not job:
+            raise HTTPException(404, "Job not found")
+
+        directory = Path(settings.apply_screenshot_dir)
+        directory.mkdir(parents=True, exist_ok=True)
+        import re
+        company = re.sub(r"[^A-Za-z0-9]+", "_", str(job.company or "company"))[:40].strip("_")
+        title = re.sub(r"[^A-Za-z0-9]+", "_", str(job.title or "job"))[:50].strip("_")
+        path = directory / f"{job.id}_{company}_{title}.png"
+        path.write_bytes(image_bytes)
+
+        job.application_screenshot_path = str(path)
+        session.commit()
+        return {"ok": True, "screenshot_url": f"/api/jobs/{job.id}/screenshot", "path": str(path)}
+
+
+
 @app.patch("/api/jobs/{job_id}/stage")
 def update_stage(job_id: int, payload: StageUpdate, request: Request, _: bool = Depends(_auth)):
     try:

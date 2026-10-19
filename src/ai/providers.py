@@ -43,6 +43,7 @@ class OllamaProvider(AIProvider):
 
     def generate(self, *, system_prompt: str, user_prompt: str, max_tokens: int) -> str:
         try:
+            req_timeout = min(max(5, self.timeout), 25)
             response = requests.post(
                 f"{self.base_url}/api/chat",
                 json={
@@ -53,10 +54,15 @@ class OllamaProvider(AIProvider):
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt},
                     ],
-                    "options": {"num_predict": max_tokens, "temperature": 0.25},
-                    "keep_alive": "10m",
+                    "options": {
+                        "num_predict": max_tokens,
+                        "temperature": 0.25,
+                        "num_ctx": 2048,
+                        "num_thread": 2,
+                    },
+                    "keep_alive": "5m",
                 },
-                timeout=self.timeout,
+                timeout=req_timeout,
             )
         except requests.RequestException as exc:
             raise AIProviderError(f"Ollama request failed: {exc}", transient=True) from exc

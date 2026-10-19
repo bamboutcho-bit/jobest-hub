@@ -89,7 +89,7 @@
     let currentFreelanceTab = 'kanban';
     let currentJobsTab = 'postings';
     let syncIntervalId = null;
-    let syncDelayMs = 3000;
+    let syncDelayMs = 30000;
 
     // Cache Data
     let allFreelanceLeads = [];
@@ -205,21 +205,31 @@
 
     function changeSyncInterval(val) {
       syncDelayMs = parseInt(val, 10);
-      clearInterval(syncIntervalId);
+      if (syncIntervalId) clearInterval(syncIntervalId);
       if (syncDelayMs > 0) {
         startAutoSync();
-        document.getElementById('liveStatusText').textContent = 'Live Sync';
+        const el = document.getElementById('liveStatusText');
+        if (el) el.textContent = 'Live Sync';
       } else {
-        document.getElementById('liveStatusText').textContent = 'Paused';
+        const el = document.getElementById('liveStatusText');
+        if (el) el.textContent = 'Paused';
       }
     }
 
     function startAutoSync() {
       if (syncDelayMs <= 0) return;
+      if (syncIntervalId) clearInterval(syncIntervalId);
+      const sel = document.getElementById('syncIntervalSelect');
+      if (sel && sel.value) {
+        syncDelayMs = parseInt(sel.value, 10);
+      }
       syncIntervalId = setInterval(refreshCurrentView, syncDelayMs);
     }
 
     async function refreshCurrentView() {
+      // Don't waste CPU or network when the user is not actively on this tab
+      if (document.hidden) return;
+
       try {
         if (typeof fetchCurrentUser === 'function') {
           await fetchCurrentUser();
@@ -232,9 +242,24 @@
 
       try {
         if (currentAppMode === 'freelance') {
-          await Promise.allSettled([loadFreelanceStats(), loadFreelanceLeads()]);
+          if (currentFreelanceTab === 'kanban' || currentFreelanceTab === 'leads') {
+            await Promise.allSettled([loadFreelanceStats(), loadFreelanceLeads()]);
+          } else {
+            await loadFreelanceStats();
+          }
         } else {
-          await Promise.allSettled([loadJobSummary(), loadJobs(), loadInbox(), loadOutbound(), loadPipelineRuns(), loadSystemInfo()]);
+          // Smart sub-tab refresh: only refresh what is currently visible on screen
+          const tasks = [loadJobSummary()];
+          if (currentJobsTab === 'postings') {
+            tasks.push(loadJobs());
+          } else if (currentJobsTab === 'inbox') {
+            tasks.push(loadInbox());
+          } else if (currentJobsTab === 'outbound') {
+            tasks.push(loadOutbound());
+          } else if (currentJobsTab === 'pipeline') {
+            tasks.push(loadPipelineRuns());
+          }
+          await Promise.allSettled(tasks);
         }
       } catch (err) {
         console.error('Sync error:', err);
@@ -1794,6 +1819,11 @@
           <span>${formatAppDate(j.applied_at)}</span>
         </div>
       ` : '';
+      const screenBadge = j.has_screenshot ? `
+        <a href="/api/jobs/${j.id}/screenshot" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="pill" style="font-size:10px;background:rgba(16,185,129,0.22);color:#6ee7b7;border:1px solid #10b981;margin-top:2px;display:inline-flex;align-items:center;gap:3px;text-decoration:none;font-weight:700" title="Verified with screenshot proof — click to view full size">
+          📸 Verified Proof ↗
+        </a>
+      ` : '';
 
       if (isApplied) {
         if (method.includes('email') || status === 'sent' || (targetEmail && !method.includes('portal') && !method.includes('linkedin'))) {
@@ -1804,6 +1834,7 @@
               </span>
               ${targetEmail ? `<span style="font-size:11px;font-family:'JetBrains Mono';color:#a7f3d0;font-weight:600;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="Recipient: ${esc(targetEmail)}">To: ${esc(targetEmail)}</span>` : ''}
               ${appDateBadge}
+              ${screenBadge}
             </div>
           `;
         } else if (status === 'submitted') {
@@ -1816,6 +1847,7 @@
                 Confirmed Submitted ✅
               </span>
               ${appDateBadge}
+              ${screenBadge}
             </div>
           `;
         } else if (status === 'submitted_unverified') {
@@ -1828,6 +1860,7 @@
                 Click row for proof 📸
               </span>
               ${appDateBadge}
+              ${screenBadge}
             </div>
           `;
         } else if (method.includes('portal') || method.includes('web') || method.includes('browser')) {
@@ -1840,6 +1873,7 @@
                 ${esc(j.application_status || 'Submitted')}
               </span>
               ${appDateBadge}
+              ${screenBadge}
             </div>
           `;
         } else if (method.includes('linkedin') || (j.source_site && j.source_site.toLowerCase().includes('linkedin')) || (j.job_url && j.job_url.includes('linkedin.com'))) {
@@ -1853,6 +1887,7 @@
                 ${mLabel}
               </span>
               ${appDateBadge}
+              ${screenBadge}
             </div>
           `;
         } else if (method.includes('indeed') || (j.source_site && j.source_site.toLowerCase().includes('indeed')) || (j.job_url && j.job_url.includes('indeed.com'))) {
@@ -1866,6 +1901,7 @@
                 ${mLabel}
               </span>
               ${appDateBadge}
+              ${screenBadge}
             </div>
           `;
         } else {
@@ -1875,11 +1911,11 @@
                 ✓ Applied (${esc(j.application_method || 'direct')})
               </span>
               ${appDateBadge}
+              ${screenBadge}
             </div>
           `;
         }
       }
-
 
       // Not applied yet (discovered, evaluated_match, etc.)
       const stageClass = j.stage === 'evaluated_match' ? 'deal_won' : j.stage === 'evaluated_low' ? 'lost' : 'discovered';
@@ -1893,6 +1929,7 @@
             <span style="font-size:10px;font-family:'JetBrains Mono';color:var(--text-muted);max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(targetEmail)}">
               ${esc(targetEmail)}
             </span>
+            ${screenBadge}
           </div>
         `;
       } else if (j.application_url) {
@@ -1904,11 +1941,12 @@
             <span style="font-size:10px;color:var(--text-faint)">
               ATS Form
             </span>
+            ${screenBadge}
           </div>
         `;
       }
 
-      return `<span class="pill pill-stage-${stageClass}">${esc(j.stage)}</span>`;
+      return `<div style="display:flex;flex-direction:column;gap:3px;align-items:flex-start"><span class="pill pill-stage-${stageClass}">${esc(j.stage)}</span>${screenBadge}</div>`;
     }
 
     function setJobQuickFilter(type) {
@@ -2001,20 +2039,30 @@
         statsEl.textContent = `${allJobsList.length} jobs • ${appliedCount} applied • ${emailCount} email channel`;
       }
 
-      renderJobsTable();
-      renderJobsCards();
+      let _activeJobsViewMode = 'table';
+      let _showAllJobsTable = false;
+
+      if (_activeJobsViewMode === 'cards') {
+        renderJobsCards();
+      } else {
+        renderJobsTable();
+      }
       updateBulkLinkedInBadge();
       updateBulkIndeedBadge();
     }
 
-    function renderJobsTable() {
+    function renderJobsTable(showAll = false) {
+      if (showAll) _showAllJobsTable = true;
       const tbody = document.getElementById('jobsTableBody');
       if (!allJobsList.length) {
         tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-faint);padding:24px">No job postings found matching your precision filters.</td></tr>';
         return;
       }
 
-      tbody.innerHTML = allJobsList.map(j => {
+      const limit = _showAllJobsTable ? allJobsList.length : 80;
+      const listToRender = allJobsList.slice(0, limit);
+
+      const rows = listToRender.map(j => {
         const viewBtn = `<button class="btn btn-sm" onclick="event.stopPropagation(); openJobModal(${j.id})" title="View job posting and AI match analysis" style="padding:2px 8px;font-size:11px;font-weight:700">👁️ View</button>`;
         const directUrl = j.application_url || j.job_url || '';
         const isLiJob = (j.source_site && j.source_site.toLowerCase().includes('linkedin')) || (j.job_url && j.job_url.includes('linkedin.com')) || (j.application_url && j.application_url.includes('linkedin.com'));
@@ -2058,11 +2106,27 @@
           <td><div style="display:flex;align-items:center;gap:6px">${viewBtn}${applyBtn}${logBtn}</div></td>
         </tr>
       `}).join('');
+
+      let footerRow = '';
+      if (allJobsList.length > limit) {
+        footerRow = `
+          <tr>
+            <td colspan="10" style="text-align:center;padding:14px;background:rgba(255,255,255,0.02)">
+              <button class="btn btn-sm btn-cyan" onclick="renderJobsTable(true)">
+                ⚡ Showing first ${limit} of ${allJobsList.length} matches — Click to display all ⬇
+              </button>
+            </td>
+          </tr>
+        `;
+      }
+      tbody.innerHTML = rows + footerRow;
     }
 
     function renderJobsCards() {
       const container = document.getElementById('jobsCardsContainer');
-      container.innerHTML = allJobsList.map(j => {
+      const limit = 60;
+      const listToRender = allJobsList.slice(0, limit);
+      container.innerHTML = listToRender.map(j => {
         const directUrl = j.application_url || j.job_url || '';
         const isLiJob = (j.source_site && j.source_site.toLowerCase().includes('linkedin')) || (j.job_url && j.job_url.includes('linkedin.com')) || (j.application_url && j.application_url.includes('linkedin.com'));
         const isIndeedJob = (j.source_site && j.source_site.toLowerCase().includes('indeed')) || (j.job_url && j.job_url.includes('indeed.com')) || (j.application_url && j.application_url.includes('indeed.com'));
@@ -2120,10 +2184,16 @@
     }
 
     function toggleJobsView(mode) {
+      _activeJobsViewMode = mode;
       document.getElementById('jobsTableContainer').style.display = mode === 'table' ? 'block' : 'none';
       document.getElementById('jobsCardsContainer').style.display = mode === 'cards' ? 'grid' : 'none';
       document.getElementById('jobsViewTableBtn').classList.toggle('btn-cyan', mode === 'table');
       document.getElementById('jobsViewCardsBtn').classList.toggle('btn-cyan', mode === 'cards');
+      if (mode === 'cards') {
+        renderJobsCards();
+      } else {
+        renderJobsTable();
+      }
     }
 
     async function triggerBatchReEvaluateJobs() {
@@ -2288,13 +2358,21 @@
               atsNote.textContent = j.application_error || 'Browser portal interaction recorded.';
             }
 
+            const prevBox = document.getElementById('mJobScreenshotPreviewBox');
+            const emptyBox = document.getElementById('mJobScreenshotEmptyBox');
+
+            screenWrap.style.display = 'block';
             if (j.has_screenshot) {
-              screenWrap.style.display = 'block';
-              const sUrl = `/api/jobs/${j.id}/screenshot`;
+              if (prevBox) prevBox.style.display = 'block';
+              if (emptyBox) emptyBox.style.display = 'none';
+              const sUrl = `/api/jobs/${j.id}/screenshot?t=${Date.now()}`;
               screenImg.src = sUrl;
               screenLink.href = sUrl;
             } else {
-              screenWrap.style.display = 'none';
+              if (prevBox) prevBox.style.display = 'none';
+              if (emptyBox) emptyBox.style.display = 'block';
+              screenImg.src = '';
+              screenLink.href = '';
             }
           } else {
             atsSec.style.display = 'none';
@@ -3292,6 +3370,72 @@
         showToast('Failed to record application: ' + e.message, 'error');
       }
     }
+
+    async function uploadScreenshotFromFileInput(input) {
+      if (!input.files || !input.files[0]) return;
+      const file = input.files[0];
+      const jobId = currentActiveJob?.id || _activeSpecifyAppJobId;
+      if (!jobId) {
+        showToast('No job selected for screenshot upload', 'error');
+        return;
+      }
+      showToast('Uploading screenshot proof...', 'normal');
+      try {
+        const b64 = await readFileAsBase64(file);
+        const res = await apiSend(`/api/jobs/${jobId}/screenshot`, 'POST', { image_base64: b64 });
+        if (res.ok) {
+          showToast('📸 Screenshot proof saved and verified! ✓', 'success');
+          if (currentActiveJob && currentActiveJob.id === jobId) {
+            currentActiveJob.has_screenshot = true;
+            openJobModal(jobId);
+          }
+          loadJobs();
+        }
+      } catch (err) {
+        showToast('Screenshot upload failed: ' + err.message, 'error');
+      } finally {
+        input.value = '';
+      }
+    }
+
+    function readFileAsBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // Global Clipboard Paste Listener for Screenshots (Ctrl+V)
+    window.addEventListener('paste', async (e) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      const imageItem = Array.from(items).find(x => x.type.startsWith('image/'));
+      if (!imageItem) return;
+
+      const targetJobId = currentActiveJob?.id || _activeSpecifyAppJobId || _bulkLiQueue?.[_bulkLiIndex]?.id || _bulkIndQueue?.[_bulkIndIndex]?.id;
+      if (!targetJobId) return;
+
+      const file = imageItem.getAsFile();
+      if (!file) return;
+
+      showToast('Pasting & uploading screenshot proof from clipboard... 📸', 'normal');
+      try {
+        const b64 = await readFileAsBase64(file);
+        const res = await apiSend(`/api/jobs/${targetJobId}/screenshot`, 'POST', { image_base64: b64 });
+        if (res.ok) {
+          showToast(`📸 Screenshot proof attached to #${targetJobId}! ✓`, 'success');
+          if (currentActiveJob && currentActiveJob.id === targetJobId) {
+            currentActiveJob.has_screenshot = true;
+            openJobModal(targetJobId);
+          }
+          loadJobs();
+        }
+      } catch (err) {
+        showToast('Clipboard screenshot upload failed: ' + err.message, 'error');
+      }
+    });
 
     function openRecordExternalModal() {
       const modal = document.getElementById('recordExternalModal');
@@ -8644,6 +8788,7 @@
     window.markCurrentBulkIndApplied = markCurrentBulkIndApplied;
     window.launchBatchIndeedTabs = launchBatchIndeedTabs;
     window.updateBulkIndeedBadge = updateBulkIndeedBadge;
+    window.uploadScreenshotFromFileInput = uploadScreenshotFromFileInput;
 
 
 
