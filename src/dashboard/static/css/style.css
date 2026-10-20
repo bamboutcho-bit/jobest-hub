@@ -32,7 +32,42 @@
       --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
       --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.45);
       --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.6);
-      --shadow-glow: 0 0 24px rgba(139, 92, 246, 0.25);
+    }
+
+    /* Light Mode Design System Tokens */
+    :root[data-theme="light"],
+    html[data-theme="light"],
+    body[data-theme="light"] {
+      --bg: #f8fafc;
+      --bg-surface: #ffffff;
+      --bg-card: #ffffff;
+      --bg-card-hover: #f1f5f9;
+      --bg-card-subtle: #f8fafc;
+      --border: #e2e8f0;
+      --border-hover: #cbd5e1;
+      --border-focus: #7c3aed;
+      --text: #0f172a;
+      --text-muted: #475569;
+      --text-faint: #64748b;
+      --purple: #7c3aed;
+      --purple-light: #6d28d9;
+      --purple-dark: #4c1d95;
+      --cyan: #0891b2;
+      --cyan-light: #0284c7;
+      --blue: #2563eb;
+      --good: #059669;
+      --good-bg: rgba(16, 185, 129, 0.12);
+      --good-border: rgba(16, 185, 129, 0.35);
+      --warn: #d97706;
+      --warn-bg: rgba(245, 158, 11, 0.12);
+      --warn-border: rgba(245, 158, 11, 0.35);
+      --bad: #e11d48;
+      --bad-bg: rgba(244, 63, 94, 0.12);
+      --bad-border: rgba(244, 63, 94, 0.35);
+      --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.03);
+      --shadow-md: 0 4px 14px rgba(15, 23, 42, 0.06), 0 2px 6px rgba(15, 23, 42, 0.04);
+      --shadow-lg: 0 14px 36px rgba(15, 23, 42, 0.1), 0 4px 12px rgba(15, 23, 42, 0.05);
+      --shadow-glow: 0 0 20px rgba(124, 58, 237, 0.15);
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -224,6 +259,40 @@
     .btn-icon { width: 34px; height: 34px; padding: 0; border-radius: var(--radius-sm); }
     .btn-success { background: var(--good); color: #000; border: none; }
     .btn-success:hover { background: #34d399; }
+    
+    /* Specific Channel & Action Button Classes */
+    .btn-linkedin {
+      background: rgba(10, 102, 194, 0.25);
+      border: 1px solid #0a66c2;
+      color: #60a5fa;
+      font-weight: 700;
+    }
+    .btn-linkedin:hover {
+      background: #0a66c2;
+      color: #ffffff;
+      border-color: #004182;
+    }
+    .btn-indeed {
+      background: rgba(37, 99, 235, 0.25);
+      border: 1px solid #2563eb;
+      color: #93c5fd;
+      font-weight: 700;
+    }
+    .btn-indeed:hover {
+      background: #2563eb;
+      color: #ffffff;
+      border-color: #1d4ed8;
+    }
+    .btn-log {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: var(--text);
+      font-weight: 600;
+    }
+    .btn-log:hover {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.25);
+    }
 
     /* Form Inputs, Selects & Controls - Premium Cyber Glow Theme */
     input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="range"]):not([type="file"]):not([type="hidden"]),
@@ -1646,5 +1715,848 @@
       position: sticky;
       bottom: 0;
       z-index: 20;
+    }
+
+    /* =================================================================== */
+    /* THEME TOGGLE BUTTON COMPONENT                                       */
+    /* =================================================================== */
+    .theme-toggle-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text);
+      user-select: none;
+    }
+    .theme-toggle-btn:hover {
+      border-color: var(--border-hover);
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-sm);
+    }
+    [data-theme="light"] .theme-toggle-btn {
+      background: #ffffff;
+      border-color: #cbd5e1;
+      color: #0f172a;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+    [data-theme="light"] .theme-toggle-btn:hover {
+      background: #f1f5f9;
+      border-color: #94a3b8;
+    }
+
+    /* =================================================================== */
+    /* LIGHT MODE COMPONENT & SURFACE ADAPTATIONS                          */
+    /* =================================================================== */
+    [data-theme="light"] body,
+    body[data-theme="light"] {
+      background-color: var(--bg);
+      color: var(--text);
+      background-image: 
+        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(124, 58, 237, 0.06), transparent 70%),
+        radial-gradient(circle 600px at 100% 20%, rgba(6, 182, 212, 0.04), transparent);
+    }
+
+    /* Top bar, Brand, and User Controls */
+    [data-theme="light"] header.top-bar {
+      background: rgba(255, 255, 255, 0.94);
+      border-color: #e2e8f0;
+      box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
+    }
+    [data-theme="light"] .brand-title {
+      background: linear-gradient(135deg, #0f172a 0%, #334155 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    [data-theme="light"] .brand-badge {
+      color: #6d28d9;
+      background: rgba(124, 58, 237, 0.08);
+      border-color: rgba(124, 58, 237, 0.25);
+    }
+    [data-theme="light"] .status-pulse {
+      background: #ffffff;
+      border-color: #e2e8f0;
+      color: #475569;
+    }
+    [data-theme="light"] #navUserBadge {
+      background: #ffffff !important;
+      border-color: #e2e8f0 !important;
+      color: #0f172a !important;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+    [data-theme="light"] #navUserName {
+      color: #0f172a !important;
+    }
+    [data-theme="light"] #notifBellBtn {
+      background: #ffffff !important;
+      border-color: #cbd5e1 !important;
+      color: #0f172a !important;
+    }
+    [data-theme="light"] #notifBellBtn:hover {
+      background: #f1f5f9 !important;
+      border-color: #94a3b8 !important;
+    }
+    [data-theme="light"] #globalRefreshBtn {
+      background: #ffffff;
+      border-color: #cbd5e1;
+      color: #0f172a;
+    }
+    [data-theme="light"] #globalRefreshBtn:hover {
+      background: #f1f5f9;
+    }
+    [data-theme="light"] #cacheTelemetryChip {
+      background: rgba(16, 185, 129, 0.1) !important;
+      border-color: rgba(16, 185, 129, 0.3) !important;
+      color: #047857 !important;
+    }
+
+    /* Mode Switcher */
+    [data-theme="light"] .mode-switcher {
+      background: #f1f5f9;
+      border-color: #e2e8f0;
+      box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+    [data-theme="light"] .mode-btn {
+      color: #64748b;
+    }
+    [data-theme="light"] .mode-btn:hover {
+      color: #0f172a;
+    }
+    [data-theme="light"] .mode-btn.active {
+      background: #ffffff;
+      color: #7c3aed;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+    }
+    [data-theme="light"] .mode-btn.active.jobs-mode {
+      background: #ffffff;
+      color: #0284c7;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+    }
+
+    /* Nav Tabs & Sub-tabs */
+    [data-theme="light"] .nav-tabs,
+    [data-theme="light"] .sub-nav {
+      border-bottom-color: #e2e8f0;
+    }
+    [data-theme="light"] .nav-tab,
+    [data-theme="light"] .tab-btn {
+      color: #64748b;
+      border: 1px solid transparent;
+      background: transparent;
+      font-weight: 600;
+    }
+    [data-theme="light"] .nav-tab:hover,
+    [data-theme="light"] .tab-btn:hover {
+      color: #0f172a;
+      background: #f1f5f9;
+      border-color: #cbd5e1;
+    }
+    [data-theme="light"] .nav-tab.active,
+    [data-theme="light"] .tab-btn.active {
+      background: #ffffff;
+      color: #7c3aed;
+      border: 1px solid #cbd5e1;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+      font-weight: 700;
+    }
+    [data-theme="light"] .nav-tab.active.jobs-tab,
+    [data-theme="light"] .tab-btn.active.jobs-tab {
+      background: #ffffff;
+      color: #0284c7;
+      border: 1px solid #7dd3fc;
+      box-shadow: 0 2px 6px rgba(2, 132, 199, 0.08);
+      font-weight: 700;
+    }
+
+    /* KPI Cards & Metrics */
+    [data-theme="light"] .kpi-card {
+      background: #ffffff;
+      border-color: #e2e8f0;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    }
+    [data-theme="light"] .kpi-card:hover {
+      border-color: #cbd5e1;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+    }
+    [data-theme="light"] .kpi-label {
+      color: #475569;
+    }
+    [data-theme="light"] .kpi-label span {
+      color: #475569;
+    }
+    [data-theme="light"] .kpi-value {
+      color: #0f172a;
+    }
+    [data-theme="light"] .kpi-sub {
+      color: #64748b;
+    }
+
+    /* Tables (Postings, Deals, Inbox, Outbound) */
+    [data-theme="light"] .data-table-wrap {
+      background: #ffffff;
+      border-color: #e2e8f0;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    }
+    [data-theme="light"] table.data-table th {
+      background: #f8fafc;
+      color: #475569;
+      border-bottom: 2px solid #e2e8f0;
+      font-weight: 700;
+    }
+    [data-theme="light"] table.data-table th:hover {
+      color: #0f172a;
+    }
+    [data-theme="light"] table.data-table td {
+      color: #1e293b;
+      border-bottom: 1px solid #f1f5f9;
+    }
+    [data-theme="light"] table.data-table tr:hover td {
+      background: #f8fafc;
+    }
+    [data-theme="light"] table.data-table tr.clickable:hover td {
+      background: #f1f5f9;
+    }
+    [data-theme="light"] #jobsTableBody tr.clickable:hover {
+      background: #f8fafc;
+    }
+    [data-theme="light"] #jobsQuickStats {
+      color: #475569 !important;
+    }
+
+    /* Kanban Board & Lead Cards */
+    [data-theme="light"] .kanban-board {
+      border-color: #e2e8f0;
+    }
+    [data-theme="light"] .kanban-column {
+      background: #f8fafc;
+      border-color: #e2e8f0;
+    }
+    [data-theme="light"] .kanban-col-header {
+      border-bottom-color: #e2e8f0;
+    }
+    [data-theme="light"] .kanban-col-title {
+      color: #0f172a;
+    }
+    [data-theme="light"] .kanban-col-count {
+      background: #e2e8f0;
+      color: #334155;
+    }
+    [data-theme="light"] .lead-card {
+      background: #ffffff;
+      border-color: #e2e8f0;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+    }
+    [data-theme="light"] .lead-card:hover {
+      border-color: #a78bfa;
+      box-shadow: 0 6px 18px rgba(124, 58, 237, 0.12);
+    }
+    [data-theme="light"] .lead-card-title {
+      color: #0f172a;
+    }
+    [data-theme="light"] .lead-card-client {
+      color: #475569;
+    }
+    [data-theme="light"] .lead-card-footer {
+      border-top-color: #f1f5f9;
+    }
+    [data-theme="light"] .lead-card-detail {
+      background: #f8fafc !important;
+      color: #0f172a !important;
+      border-color: #e2e8f0 !important;
+    }
+
+    /* Buttons - Universal Light Mode High Contrast */
+    [data-theme="light"] .btn {
+      background: #ffffff;
+      border-color: #cbd5e1;
+      color: #0f172a;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+      font-weight: 600;
+    }
+    [data-theme="light"] .btn:hover {
+      background: #f1f5f9;
+      border-color: #94a3b8;
+      color: #0f172a;
+    }
+    [data-theme="light"] .btn-primary {
+      background: linear-gradient(135deg, #7c3aed, #6d28d9) !important;
+      color: #ffffff !important;
+      border: 1px solid #6d28d9 !important;
+      box-shadow: 0 2px 6px rgba(124, 58, 237, 0.25) !important;
+    }
+    [data-theme="light"] .btn-primary:hover {
+      background: linear-gradient(135deg, #6d28d9, #5b21b6) !important;
+      color: #ffffff !important;
+    }
+    [data-theme="light"] .btn-cyan {
+      background: linear-gradient(135deg, #0284c7, #0891b2) !important;
+      border: 1px solid #0284c7 !important;
+      color: #ffffff !important;
+      box-shadow: 0 2px 6px rgba(8, 145, 178, 0.25) !important;
+      font-weight: 700 !important;
+    }
+    [data-theme="light"] .btn-cyan:hover {
+      background: linear-gradient(135deg, #0369a1, #0e7490) !important;
+      color: #ffffff !important;
+    }
+    [data-theme="light"] .btn-good {
+      background: #d1fae5 !important;
+      border-color: #059669 !important;
+      color: #065f46 !important;
+      font-weight: 700 !important;
+    }
+    [data-theme="light"] .btn-linkedin,
+    [data-theme="light"] #btnBulkLinkedInApply {
+      background: #0a66c2 !important;
+      border: 1px solid #004182 !important;
+      color: #ffffff !important;
+      font-weight: 700 !important;
+      box-shadow: 0 2px 6px rgba(10, 102, 194, 0.25) !important;
+    }
+    [data-theme="light"] .btn-linkedin:hover,
+    [data-theme="light"] #btnBulkLinkedInApply:hover {
+      background: #004182 !important;
+      border-color: #002b57 !important;
+      color: #ffffff !important;
+    }
+    [data-theme="light"] .btn-indeed,
+    [data-theme="light"] #btnBulkIndeedApply {
+      background: #2563eb !important;
+      border: 1px solid #1d4ed8 !important;
+      color: #ffffff !important;
+      font-weight: 700 !important;
+      box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25) !important;
+    }
+    [data-theme="light"] .btn-indeed:hover,
+    [data-theme="light"] #btnBulkIndeedApply:hover {
+      background: #1d4ed8 !important;
+      border-color: #1e40af !important;
+      color: #ffffff !important;
+    }
+    [data-theme="light"] .btn-log {
+      background: #f1f5f9 !important;
+      border: 1px solid #cbd5e1 !important;
+      color: #0f172a !important;
+      font-weight: 600 !important;
+    }
+    [data-theme="light"] .btn-log:hover {
+      background: #e2e8f0 !important;
+      border-color: #94a3b8 !important;
+      color: #0f172a !important;
+    }
+    
+    /* Sub-nav & Modal Tab Buttons */
+    [data-theme="light"] .tab-btn {
+      color: #475569;
+      background: transparent;
+      border: 1px solid transparent;
+      font-weight: 600;
+    }
+    [data-theme="light"] .tab-btn:hover {
+      color: #0f172a;
+      background: #f1f5f9;
+    }
+    [data-theme="light"] .tab-btn.active {
+      background: #ffffff;
+      color: #7c3aed;
+      border: 1px solid #cbd5e1;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+      font-weight: 700;
+    }
+    [data-theme="light"] .tab-btn.active.jobs-tab {
+      background: #ffffff;
+      color: #0369a1;
+      border: 1px solid #7dd3fc;
+      box-shadow: 0 2px 6px rgba(2, 132, 199, 0.1);
+      font-weight: 700;
+    }
+
+    /* Topbar Controls */
+    [data-theme="light"] #topbarSetupBtn {
+      background: #fef3c7 !important;
+      border-color: #f59e0b !important;
+      color: #92400e !important;
+      font-weight: 700 !important;
+    }
+    [data-theme="light"] #navUserBadge button {
+      background: #fee2e2 !important;
+      border: 1px solid #fca5a5 !important;
+      color: #dc2626 !important;
+      font-weight: 700 !important;
+    }
+    [data-theme="light"] #navUserBadge button:hover {
+      background: #fecaca !important;
+      color: #b91c1c !important;
+    }
+    [data-theme="light"] #notifDropdown button {
+      color: #0284c7 !important;
+      font-weight: 600 !important;
+    }
+    [data-theme="light"] #notifDropdown button:last-child {
+      color: #64748b !important;
+    }
+    [data-theme="light"] #notifDropdown button:hover {
+      color: #0f172a !important;
+    }
+
+    /* Specific Action & Feature Buttons */
+    [data-theme="light"] #btnBatchFollowUps {
+      background: #fef3c7 !important;
+      border-color: #f59e0b !important;
+      color: #92400e !important;
+      font-weight: 700 !important;
+    }
+    [data-theme="light"] #btnBatchFollowUps #batchFollowUpBadge {
+      background: #fde68a !important;
+      color: #78350f !important;
+    }
+    [data-theme="light"] #fTabFollowUps {
+      border-color: #f59e0b !important;
+      color: #92400e !important;
+      font-weight: 700 !important;
+    }
+    [data-theme="light"] #fTabFollowUps #fKpiFollowUpsBadge {
+      background: #fde68a !important;
+      color: #78350f !important;
+    }
+    [data-theme="light"] #btnBatchEnrichHr {
+      background: #f5f3ff !important;
+      border-color: #a78bfa !important;
+      color: #6d28d9 !important;
+      font-weight: 700 !important;
+    }
+    [data-theme="light"] #outboundChipLinkedIn {
+      border-color: #0a66c2 !important;
+      color: #004182 !important;
+      font-weight: 700 !important;
+      background: #eff6ff !important;
+    }
+    [data-theme="light"] #outboundChipIndeed {
+      border-color: #2563eb !important;
+      color: #1e40af !important;
+      font-weight: 700 !important;
+      background: #eff6ff !important;
+    }
+    [data-theme="light"] button[onclick="openRecordExternalModal()"] {
+      border-color: #0a66c2 !important;
+      color: #004182 !important;
+      font-weight: 700 !important;
+      background: #eff6ff !important;
+    }
+    [data-theme="light"] #btnGenerateCvStudio,
+    [data-theme="light"] button[onclick="generateCvFromStudio()"] {
+      background: #d1fae5 !important;
+      border-color: #059669 !important;
+      color: #065f46 !important;
+      font-weight: 700 !important;
+    }
+    [data-theme="light"] #btnRunMlAnalysis {
+      background: #f5f3ff !important;
+      border-color: #a78bfa !important;
+      color: #6d28d9 !important;
+      font-weight: 700 !important;
+    }
+    [data-theme="light"] #btnDownloadModalCoverLetter {
+      background: #2563eb !important;
+      border-color: #1d4ed8 !important;
+      color: #ffffff !important;
+      font-weight: 700 !important;
+    }
+    [data-theme="light"] button[onclick*="mJobScreenshotUploadInput"] {
+      background: #f1f5f9 !important;
+      border-color: #cbd5e1 !important;
+      color: #0f172a !important;
+      font-weight: 600 !important;
+    }
+    [data-theme="light"] button[onclick="deleteCurrentProfile()"] {
+      background: #fee2e2 !important;
+      border-color: #fca5a5 !important;
+      color: #dc2626 !important;
+      font-weight: 700 !important;
+    }
+
+    /* Freelance Pitch Studio Formats */
+    [data-theme="light"] #fmtBtn_linkedin {
+      border-color: #0a66c2 !important;
+      color: #004182 !important;
+      font-weight: 700 !important;
+      background: #eff6ff !important;
+    }
+    [data-theme="light"] #fmtBtn_chat_dm {
+      border-color: #059669 !important;
+      color: #065f46 !important;
+      font-weight: 700 !important;
+      background: #ecfdf5 !important;
+    }
+    [data-theme="light"] #fmtBtn_follow_up_1,
+    [data-theme="light"] #fmtBtn_follow_up_2 {
+      border-color: #d97706 !important;
+      color: #92400e !important;
+      font-weight: 700 !important;
+      background: #fffbeb !important;
+    }
+    [data-theme="light"] button[onclick*="generateLeadFollowUp"] {
+      background: #fffbeb !important;
+      border-color: #f59e0b !important;
+      color: #92400e !important;
+      font-weight: 700 !important;
+    }
+
+    /* Modal Copy & Action Buttons */
+    [data-theme="light"] #btnCopyBulkLiPitch,
+    [data-theme="light"] #btnCopyBulkIndPitch,
+    [data-theme="light"] #btnCopyCrypto,
+    [data-theme="light"] #btnCopyPaypal,
+    [data-theme="light"] #btnCopyWise,
+    [data-theme="light"] #btnCopyRevolut,
+    [data-theme="light"] #btnCopyCih,
+    [data-theme="light"] #btnCopyAttijari,
+    [data-theme="light"] #bulkLiDirectLink,
+    [data-theme="light"] #bulkIndDirectLink {
+      background: #f1f5f9 !important;
+      border-color: #cbd5e1 !important;
+      color: #0f172a !important;
+      font-weight: 700 !important;
+    }
+
+    /* Modal Plan Switcher Pills in Checkout */
+    [data-theme="light"] #modalPlanSwitchGroup button {
+      background: #ffffff !important;
+      border-color: #cbd5e1 !important;
+    }
+    [data-theme="light"] #modalPlanSwitchGroup button span:first-child,
+    [data-theme="light"] #modalPlanSwitchGroup button .modal-plan-name {
+      color: #0f172a !important;
+    }
+    [data-theme="light"] #modalPlanSwitchGroup button.btn-primary {
+      background: linear-gradient(135deg, #7c3aed, #6d28d9) !important;
+      border-color: #7c3aed !important;
+    }
+    [data-theme="light"] #modalPlanSwitchGroup button.btn-primary span:first-child,
+    [data-theme="light"] #modalPlanSwitchGroup button.btn-primary .modal-plan-name {
+      color: #ffffff !important;
+    }
+    [data-theme="light"] #payTabStripe {
+      color: #4338ca !important;
+      border-color: #c7d2fe !important;
+    }
+
+    /* Pricing card actions in Light Mode */
+    [data-theme="light"] .pricing-card button.btn:not(.btn-primary):not(.btn-cyan) {
+      background: #f1f5f9 !important;
+      border-color: #cbd5e1 !important;
+      color: #0f172a !important;
+      font-weight: 700 !important;
+    }
+    [data-theme="light"] .pricing-card .active-plan-badge {
+      background: #d1fae5 !important;
+      border-color: #059669 !important;
+      color: #065f46 !important;
+      font-weight: 700 !important;
+    }
+
+    /* Onboarding Dialog Actions */
+    [data-theme="light"] .onb-footer button[onclick*="closeOnboardingModal"] {
+      color: #475569 !important;
+      background: #ffffff !important;
+      border: 1px solid #cbd5e1 !important;
+      font-weight: 600 !important;
+    }
+    [data-theme="light"] #onbBtnPrev {
+      background: #ffffff !important;
+      border: 1px solid #cbd5e1 !important;
+      color: #0f172a !important;
+      font-weight: 600 !important;
+    }
+    [data-theme="light"] #btnOnbMlExtract {
+      background: #f5f3ff !important;
+      border-color: #a78bfa !important;
+      color: #6d28d9 !important;
+      font-weight: 700 !important;
+    }
+
+    /* Pills & Badges */
+    [data-theme="light"] .pill {
+      background: #f1f5f9;
+      border-color: #e2e8f0;
+      color: #334155;
+    }
+    [data-theme="light"] .pill-stage-deal_won {
+      background: rgba(16, 185, 129, 0.12);
+      color: #047857;
+      border-color: rgba(16, 185, 129, 0.3);
+    }
+    [data-theme="light"] .pill-stage-pitched {
+      background: rgba(124, 58, 237, 0.1);
+      color: #6d28d9;
+      border-color: rgba(124, 58, 237, 0.25);
+    }
+    [data-theme="light"] .pill-stage-lost {
+      background: rgba(244, 63, 94, 0.1);
+      color: #be123c;
+      border-color: rgba(244, 63, 94, 0.25);
+    }
+
+    /* Modals & Dialogs */
+    [data-theme="light"] .modal-backdrop {
+      background: rgba(15, 23, 42, 0.45);
+      backdrop-filter: blur(8px);
+    }
+    [data-theme="light"] .modal-card {
+      background: #ffffff;
+      border-color: #e2e8f0;
+      box-shadow: 0 25px 60px rgba(15, 23, 42, 0.15);
+      color: #0f172a;
+    }
+    [data-theme="light"] .modal-header {
+      background: #f8fafc;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    [data-theme="light"] .modal-header h3 {
+      color: #0f172a;
+    }
+    [data-theme="light"] .modal-tabs {
+      border-bottom-color: #e2e8f0;
+    }
+    [data-theme="light"] .modal-body {
+      background: #ffffff;
+      color: #0f172a;
+    }
+    [data-theme="light"] .modal-footer {
+      background: #f8fafc;
+      border-top: 1px solid #e2e8f0;
+    }
+
+    /* Notification & User Dropdowns */
+    [data-theme="light"] #notifDropdown {
+      background: #ffffff !important;
+      border-color: #e2e8f0 !important;
+      box-shadow: 0 16px 40px rgba(15, 23, 42, 0.12) !important;
+      color: #0f172a !important;
+    }
+    [data-theme="light"] #notifDropdown > div:first-child {
+      background: #f8fafc !important;
+      border-bottom-color: #e2e8f0 !important;
+      color: #0f172a !important;
+    }
+    [data-theme="light"] .notif-item {
+      color: #1e293b;
+      border-bottom: 1px solid #f1f5f9;
+    }
+    [data-theme="light"] .notif-item:hover {
+      background: #f8fafc;
+    }
+    [data-theme="light"] .notif-item.unread {
+      background: rgba(124, 58, 237, 0.04);
+    }
+
+    /* Chatbot Widget */
+    [data-theme="light"] .chatbot-widget {
+      background: #ffffff;
+      border-color: #e2e8f0;
+      box-shadow: 0 20px 50px rgba(15, 23, 42, 0.15);
+    }
+    [data-theme="light"] .chatbot-header {
+      background: #f8fafc;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    [data-theme="light"] .chatbot-title {
+      color: #0f172a;
+    }
+    [data-theme="light"] .chatbot-subtitle {
+      color: #64748b;
+    }
+    [data-theme="light"] .chatbot-close-btn {
+      color: #64748b;
+    }
+    [data-theme="light"] .chatbot-close-btn:hover {
+      color: #0f172a;
+      background: #f1f5f9;
+    }
+    [data-theme="light"] .chatbot-quick-chips {
+      background: #ffffff;
+      border-bottom: 1px solid #f1f5f9;
+    }
+    [data-theme="light"] .chatbot-chip {
+      background: #f8fafc;
+      border-color: #e2e8f0;
+      color: #334155;
+    }
+    [data-theme="light"] .chatbot-chip:hover {
+      background: #f1f5f9;
+      border-color: #a78bfa;
+      color: #7c3aed;
+    }
+    [data-theme="light"] .chatbot-messages {
+      background: #ffffff;
+    }
+    [data-theme="light"] .chat-bubble.bot {
+      background: #f1f5f9;
+      border: 1px solid #e2e8f0;
+      color: #1e293b;
+    }
+    [data-theme="light"] .chat-bubble.user {
+      background: linear-gradient(135deg, #7c3aed, #6366f1);
+      color: #ffffff;
+    }
+    [data-theme="light"] .chat-sender-label {
+      color: #64748b;
+    }
+    [data-theme="light"] .chat-time {
+      color: #94a3b8;
+    }
+    [data-theme="light"] .chatbot-input-bar {
+      background: #f8fafc;
+      border-top: 1px solid #e2e8f0;
+    }
+    [data-theme="light"] .chatbot-input {
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      color: #0f172a;
+    }
+    [data-theme="light"] .chatbot-input:focus {
+      border-color: #7c3aed;
+      box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.15);
+    }
+
+    /* Onboarding Wizard */
+    [data-theme="light"] .onboarding-card {
+      background: #ffffff;
+      border-color: #e2e8f0;
+      box-shadow: 0 25px 60px rgba(15, 23, 42, 0.15);
+      color: #0f172a;
+    }
+    [data-theme="light"] .onboarding-header {
+      background: #f8fafc;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    [data-theme="light"] .onb-progress-wrap {
+      background: #ffffff;
+      border-bottom-color: #e2e8f0;
+    }
+    [data-theme="light"] .onb-progress-bar-bg {
+      background: #e2e8f0;
+    }
+    [data-theme="light"] .onb-step-tabs {
+      background: #f8fafc;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    [data-theme="light"] .onb-step-tab {
+      color: #64748b;
+    }
+    [data-theme="light"] .onb-step-tab:hover {
+      color: #0f172a;
+      background: #e2e8f0;
+    }
+    [data-theme="light"] .onb-step-tab.active {
+      color: #7c3aed;
+      background: rgba(124, 58, 237, 0.08);
+      border-color: #a78bfa;
+    }
+    [data-theme="light"] .onb-tutorial-card {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      color: #0f172a;
+    }
+    [data-theme="light"] .onb-tutorial-card:hover {
+      background: #ffffff;
+      border-color: #a78bfa;
+      box-shadow: 0 4px 12px rgba(124, 58, 237, 0.1);
+    }
+    [data-theme="light"] .onb-dropzone {
+      background: #f8fafc;
+      border-color: #cbd5e1;
+    }
+    [data-theme="light"] .onb-dropzone:hover {
+      border-color: #0891b2;
+      background: rgba(6, 182, 212, 0.05);
+    }
+    [data-theme="light"] .onb-pill-btn {
+      background: #f1f5f9;
+      border-color: #cbd5e1;
+      color: #1e293b;
+    }
+    [data-theme="light"] .onb-pill-btn:hover {
+      background: #e2e8f0;
+      border-color: #94a3b8;
+    }
+    [data-theme="light"] .onb-guide-box {
+      background: #f8fafc;
+      border-color: #e2e8f0;
+      color: #334155;
+    }
+    [data-theme="light"] .onb-footer {
+      background: #f8fafc;
+      border-top: 1px solid #e2e8f0;
+    }
+
+    /* Specific Panel Overrides */
+    [data-theme="light"] .pipeline-cockpit-banner {
+      background: #ffffff;
+      border-color: #e2e8f0;
+      box-shadow: var(--shadow-sm);
+    }
+    [data-theme="light"] .cockpit-task-title {
+      color: #0f172a;
+    }
+    [data-theme="light"] .pricing-card {
+      background: #ffffff !important;
+      border-color: #e2e8f0 !important;
+      box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06) !important;
+      color: #0f172a !important;
+    }
+    [data-theme="light"] .pricing-card.featured {
+      border-color: #7c3aed !important;
+      box-shadow: 0 8px 28px rgba(124, 58, 237, 0.15) !important;
+    }
+    [data-theme="light"] .pricing-plan-name,
+    [data-theme="light"] .pricing-amount {
+      color: #0f172a !important;
+    }
+    [data-theme="light"] .pricing-period,
+    [data-theme="light"] .pricing-desc {
+      color: #475569 !important;
+    }
+    [data-theme="light"] .pricing-feature-item {
+      color: #334155 !important;
+    }
+    [data-theme="light"] #hrBatchStatusBox,
+    [data-theme="light"] #mlCvAnalysisPanel,
+    [data-theme="light"] #cvStatusBanner,
+    [data-theme="light"] #profLiGuide,
+    [data-theme="light"] #profIndGuide,
+    [data-theme="light"] #liGuide,
+    [data-theme="light"] #indGuide {
+      background: #f8fafc !important;
+      border-color: #e2e8f0 !important;
+      color: #334155 !important;
+    }
+    [data-theme="light"] #setupAlertBanner {
+      background: #fefce8 !important;
+      border-color: #fef08a !important;
+    }
+    [data-theme="light"] #setupAlertBanner div[style*="color:#fff"] {
+      color: #854d0e !important;
+    }
+    [data-theme="light"] .toast {
+      background: #ffffff !important;
+      color: #0f172a !important;
+      border-color: #e2e8f0 !important;
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12) !important;
+    }
+    [data-theme="light"] ::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    [data-theme="light"] ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+    }
+    [data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
     }
 

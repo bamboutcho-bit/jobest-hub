@@ -96,6 +96,8 @@
     let currentActiveLead = null;
     let currentActiveJob = null;
     let allJobsList = [];
+    let _activeJobsViewMode = 'table';
+    let _showAllJobsTable = false;
 
     const STAGES = ['discovered', 'evaluated', 'pitched', 'in_discussion', 'offer_received', 'deal_won', 'lost'];
     const KANBAN_STAGES = [
@@ -112,8 +114,43 @@
       'rejected', 'offer_received', 'offer_negotiating', 'accepted', 'withdrawn'
     ];
 
+    // ===================================================================
+    // THEME MANAGEMENT (Light / Dark Mode)
+    // ===================================================================
+    function initTheme() {
+      try {
+        const saved = localStorage.getItem('autohunt_theme');
+        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const theme = saved || (prefersDark ? 'dark' : 'light');
+        setTheme(theme, false);
+      } catch (e) {
+        setTheme('dark', false);
+      }
+    }
+
+    function setTheme(theme, persist = true) {
+      if (theme !== 'light' && theme !== 'dark') theme = 'dark';
+      document.documentElement.setAttribute('data-theme', theme);
+      if (document.body) document.body.setAttribute('data-theme', theme);
+      if (persist) {
+        try { localStorage.setItem('autohunt_theme', theme); } catch (e) {}
+      }
+      const icon = document.getElementById('themeToggleIcon');
+      const label = document.getElementById('themeToggleText');
+      if (icon) icon.textContent = theme === 'light' ? '🌙' : '☀️';
+      if (label) label.textContent = theme === 'light' ? 'Dark' : 'Light';
+    }
+
+    function toggleTheme() {
+      const current = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+      const next = current === 'light' ? 'dark' : 'light';
+      setTheme(next, true);
+      showToast(`Switched to ${next === 'light' ? 'Light' : 'Dark'} mode`, 'normal');
+    }
+
     // Initialization
     window.addEventListener('DOMContentLoaded', () => {
+      initTheme();
       // Zero localStorage policy enforced: all state is in-memory or session-cookie backed
 
       // Resolve initial mode from URL hash, path, or server-provided default
@@ -2011,7 +2048,17 @@
       if (visa) url += `&visa=${visa}`;
       if (minScore) url += `&min_score=${minScore}`;
 
-      allJobsList = await apiGet(url);
+      try {
+        allJobsList = await apiGet(url);
+      } catch (err) {
+        console.error('Failed to load jobs:', err);
+        const tbody = document.getElementById('jobsTableBody');
+        if (tbody) {
+          tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;color:var(--warn);padding:24px">⚠️ Failed to load jobs: ${esc(err.message || err)}</td></tr>`;
+        }
+        showToast('Failed to load jobs: ' + (err.message || err), 'error');
+        return;
+      }
 
       if (hrFilter === 'has_hr') {
         allJobsList = allJobsList.filter(j => (j.application_emails && j.application_emails.trim() !== '') || (j.application_email && j.application_email.trim() !== '') || (j.application_method && j.application_method.includes('email')));
@@ -2042,8 +2089,7 @@
         statsEl.textContent = `${allJobsList.length} jobs • ${appliedCount} applied • ${emailCount} email channel`;
       }
 
-      let _activeJobsViewMode = 'table';
-      let _showAllJobsTable = false;
+      _showAllJobsTable = false;
 
       if (_activeJobsViewMode === 'cards') {
         renderJobsCards();
@@ -2073,14 +2119,14 @@
 
         let applyBtn = '';
         if (isLiJob) {
-          applyBtn = `<button class="btn btn-sm" onclick="event.stopPropagation(); oneClickApplyLinkedIn(${j.id})" style="background:rgba(10,102,194,0.22);border:1px solid #0a66c2;color:#60a5fa;font-weight:700;padding:2px 8px;font-size:11px" title="1-Click Apply: Open on LinkedIn, auto-copy tailored pitch, and record application">💼 Apply on LinkedIn ↗</button>`;
+          applyBtn = `<button class="btn btn-sm btn-linkedin" onclick="event.stopPropagation(); oneClickApplyLinkedIn(${j.id})" style="padding:2px 8px;font-size:11px" title="1-Click Apply: Open on LinkedIn, auto-copy tailored pitch, and record application">💼 Apply on LinkedIn ↗</button>`;
         } else if (isIndeedJob) {
-          applyBtn = `<button class="btn btn-sm" onclick="event.stopPropagation(); oneClickApplyIndeed(${j.id})" style="background:rgba(37,99,235,0.22);border:1px solid #2563eb;color:#93c5fd;font-weight:700;padding:2px 8px;font-size:11px" title="1-Click Apply: Open on Indeed and record application">🔵 Apply on Indeed ↗</button>`;
+          applyBtn = `<button class="btn btn-sm btn-indeed" onclick="event.stopPropagation(); oneClickApplyIndeed(${j.id})" style="padding:2px 8px;font-size:11px" title="1-Click Apply: Open on Indeed and record application">🔵 Apply on Indeed ↗</button>`;
         } else if (directUrl) {
           applyBtn = `<a href="${esc(directUrl)}" target="_blank" rel="noopener" class="btn btn-sm btn-cyan" onclick="event.stopPropagation()" style="padding:2px 8px;font-size:11px">Direct Apply ↗</a>`;
         }
 
-        const logBtn = `<button class="btn btn-sm" onclick="event.stopPropagation(); openSpecifyAppModal(${j.id})" title="Specify or log application via LinkedIn, Indeed, etc." style="padding:2px 7px;font-size:11px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15)">📌 Log</button>`;
+        const logBtn = `<button class="btn btn-sm btn-log" onclick="event.stopPropagation(); openSpecifyAppModal(${j.id})" title="Specify or log application via LinkedIn, Indeed, etc." style="padding:2px 7px;font-size:11px">📌 Log</button>`;
         const skillsPreview = (j.skills || []).slice(0, 3).map(s => `<span class="pill" style="font-size:10px;padding:1px 5px;background:rgba(255,255,255,0.06)">${esc(s)}</span>`).join(' ');
         
         const contBadge = getContinentBadge(j.continent, j.location, j.is_remote);
@@ -2136,14 +2182,14 @@
 
         let applyBtn = '';
         if (isLiJob) {
-          applyBtn = `<button class="btn btn-sm" onclick="event.stopPropagation(); oneClickApplyLinkedIn(${j.id})" style="background:rgba(10,102,194,0.22);border:1px solid #0a66c2;color:#60a5fa;font-weight:700;padding:3px 9px;font-size:11px" title="1-Click Apply: Open on LinkedIn, auto-copy tailored pitch, and record application">💼 Apply on LinkedIn ↗</button>`;
+          applyBtn = `<button class="btn btn-sm btn-linkedin" onclick="event.stopPropagation(); oneClickApplyLinkedIn(${j.id})" style="padding:3px 9px;font-size:11px" title="1-Click Apply: Open on LinkedIn, auto-copy tailored pitch, and record application">💼 Apply on LinkedIn ↗</button>`;
         } else if (isIndeedJob) {
-          applyBtn = `<button class="btn btn-sm" onclick="event.stopPropagation(); oneClickApplyIndeed(${j.id})" style="background:rgba(37,99,235,0.22);border:1px solid #2563eb;color:#93c5fd;font-weight:700;padding:3px 9px;font-size:11px" title="1-Click Apply: Open on Indeed and record application">🔵 Apply on Indeed ↗</button>`;
+          applyBtn = `<button class="btn btn-sm btn-indeed" onclick="event.stopPropagation(); oneClickApplyIndeed(${j.id})" style="padding:3px 9px;font-size:11px" title="1-Click Apply: Open on Indeed and record application">🔵 Apply on Indeed ↗</button>`;
         } else if (directUrl) {
           applyBtn = `<a href="${esc(directUrl)}" target="_blank" rel="noopener" class="btn btn-sm btn-cyan" onclick="event.stopPropagation()" style="padding:3px 9px;font-size:11px">Direct Apply ↗</a>`;
         }
 
-        const logBtn = `<button class="btn btn-sm" onclick="event.stopPropagation(); openSpecifyAppModal(${j.id})" title="Specify or log application via LinkedIn, Indeed, etc." style="padding:3px 8px;font-size:11px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15)">📌 Log</button>`;
+        const logBtn = `<button class="btn btn-sm btn-log" onclick="event.stopPropagation(); openSpecifyAppModal(${j.id})" title="Specify or log application via LinkedIn, Indeed, etc." style="padding:3px 8px;font-size:11px">📌 Log</button>`;
         const methodBadge = j.evaluation_method ? `<span class="pill" style="font-size:10px;background:rgba(139,92,246,0.15);color:var(--purple-light)">${esc(j.evaluation_method)}</span>` : '';
         const expBadge = getExpBadge(j.experience_level, j.experience_years_required);
         const degBadge = getDegreeBadge(j.degree_required);
@@ -2163,7 +2209,7 @@
             ${hrBadge}
           </div>
           
-          <div style="display:flex;flex-wrap:gap:4px;margin-bottom:8px">
+          <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">
             ${expBadge}
             ${degBadge}
             ${visaBadge}
@@ -2430,9 +2476,9 @@
         if (isApplied) {
           applyBtn = `<span class="pill pill-stage-deal_won" style="padding:5px 12px;font-size:12px;font-weight:700">✓ Applied (${esc(j.application_method || 'sent')})</span>`;
         } else if (isLiJob) {
-          applyBtn = `<button class="btn btn-sm" id="btnModalApplySingle" onclick="oneClickApplyLinkedIn(${j.id})" style="background:rgba(10,102,194,0.3);border:1px solid #0a66c2;color:#60a5fa;font-weight:700;padding:5px 12px;font-size:12px" title="1-Click Apply: Open on LinkedIn, auto-copy tailored pitch, and record application">💼 1-Click Apply on LinkedIn ↗</button>`;
+          applyBtn = `<button class="btn btn-sm btn-linkedin" id="btnModalApplySingle" onclick="oneClickApplyLinkedIn(${j.id})" style="padding:5px 12px;font-size:12px" title="1-Click Apply: Open on LinkedIn, auto-copy tailored pitch, and record application">💼 1-Click Apply on LinkedIn ↗</button>`;
         } else if (isIndeedJob) {
-          applyBtn = `<button class="btn btn-sm" id="btnModalApplySingle" onclick="oneClickApplyIndeed(${j.id})" style="background:rgba(37,99,235,0.3);border:1px solid #2563eb;color:#93c5fd;font-weight:700;padding:5px 12px;font-size:12px" title="1-Click Apply: Open on Indeed and record application">🔵 1-Click Apply on Indeed ↗</button>`;
+          applyBtn = `<button class="btn btn-sm btn-indeed" id="btnModalApplySingle" onclick="oneClickApplyIndeed(${j.id})" style="padding:5px 12px;font-size:12px" title="1-Click Apply: Open on Indeed and record application">🔵 1-Click Apply on Indeed ↗</button>`;
         } else {
           applyBtn = `<button class="btn btn-sm btn-primary" id="btnModalApplySingle" onclick="applySingleJob(${j.id})">🚀 Auto-Apply to This Job</button>`;
         }
@@ -2448,14 +2494,14 @@
         }
 
         const channelBtns = !isApplied ? `
-          <button class="btn btn-sm" onclick="specifyApplicationChannel(${j.id}, 'linkedin')" style="border-color:rgba(10,102,194,0.5);color:#60a5fa;font-weight:700" title="Specify applied via LinkedIn">
+          <button class="btn btn-sm btn-linkedin" onclick="specifyApplicationChannel(${j.id}, 'linkedin')" title="Specify applied via LinkedIn">
             💼 Apply via LinkedIn
           </button>
-          <button class="btn btn-sm" onclick="specifyApplicationChannel(${j.id}, 'indeed')" style="border-color:rgba(37,99,235,0.5);color:#93c5fd;font-weight:700" title="Specify applied via Indeed">
+          <button class="btn btn-sm btn-indeed" onclick="specifyApplicationChannel(${j.id}, 'indeed')" title="Specify applied via Indeed">
             🔵 Apply via Indeed
           </button>
         ` : `
-          <button class="btn btn-sm" onclick="openSpecifyAppModal(${j.id})" style="border-color:rgba(56,189,248,0.4);color:var(--cyan-light);font-size:11px" title="Change or specify application channel">
+          <button class="btn btn-sm" onclick="openSpecifyAppModal(${j.id})" style="font-size:11px" title="Change or specify application channel">
             📌 Change Channel
           </button>
         `;
@@ -2464,7 +2510,7 @@
         linksWrap.innerHTML = `
           ${applyBtn}
           ${channelBtns}
-          <a href="/api/jobs/${j.id}/motivation_letter/download" target="_blank" download class="btn btn-sm" style="background:rgba(59,130,246,0.18);border:1px solid rgba(59,130,246,0.4);color:#60a5fa;display:inline-flex;align-items:center;gap:5px" title="Download dedicated company motivation letter (.docx)">
+          <a href="/api/jobs/${j.id}/motivation_letter/download" target="_blank" download class="btn btn-sm btn-cyan" style="display:inline-flex;align-items:center;gap:5px" title="Download dedicated company motivation letter (.docx)">
             <span>📝</span> Motivation Letter (.docx)
           </a>
           ${j.job_url ? `<a href="${esc(j.job_url)}" target="_blank" class="btn btn-sm">Original Post ↗</a>` : ''}
@@ -6831,7 +6877,7 @@
           if (isFreePlan) {
             btnHtml = `
               <div style="display:flex;flex-direction:column;gap:8px">
-                <div style="width:100%;padding:11px;font-weight:700;font-size:13px;border-radius:10px;justify-content:center;display:flex;align-items:center;gap:6px;background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.4);color:#a7f3d0">
+                <div class="active-plan-badge" style="width:100%;padding:11px;font-weight:700;font-size:13px;border-radius:10px;justify-content:center;display:flex;align-items:center;gap:6px;background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.4);color:var(--good)">
                   <span>✓ Active (Free Forever)</span>
                 </div>
                 <button type="button" class="btn btn-primary" onclick="openPaymentModal('starter')" style="width:100%;padding:11px;font-weight:800;font-size:13px;border-radius:10px;justify-content:center;display:flex;align-items:center;gap:6px">
@@ -6864,14 +6910,14 @@
         } else {
           if (isFreePlan) {
             btnHtml = `
-              <button class="btn" onclick="switchToFreePlan()" style="width:100%;padding:12px;font-weight:700;font-size:13px;border-radius:10px;justify-content:center;display:flex;align-items:center;gap:6px;border-color:rgba(255,255,255,0.2);color:#cbd5e1">
+              <button class="btn" onclick="switchToFreePlan()" style="width:100%;padding:12px;font-weight:700;font-size:13px;border-radius:10px;justify-content:center;display:flex;align-items:center;gap:6px">
                 <span>⬇️ Switch to Free Plan</span>
               </button>
               <div style="text-align:center;font-size:11px;color:var(--text-muted);margin-top:6px">100% Free · 5 applications/day included</div>
             `;
           } else {
             btnHtml = `
-              <button class="btn" onclick="openPaymentModal('${esc(p.slug)}', '${esc(currentPricingCurrency)}')" style="width:100%;padding:12px;font-weight:700;font-size:13px;border-radius:10px;justify-content:center;display:flex;align-items:center;gap:6px;border-color:rgba(255,255,255,0.2);color:#cbd5e1">
+              <button class="btn" onclick="openPaymentModal('${esc(p.slug)}', '${esc(currentPricingCurrency)}')" style="width:100%;padding:12px;font-weight:700;font-size:13px;border-radius:10px;justify-content:center;display:flex;align-items:center;gap:6px">
                 <span>🔄 Switch to ${esc(p.name)}</span>
               </button>
             `;
@@ -6879,15 +6925,15 @@
         }
 
         return `
-          <div class="panel" style="${cardBorder}${cardBg}display:flex;flex-direction:column;justify-content:space-between;border-radius:16px;padding:24px;position:relative;transition:transform 0.2s ease, box-shadow 0.2s ease">
+          <div class="panel pricing-plan-card" style="${cardBorder}${cardBg}display:flex;flex-direction:column;justify-content:space-between;border-radius:16px;padding:24px;position:relative;transition:transform 0.2s ease, box-shadow 0.2s ease">
             ${badgeHtml}
             <div>
               <div style="font-size:12px;font-weight:700;color:${isCurrent ? 'var(--good)' : (isRec ? 'var(--cyan-light)' : 'var(--text-muted)')};text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">${isCurrent ? 'ACTIVE PLAN' : esc(p.badge || 'PLAN')}</div>
-              <h3 style="font-size:20px;font-weight:800;color:#fff;margin-bottom:8px">${esc(p.name)}</h3>
+              <h3 style="font-size:20px;font-weight:800;color:var(--text);margin-bottom:8px">${esc(p.name)}</h3>
               <div style="font-size:12px;color:var(--text-muted);min-height:36px;margin-bottom:16px;line-height:1.4">${planDesc}</div>
 
-              <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid rgba(255,255,255,0.08)">
-                <span style="font-size:32px;font-weight:900;color:${isFreePlan ? 'var(--good)' : '#fff'};letter-spacing:-0.03em">${priceDisplay}</span>
+              <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid var(--border)">
+                <span style="font-size:32px;font-weight:900;color:${isFreePlan ? 'var(--good)' : 'var(--text)'};letter-spacing:-0.03em">${priceDisplay}</span>
                 <span style="font-size:13px;color:var(--text-muted)">${billingDisplay}</span>
               </div>
 
@@ -6998,7 +7044,7 @@
 
           return `
             <button type="button" id="modalPlanBtn_${esc(p.slug)}" class="btn btn-sm" onclick="selectModalPlan('${esc(p.slug)}')" style="border-radius:10px;padding:9px 6px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;transition:all 0.2s ease;background:${isSelected ? activeBg : 'rgba(255,255,255,0.03)'};border:1px solid ${isSelected ? activeBorder : 'var(--border)'};box-shadow:${isSelected ? `0 0 16px ${activeShadow}` : 'none'}">
-              <span style="font-weight:700;font-size:12px;color:#fff">${esc(p.name)}</span>
+              <span class="modal-plan-name" style="font-weight:700;font-size:12px;color:var(--text)">${esc(p.name)}</span>
               <span id="modalPlanPrice_${esc(p.slug)}" style="font-size:11px;font-family:'JetBrains Mono';color:var(--cyan-light);font-weight:700">${pInfo.display}/mo</span>
               <span style="font-size:9.5px;color:var(--text-muted)">${limitTxt}</span>
             </button>

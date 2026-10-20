@@ -7273,6 +7273,8 @@ def landing_page(request: Request):
 
 
 @app.get("/app", response_class=HTMLResponse)
+@app.get("/dashboard", response_class=HTMLResponse)
+@app.get("/jobs", response_class=HTMLResponse)
 def dashboard_app(request: Request):
     from src.auth.service import get_current_user_optional, create_session_token
     from fastapi.responses import RedirectResponse

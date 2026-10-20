@@ -7,10 +7,19 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/style.css?v=6.5.0">
+  <link rel="stylesheet" href="/static/css/style.css?v=6.6.2">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
+  <script>
+    (function() {
+      try {
+        var saved = localStorage.getItem('autohunt_theme');
+        var theme = saved || (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+        document.documentElement.setAttribute('data-theme', theme);
+      } catch (e) {}
+    })();
+  </script>
   <style>
     @keyframes spinRefresh {
       0% { transform: rotate(0deg); }
@@ -67,6 +76,47 @@
       transition: background-color 5000s ease-in-out 0s !important;
       border: 1px solid rgba(139, 92, 246, 0.5) !important;
     }
+
+    /* Light Mode Universal Input & Control Overrides */
+    [data-theme="light"] input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="range"]):not([type="file"]):not([type="hidden"]),
+    [data-theme="light"] select,
+    [data-theme="light"] textarea,
+    [data-theme="light"] .form-control {
+      background: #ffffff !important;
+      color: #0f172a !important;
+      border: 1px solid #cbd5e1 !important;
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+    }
+    [data-theme="light"] input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="range"]):not([type="file"]):not([type="hidden"]):hover,
+    [data-theme="light"] select:hover,
+    [data-theme="light"] textarea:hover,
+    [data-theme="light"] .form-control:hover {
+      border-color: #a78bfa !important;
+      background: #f8fafc !important;
+    }
+    [data-theme="light"] input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="range"]):not([type="file"]):not([type="hidden"]):focus,
+    [data-theme="light"] select:focus,
+    [data-theme="light"] textarea:focus,
+    [data-theme="light"] .form-control:focus {
+      border-color: #7c3aed !important;
+      background: #ffffff !important;
+      box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.2), inset 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+      color: #0f172a !important;
+    }
+    [data-theme="light"] ::placeholder,
+    [data-theme="light"] input::placeholder,
+    [data-theme="light"] textarea::placeholder {
+      color: #94a3b8 !important;
+      opacity: 1 !important;
+    }
+    [data-theme="light"] input:-webkit-autofill,
+    [data-theme="light"] input:-webkit-autofill:hover, 
+    [data-theme="light"] input:-webkit-autofill:focus, 
+    [data-theme="light"] input:-webkit-autofill:active {
+      -webkit-box-shadow: 0 0 0 1000px #ffffff inset !important;
+      -webkit-text-fill-color: #0f172a !important;
+      border: 1px solid #7c3aed !important;
+    }
   </style>
 </head>
 <body data-default-tab="{{DEFAULT_TAB}}">
@@ -115,6 +165,12 @@
         <button id="globalRefreshBtn" class="btn btn-sm" onclick="manualRefresh()" title="Refresh data now" style="display:flex;align-items:center;gap:6px">
           <span id="globalRefreshIcon" style="display:inline-block">↻</span>
           <span id="globalRefreshText">Refresh</span>
+        </button>
+
+        <!-- Theme Toggle Button (Light/Dark Mode) -->
+        <button id="themeToggleBtn" class="btn btn-sm theme-toggle-btn" onclick="toggleTheme()" title="Switch Light / Dark Mode" aria-label="Toggle Theme">
+          <span id="themeToggleIcon" style="font-size:14px;line-height:1">☀️</span>
+          <span id="themeToggleText" style="font-size:12px;font-weight:600">Light</span>
         </button>
 
         <!-- Real-Time Broker Notification Bell -->
@@ -323,10 +379,10 @@
           <button id="btnApplyMatches" class="btn btn-primary" onclick="triggerApplyPendingMatches()">
             <span id="applyMatchesIcon">🚀</span> Auto-Apply to Matches
           </button>
-          <button id="btnBulkLinkedInApply" class="btn" onclick="openBulkLinkedInModal()" style="border:1px solid #0a66c2;background:linear-gradient(135deg, rgba(10,102,194,0.38) 0%, rgba(2,132,199,0.22) 100%);color:#60a5fa;font-weight:800;display:inline-flex;align-items:center;gap:6px;box-shadow:0 0 12px rgba(10,102,194,0.25)" title="Auto-Apply to all eligible LinkedIn jobs safely via guided 1-click launcher">
+          <button id="btnBulkLinkedInApply" class="btn btn-linkedin" onclick="openBulkLinkedInModal()" title="Auto-Apply to all eligible LinkedIn jobs safely via guided 1-click launcher">
             <span>💼</span> Auto-Apply LinkedIn <span id="bulkLinkedInCountBadge" class="brand-badge" style="background:#0a66c2;color:#fff;font-size:10px;padding:1px 6px">...</span>
           </button>
-          <button id="btnBulkIndeedApply" class="btn" onclick="openBulkIndeedModal()" style="border:1px solid #2563eb;background:linear-gradient(135deg, rgba(37,99,235,0.38) 0%, rgba(30,64,175,0.22) 100%);color:#93c5fd;font-weight:800;display:inline-flex;align-items:center;gap:6px;box-shadow:0 0 12px rgba(37,99,235,0.25)" title="Auto-Apply to all eligible Indeed jobs safely via guided 1-click launcher">
+          <button id="btnBulkIndeedApply" class="btn btn-indeed" onclick="openBulkIndeedModal()" title="Auto-Apply to all eligible Indeed jobs safely via guided 1-click launcher">
             <span>🔵</span> Auto-Apply Indeed <span id="bulkIndeedCountBadge" class="brand-badge" style="background:#2563eb;color:#fff;font-size:10px;padding:1px 6px">...</span>
           </button>
           <button id="btnCheckInbox" class="btn" onclick="triggerCheckInbox()">
@@ -378,8 +434,8 @@
             <button id="qfLinkedIn" class="btn btn-sm" onclick="setJobQuickFilter('linkedin')" title="Show jobs applied on LinkedIn">💼 LinkedIn</button>
             <button id="qfIndeed" class="btn btn-sm" onclick="setJobQuickFilter('indeed')" title="Show jobs applied on Indeed">🔵 Indeed</button>
             <button id="qfEmail" class="btn btn-sm" onclick="setJobQuickFilter('email')" title="Show jobs targeted with recruiter email outreach">✉️ Email Channel</button>
-            <button type="button" class="btn btn-sm" onclick="openBulkLinkedInModal()" style="margin-left:6px;background:rgba(10,102,194,0.25);border:1px solid #0a66c2;color:#60a5fa;font-weight:700" title="Open LinkedIn Auto-Apply Assistant">💼 Auto-Apply LinkedIn Queue</button>
-            <button type="button" class="btn btn-sm" onclick="openBulkIndeedModal()" style="margin-left:4px;background:rgba(37,99,235,0.25);border:1px solid #2563eb;color:#93c5fd;font-weight:700" title="Open Indeed Auto-Apply Assistant">🔵 Auto-Apply Indeed Queue</button>
+            <button type="button" class="btn btn-sm btn-linkedin" onclick="openBulkLinkedInModal()" style="margin-left:6px" title="Open LinkedIn Auto-Apply Assistant">💼 Auto-Apply LinkedIn Queue</button>
+            <button type="button" class="btn btn-sm btn-indeed" onclick="openBulkIndeedModal()" style="margin-left:4px" title="Open Indeed Auto-Apply Assistant">🔵 Auto-Apply Indeed Queue</button>
           </div>
           <div id="jobsQuickStats" style="font-size:12px;color:var(--text-muted);font-family:'JetBrains Mono'"></div>
         </div>
@@ -944,7 +1000,7 @@
                   <div style="font-size:10px;color:#f59e0b;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:4px;padding:6px;margin-bottom:8px;line-height:1.4">
                     🛡️ <strong>Safety Protected:</strong> Automated background Easy Apply is disabled to prevent LinkedIn Sentinel session lockouts on your desktop. Use the <strong>💼 1-Click Apply</strong> button on any job to safely apply in your personal browser!
                   </div>
-                  <button type="button" class="btn btn-sm" onclick="switchAppMode('jobs'); switchJobsTab('postings'); setJobQuickFilter('linkedin')" style="width:100%;background:rgba(10,102,194,0.25);border:1px solid #0a66c2;color:#60a5fa;font-weight:700;margin-bottom:8px;padding:6px;font-size:11px" title="Jump to LinkedIn jobs in Postings Explorer">
+                  <button type="button" class="btn btn-sm btn-linkedin" onclick="switchAppMode('jobs'); switchJobsTab('postings'); setJobQuickFilter('linkedin')" style="width:100%;margin-bottom:8px;padding:6px;font-size:11px" title="Jump to LinkedIn jobs in Postings Explorer">
                     💼 View & 1-Click Apply to LinkedIn Jobs ↗
                   </button>
                   <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#fff;cursor:pointer;margin-bottom:8px">
@@ -987,7 +1043,7 @@
                     <span>Verified: <span id="profIndVerifiedAt" style="color:#fff">Never</span></span>
                     <span id="profIndCookiePreview" style="color:var(--cyan-light);font-family:monospace">None</span>
                   </div>
-                  <button type="button" class="btn btn-sm" onclick="openBulkIndeedModal()" style="width:100%;background:rgba(37,99,235,0.25);border:1px solid #2563eb;color:#93c5fd;font-weight:700;margin-bottom:8px;padding:6px;font-size:11px" title="Open Indeed Auto-Apply Assistant">
+                  <button type="button" class="btn btn-sm btn-indeed" onclick="openBulkIndeedModal()" style="width:100%;margin-bottom:8px;padding:6px;font-size:11px" title="Open Indeed Auto-Apply Assistant">
                     🔵 View & 1-Click Apply to Indeed Jobs (218) ↗
                   </button>
                   <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#fff;cursor:pointer;margin-bottom:8px">
@@ -1642,7 +1698,7 @@
                 <div style="font-size:11px;color:#f59e0b;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:6px;padding:8px 10px;margin-bottom:12px;line-height:1.4">
                   🛡️ <strong>Safety Protected:</strong> Automated background headless Easy Apply is disabled to prevent LinkedIn Sentinel from terminating your desktop browser session. Use the <strong>💼 1-Click Apply</strong> button directly on any job card/table to safely open, auto-copy your tailored pitch, and record your application!
                 </div>
-                <button type="button" class="btn btn-sm" onclick="switchAppMode('jobs'); switchJobsTab('postings'); setJobQuickFilter('linkedin')" style="width:100%;background:rgba(10,102,194,0.25);border:1px solid #0a66c2;color:#60a5fa;font-weight:700;margin-bottom:12px;padding:8px;font-size:12px" title="Jump to LinkedIn jobs in Postings Explorer">
+                <button type="button" class="btn btn-sm btn-linkedin" onclick="switchAppMode('jobs'); switchJobsTab('postings'); setJobQuickFilter('linkedin')" style="width:100%;margin-bottom:12px;padding:8px;font-size:12px" title="Jump to LinkedIn jobs in Postings Explorer">
                   💼 View & 1-Click Apply to LinkedIn Jobs ↗
                 </button>
                 <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:#fff;cursor:pointer;margin-bottom:14px">
@@ -1697,7 +1753,7 @@
                   <div>Verified: <span id="indVerifiedAt" style="color:#fff">Never</span></div>
                   <div>Preview: <span id="indCookiePreview" style="color:var(--cyan-light);font-family:monospace">None</span></div>
                 </div>
-                <button type="button" class="btn btn-sm" onclick="openBulkIndeedModal()" style="width:100%;background:rgba(37,99,235,0.25);border:1px solid #2563eb;color:#93c5fd;font-weight:700;margin-bottom:12px;padding:8px;font-size:12px" title="Open Indeed Auto-Apply Assistant">
+                <button type="button" class="btn btn-sm btn-indeed" onclick="openBulkIndeedModal()" style="width:100%;margin-bottom:12px;padding:8px;font-size:12px" title="Open Indeed Auto-Apply Assistant">
                   🔵 View & 1-Click Apply to Indeed Jobs (218) ↗
                 </button>
                 <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:#fff;cursor:pointer;margin-bottom:14px">
@@ -2178,10 +2234,10 @@
             </div>
             <div style="display:flex;align-items:center;gap:6px;overflow-x:auto;padding-bottom:2px;flex-wrap:wrap">
               <button id="fmtBtn_email" class="btn btn-sm btn-primary" onclick="switchPitchFormat('email')" type="button">✉️ Full Email Pitch</button>
-              <button id="fmtBtn_linkedin" class="btn btn-sm" onclick="switchPitchFormat('linkedin')" type="button" style="border-color:#0a66c2;color:#70b5f9">💼 LinkedIn (&lt;300c)</button>
-              <button id="fmtBtn_chat_dm" class="btn btn-sm" onclick="switchPitchFormat('chat_dm')" type="button" style="border-color:#10b981;color:#6ee7b7">💬 Chat DM (Reddit/Slack/X)</button>
-              <button id="fmtBtn_follow_up_1" class="btn btn-sm" onclick="switchPitchFormat('follow_up_1')" type="button" style="border-color:#f59e0b;color:#fcd34d">⏰ Follow-Up #1</button>
-              <button id="fmtBtn_follow_up_2" class="btn btn-sm" onclick="switchPitchFormat('follow_up_2')" type="button" style="border-color:#f59e0b;color:#fcd34d">⏰ Follow-Up #2</button>
+              <button id="fmtBtn_linkedin" class="btn btn-sm" onclick="switchPitchFormat('linkedin')" type="button">💼 LinkedIn (&lt;300c)</button>
+              <button id="fmtBtn_chat_dm" class="btn btn-sm" onclick="switchPitchFormat('chat_dm')" type="button">💬 Chat DM (Reddit/Slack/X)</button>
+              <button id="fmtBtn_follow_up_1" class="btn btn-sm" onclick="switchPitchFormat('follow_up_1')" type="button">⏰ Follow-Up #1</button>
+              <button id="fmtBtn_follow_up_2" class="btn btn-sm" onclick="switchPitchFormat('follow_up_2')" type="button">⏰ Follow-Up #2</button>
             </div>
           </div>
 
@@ -2855,16 +2911,16 @@
         <div style="margin-bottom:16px">
           <label style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;display:block;margin-bottom:8px">Select Application Channel *</label>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-            <button type="button" id="btnSpecChanLinkedin" class="btn btn-sm" onclick="setSpecifyChannelChoice('linkedin')" style="border-color:rgba(10,102,194,0.5);color:#60a5fa;font-weight:700;justify-content:center;padding:10px">
+            <button type="button" id="btnSpecChanLinkedin" class="btn btn-sm btn-cyan" onclick="setSpecifyChannelChoice('linkedin')" style="justify-content:center;padding:10px">
               💼 LinkedIn
             </button>
-            <button type="button" id="btnSpecChanIndeed" class="btn btn-sm" onclick="setSpecifyChannelChoice('indeed')" style="border-color:rgba(37,99,235,0.5);color:#93c5fd;font-weight:700;justify-content:center;padding:10px">
+            <button type="button" id="btnSpecChanIndeed" class="btn btn-sm" onclick="setSpecifyChannelChoice('indeed')" style="justify-content:center;padding:10px">
               🔵 Indeed
             </button>
-            <button type="button" id="btnSpecChanPortal" class="btn btn-sm" onclick="setSpecifyChannelChoice('web_portal')" style="border-color:rgba(168,85,247,0.5);color:var(--purple-light);font-weight:700;justify-content:center;padding:10px">
+            <button type="button" id="btnSpecChanPortal" class="btn btn-sm" onclick="setSpecifyChannelChoice('web_portal')" style="justify-content:center;padding:10px">
               🌐 Web Portal / ATS
             </button>
-            <button type="button" id="btnSpecChanEmail" class="btn btn-sm" onclick="setSpecifyChannelChoice('recruiter_email')" style="border-color:rgba(16,185,129,0.5);color:var(--good);font-weight:700;justify-content:center;padding:10px">
+            <button type="button" id="btnSpecChanEmail" class="btn btn-sm" onclick="setSpecifyChannelChoice('recruiter_email')" style="justify-content:center;padding:10px">
               ✉️ Direct Email
             </button>
           </div>
@@ -2924,16 +2980,16 @@
         <div style="margin-bottom:16px">
           <label style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;display:block;margin-bottom:8px">Platform / Channel *</label>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-            <button type="button" id="btnExtChanLinkedin" class="btn btn-sm btn-cyan" onclick="setExtChannelChoice('linkedin')" style="border-color:rgba(10,102,194,0.5);font-weight:700;justify-content:center;padding:10px">
+            <button type="button" id="btnExtChanLinkedin" class="btn btn-sm btn-cyan" onclick="setExtChannelChoice('linkedin')" style="justify-content:center;padding:10px">
               💼 LinkedIn
             </button>
-            <button type="button" id="btnExtChanIndeed" class="btn btn-sm" onclick="setExtChannelChoice('indeed')" style="border-color:rgba(37,99,235,0.5);font-weight:700;justify-content:center;padding:10px">
+            <button type="button" id="btnExtChanIndeed" class="btn btn-sm" onclick="setExtChannelChoice('indeed')" style="justify-content:center;padding:10px">
               🔵 Indeed
             </button>
-            <button type="button" id="btnExtChanPortal" class="btn btn-sm" onclick="setExtChannelChoice('web_portal')" style="border-color:rgba(168,85,247,0.5);font-weight:700;justify-content:center;padding:10px">
+            <button type="button" id="btnExtChanPortal" class="btn btn-sm" onclick="setExtChannelChoice('web_portal')" style="justify-content:center;padding:10px">
               🌐 Company ATS / Site
             </button>
-            <button type="button" id="btnExtChanEmail" class="btn btn-sm" onclick="setExtChannelChoice('recruiter_email')" style="border-color:rgba(16,185,129,0.5);font-weight:700;justify-content:center;padding:10px">
+            <button type="button" id="btnExtChanEmail" class="btn btn-sm" onclick="setExtChannelChoice('recruiter_email')" style="justify-content:center;padding:10px">
               ✉️ Direct Recruiter Email
             </button>
           </div>
@@ -3023,7 +3079,7 @@
         <div style="margin-bottom:16px">
           <label style="font-size:12px;font-weight:700;color:var(--text-muted);display:block;margin-bottom:8px">1. Select Payment Channel:</label>
           <div style="display:flex;gap:6px;flex-wrap:wrap" id="payChannelTabs">
-            <button type="button" id="payTabStripe" class="tab-btn" onclick="switchPayChannel('stripe')" style="font-size:12px;padding:7px 12px;color:#a5b4fc;border-color:rgba(99,102,241,0.35)">💳 Card / Apple Pay (Stripe)</button>
+            <button type="button" id="payTabStripe" class="tab-btn" onclick="switchPayChannel('stripe')" style="font-size:12px;padding:7px 12px">💳 Card / Apple Pay (Stripe)</button>
             <button type="button" id="payTabCrypto" class="tab-btn active" onclick="switchPayChannel('crypto')" style="font-size:12px;padding:7px 12px">🪙 Crypto (USDT / SOL / BTC)</button>
             <button type="button" id="payTabPaypal" class="tab-btn" onclick="switchPayChannel('paypal')" style="font-size:12px;padding:7px 12px">🅿️ PayPal & Cards</button>
             <button type="button" id="payTabCard" class="tab-btn" onclick="switchPayChannel('card')" style="font-size:12px;padding:7px 12px">☕ Card (Ko-fi)</button>
@@ -3775,7 +3831,7 @@
     </div>
   </div>
 
-  <script src="/static/js/app.js?v=6.8.0"></script>
+  <script src="/static/js/app.js?v=6.9.2"></script>
   <!-- Real-Time Floating Notification Toasts -->
   <div id="notifToastContainer" style="position:fixed;bottom:96px;right:24px;display:flex;flex-direction:column-reverse;gap:10px;z-index:99999;pointer-events:none"></div>
 
