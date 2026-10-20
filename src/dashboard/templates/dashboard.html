@@ -323,16 +323,16 @@
           <table class="data-table">
             <thead>
               <tr>
-                <th onclick="sortLeads('id')">ID</th>
-                <th onclick="sortLeads('title')">Project / Role</th>
-                <th onclick="sortLeads('client_name')">Client</th>
-                <th onclick="sortLeads('source_platform')">Platform</th>
-                <th onclick="sortLeads('match_score')">Score</th>
-                <th onclick="sortLeads('budget_estimate')">Budget</th>
-                <th onclick="sortLeads('stage')">Stage</th>
-                <th>Pitch Status</th>
-                <th>Contact</th>
-                <th>Actions</th>
+                <th scope="col" onclick="sortLeads('id')">ID</th>
+                <th scope="col" onclick="sortLeads('title')">Project / Role</th>
+                <th scope="col" onclick="sortLeads('client_name')">Client</th>
+                <th scope="col" onclick="sortLeads('source_platform')">Platform</th>
+                <th scope="col" onclick="sortLeads('match_score')">Score</th>
+                <th scope="col" onclick="sortLeads('budget_estimate')">Budget</th>
+                <th scope="col" onclick="sortLeads('stage')">Stage</th>
+                <th scope="col">Pitch Status</th>
+                <th scope="col">Contact</th>
+                <th scope="col">Actions</th>
               </tr>
             </thead>
             <tbody id="freelanceTableBody">
@@ -513,16 +513,16 @@
           <table class="data-table">
             <thead>
               <tr>
-                <th>ID</th>
-                <th>Role Title</th>
-                <th>Company</th>
-                <th>Continent / Location</th>
-                <th>Experience</th>
-                <th>Degree</th>
-                <th>Visa & Relocation</th>
-                <th>Score</th>
-                <th style="min-width:180px">Application Method & Status</th>
-                <th>Actions</th>
+                <th scope="col">ID</th>
+                <th scope="col">Role Title</th>
+                <th scope="col">Company</th>
+                <th scope="col">Continent / Location</th>
+                <th scope="col">Experience</th>
+                <th scope="col">Degree</th>
+                <th scope="col">Visa & Relocation</th>
+                <th scope="col">Score</th>
+                <th scope="col" style="min-width:180px">Application Method & Status</th>
+                <th scope="col">Actions</th>
               </tr>
             </thead>
             <tbody id="jobsTableBody">
@@ -684,23 +684,23 @@
         
         <!-- Comprehensive Datalists for Autocomplete / Selection -->
         <datalist id="dlCountries">
-          <option value="Afghanistan"><option value="Albania"><option value="Algeria"><option value="Andorra"><option value="Angola"><option value="Antigua and Barbuda"><option value="Argentina"><option value="Armenia"><option value="Australia"><option value="Austria"><option value="Azerbaijan"><option value="Bahamas"><option value="Bahrain"><option value="Bangladesh"><option value="Barbados"><option value="Belarus"><option value="Belgium"><option value="Belize"><option value="Benin"><option value="Bhutan"><option value="Bolivia"><option value="Bosnia and Herzegovina"><option value="Botswana"><option value="Brazil"><option value="Brunei"><option value="Bulgaria"><option value="Burkina Faso"><option value="Burundi"><option value="Cabo Verde"><option value="Cambodia"><option value="Cameroon"><option value="Canada"><option value="Central African Republic"><option value="Chad"><option value="Chile"><option value="China"><option value="Colombia"><option value="Comoros"><option value="Congo"><option value="Costa Rica"><option value="Croatia"><option value="Cuba"><option value="Cyprus"><option value="Czech Republic"><option value="Denmark"><option value="Djibouti"><option value="Dominica"><option value="Dominican Republic"><option value="Ecuador"><option value="Egypt"><option value="El Salvador"><option value="Equatorial Guinea"><option value="Eritrea"><option value="Estonia"><option value="Eswatini"><option value="Ethiopia"><option value="Fiji"><option value="Finland"><option value="France"><option value="Gabon"><option value="Gambia"><option value="Georgia"><option value="Germany"><option value="Ghana"><option value="Greece"><option value="Grenada"><option value="Guatemala"><option value="Guinea"><option value="Guinea-Bissau"><option value="Guyana"><option value="Haiti"><option value="Honduras"><option value="Hungary"><option value="Iceland"><option value="India"><option value="Indonesia"><option value="Iran"><option value="Iraq"><option value="Ireland"><option value="Israel"><option value="Italy"><option value="Jamaica"><option value="Japan"><option value="Jordan"><option value="Kazakhstan"><option value="Kenya"><option value="Kiribati"><option value="Kuwait"><option value="Kyrgyzstan"><option value="Laos"><option value="Latvia"><option value="Lebanon"><option value="Lesotho"><option value="Liberia"><option value="Libya"><option value="Liechtenstein"><option value="Lithuania"><option value="Luxembourg"><option value="Madagascar"><option value="Malawi"><option value="Malaysia"><option value="Maldives"><option value="Mali"><option value="Malta"><option value="Marshall Islands"><option value="Mauritania"><option value="Mauritius"><option value="Mexico"><option value="Micronesia"><option value="Moldova"><option value="Monaco"><option value="Mongolia"><option value="Montenegro"><option value="Morocco"><option value="Mozambique"><option value="Myanmar"><option value="Namibia"><option value="Nauru"><option value="Nepal"><option value="Netherlands"><option value="New Zealand"><option value="Nicaragua"><option value="Niger"><option value="Nigeria"><option value="North Korea"><option value="North Macedonia"><option value="Norway"><option value="Oman"><option value="Pakistan"><option value="Palau"><option value="Palestine"><option value="Panama"><option value="Papua New Guinea"><option value="Paraguay"><option value="Peru"><option value="Philippines"><option value="Poland"><option value="Portugal"><option value="Qatar"><option value="Romania"><option value="Russia"><option value="Rwanda"><option value="Saint Kitts and Nevis"><option value="Saint Lucia"><option value="Saint Vincent and the Grenadines"><option value="Samoa"><option value="San Marino"><option value="Sao Tome and Principe"><option value="Saudi Arabia"><option value="Senegal"><option value="Serbia"><option value="Seychelles"><option value="Sierra Leone"><option value="Singapore"><option value="Slovakia"><option value="Slovenia"><option value="Solomon Islands"><option value="Somalia"><option value="South Africa"><option value="South Korea"><option value="South Sudan"><option value="Spain"><option value="Sri Lanka"><option value="Sudan"><option value="Suriname"><option value="Sweden"><option value="Switzerland"><option value="Syria"><option value="Taiwan"><option value="Tajikistan"><option value="Tanzania"><option value="Thailand"><option value="Timor-Leste"><option value="Togo"><option value="Tonga"><option value="Trinidad and Tobago"><option value="Tunisia"><option value="Turkey"><option value="Turkmenistan"><option value="Tuvalu"><option value="Uganda"><option value="Ukraine"><option value="United Arab Emirates"><option value="United Kingdom"><option value="United States"><option value="Uruguay"><option value="Uzbekistan"><option value="Vanuatu"><option value="Vatican City"><option value="Venezuela"><option value="Vietnam"><option value="Yemen"><option value="Zambia"><option value="Zimbabwe"><option value="Remote">
+          <option value="Afghanistan"></option><option value="Albania"></option><option value="Algeria"></option><option value="Andorra"></option><option value="Angola"></option><option value="Antigua and Barbuda"></option><option value="Argentina"></option><option value="Armenia"></option><option value="Australia"></option><option value="Austria"></option><option value="Azerbaijan"></option><option value="Bahamas"></option><option value="Bahrain"></option><option value="Bangladesh"></option><option value="Barbados"></option><option value="Belarus"></option><option value="Belgium"></option><option value="Belize"></option><option value="Benin"></option><option value="Bhutan"></option><option value="Bolivia"></option><option value="Bosnia and Herzegovina"></option><option value="Botswana"></option><option value="Brazil"></option><option value="Brunei"></option><option value="Bulgaria"></option><option value="Burkina Faso"></option><option value="Burundi"></option><option value="Cabo Verde"></option><option value="Cambodia"></option><option value="Cameroon"></option><option value="Canada"></option><option value="Central African Republic"></option><option value="Chad"></option><option value="Chile"></option><option value="China"></option><option value="Colombia"></option><option value="Comoros"></option><option value="Congo"></option><option value="Costa Rica"></option><option value="Croatia"></option><option value="Cuba"></option><option value="Cyprus"></option><option value="Czech Republic"></option><option value="Denmark"></option><option value="Djibouti"></option><option value="Dominica"></option><option value="Dominican Republic"></option><option value="Ecuador"></option><option value="Egypt"></option><option value="El Salvador"></option><option value="Equatorial Guinea"></option><option value="Eritrea"></option><option value="Estonia"></option><option value="Eswatini"></option><option value="Ethiopia"></option><option value="Fiji"></option><option value="Finland"></option><option value="France"></option><option value="Gabon"></option><option value="Gambia"></option><option value="Georgia"></option><option value="Germany"></option><option value="Ghana"></option><option value="Greece"></option><option value="Grenada"></option><option value="Guatemala"></option><option value="Guinea"></option><option value="Guinea-Bissau"></option><option value="Guyana"></option><option value="Haiti"></option><option value="Honduras"></option><option value="Hungary"></option><option value="Iceland"></option><option value="India"></option><option value="Indonesia"></option><option value="Iran"></option><option value="Iraq"></option><option value="Ireland"></option><option value="Israel"></option><option value="Italy"></option><option value="Jamaica"></option><option value="Japan"></option><option value="Jordan"></option><option value="Kazakhstan"></option><option value="Kenya"></option><option value="Kiribati"></option><option value="Kuwait"></option><option value="Kyrgyzstan"></option><option value="Laos"></option><option value="Latvia"></option><option value="Lebanon"></option><option value="Lesotho"></option><option value="Liberia"></option><option value="Libya"></option><option value="Liechtenstein"></option><option value="Lithuania"></option><option value="Luxembourg"></option><option value="Madagascar"></option><option value="Malawi"></option><option value="Malaysia"></option><option value="Maldives"></option><option value="Mali"></option><option value="Malta"></option><option value="Marshall Islands"></option><option value="Mauritania"></option><option value="Mauritius"></option><option value="Mexico"></option><option value="Micronesia"></option><option value="Moldova"></option><option value="Monaco"></option><option value="Mongolia"></option><option value="Montenegro"></option><option value="Morocco"></option><option value="Mozambique"></option><option value="Myanmar"></option><option value="Namibia"></option><option value="Nauru"></option><option value="Nepal"></option><option value="Netherlands"></option><option value="New Zealand"></option><option value="Nicaragua"></option><option value="Niger"></option><option value="Nigeria"></option><option value="North Korea"></option><option value="North Macedonia"></option><option value="Norway"></option><option value="Oman"></option><option value="Pakistan"></option><option value="Palau"></option><option value="Palestine"></option><option value="Panama"></option><option value="Papua New Guinea"></option><option value="Paraguay"></option><option value="Peru"></option><option value="Philippines"></option><option value="Poland"></option><option value="Portugal"></option><option value="Qatar"></option><option value="Romania"></option><option value="Russia"></option><option value="Rwanda"></option><option value="Saint Kitts and Nevis"></option><option value="Saint Lucia"></option><option value="Saint Vincent and the Grenadines"></option><option value="Samoa"></option><option value="San Marino"></option><option value="Sao Tome and Principe"></option><option value="Saudi Arabia"></option><option value="Senegal"></option><option value="Serbia"></option><option value="Seychelles"></option><option value="Sierra Leone"></option><option value="Singapore"></option><option value="Slovakia"></option><option value="Slovenia"></option><option value="Solomon Islands"></option><option value="Somalia"></option><option value="South Africa"></option><option value="South Korea"></option><option value="South Sudan"></option><option value="Spain"></option><option value="Sri Lanka"></option><option value="Sudan"></option><option value="Suriname"></option><option value="Sweden"></option><option value="Switzerland"></option><option value="Syria"></option><option value="Taiwan"></option><option value="Tajikistan"></option><option value="Tanzania"></option><option value="Thailand"></option><option value="Timor-Leste"></option><option value="Togo"></option><option value="Tonga"></option><option value="Trinidad and Tobago"></option><option value="Tunisia"></option><option value="Turkey"></option><option value="Turkmenistan"></option><option value="Tuvalu"></option><option value="Uganda"></option><option value="Ukraine"></option><option value="United Arab Emirates"></option><option value="United Kingdom"></option><option value="United States"></option><option value="Uruguay"></option><option value="Uzbekistan"></option><option value="Vanuatu"></option><option value="Vatican City"></option><option value="Venezuela"></option><option value="Vietnam"></option><option value="Yemen"></option><option value="Zambia"></option><option value="Zimbabwe"></option><option value="Remote"></option>
         </datalist>
 
         <datalist id="dlTitles">
-          <option value="Backend Engineer"><option value="Frontend Engineer"><option value="Fullstack Developer"><option value="Software Engineer"><option value="Data Scientist"><option value="Data Engineer"><option value="Machine Learning Engineer"><option value="DevOps Engineer"><option value="Cloud Architect"><option value="Site Reliability Engineer"><option value="Product Manager"><option value="Graphic Designer"><option value="UI/UX Designer"><option value="Creative Director"><option value="Marketing Manager"><option value="Digital Marketer"><option value="Content Creator"><option value="Copywriter"><option value="Financial Analyst"><option value="Accountant"><option value="Business Analyst"><option value="Sales Executive"><option value="Account Executive"><option value="Operations Manager"><option value="HR Manager"><option value="Talent Acquisition Specialist"><option value="Customer Success Manager"><option value="Project Manager"><option value="QA Engineer"><option value="Mobile Developer"><option value="iOS Developer"><option value="Android Developer"><option value="Security Engineer"><option value="Systems Administrator"><option value="Database Administrator">
+          <option value="Backend Engineer"></option><option value="Frontend Engineer"></option><option value="Fullstack Developer"></option><option value="Software Engineer"></option><option value="Data Scientist"></option><option value="Data Engineer"></option><option value="Machine Learning Engineer"></option><option value="DevOps Engineer"></option><option value="Cloud Architect"></option><option value="Site Reliability Engineer"></option><option value="Product Manager"></option><option value="Graphic Designer"></option><option value="UI/UX Designer"></option><option value="Creative Director"></option><option value="Marketing Manager"></option><option value="Digital Marketer"></option><option value="Content Creator"></option><option value="Copywriter"></option><option value="Financial Analyst"></option><option value="Accountant"></option><option value="Business Analyst"></option><option value="Sales Executive"></option><option value="Account Executive"></option><option value="Operations Manager"></option><option value="HR Manager"></option><option value="Talent Acquisition Specialist"></option><option value="Customer Success Manager"></option><option value="Project Manager"></option><option value="QA Engineer"></option><option value="Mobile Developer"></option><option value="iOS Developer"></option><option value="Android Developer"></option><option value="Security Engineer"></option><option value="Systems Administrator"></option><option value="Database Administrator"></option>
         </datalist>
 
         <datalist id="dlStack">
-          <option value="Python"><option value="Java"><option value="JavaScript"><option value="TypeScript"><option value="C++"><option value="C#"><option value="Go"><option value="Rust"><option value="Ruby"><option value="PHP"><option value="Swift"><option value="Kotlin"><option value="React"><option value="Angular"><option value="Vue.js"><option value="Spring Boot"><option value="Django"><option value="Flask"><option value="FastAPI"><option value="Next.js"><option value="Express.js"><option value="Node.js"><option value="PostgreSQL"><option value="MySQL"><option value="MongoDB"><option value="Redis"><option value="AWS"><option value="GCP"><option value="Azure"><option value="Docker"><option value="Kubernetes"><option value="Terraform"><option value="GraphQL"><option value="REST API"><option value="Kafka"><option value="RabbitMQ">
+          <option value="Python"></option><option value="Java"></option><option value="JavaScript"></option><option value="TypeScript"></option><option value="C++"></option><option value="C#"></option><option value="Go"></option><option value="Rust"></option><option value="Ruby"></option><option value="PHP"></option><option value="Swift"></option><option value="Kotlin"></option><option value="React"></option><option value="Angular"></option><option value="Vue.js"></option><option value="Spring Boot"></option><option value="Django"></option><option value="Flask"></option><option value="FastAPI"></option><option value="Next.js"></option><option value="Express.js"></option><option value="Node.js"></option><option value="PostgreSQL"></option><option value="MySQL"></option><option value="MongoDB"></option><option value="Redis"></option><option value="AWS"></option><option value="GCP"></option><option value="Azure"></option><option value="Docker"></option><option value="Kubernetes"></option><option value="Terraform"></option><option value="GraphQL"></option><option value="REST API"></option><option value="Kafka"></option><option value="RabbitMQ"></option>
         </datalist>
 
         <datalist id="dlKeywords">
-          <option value="Microservices"><option value="REST APIs"><option value="CI/CD"><option value="Agile"><option value="Scrum"><option value="Leadership"><option value="System Design"><option value="Cloud Native"><option value="TDD"><option value="Unit Testing"><option value="Scalability"><option value="Performance Optimization">
+          <option value="Microservices"></option><option value="REST APIs"></option><option value="CI/CD"></option><option value="Agile"></option><option value="Scrum"></option><option value="Leadership"></option><option value="System Design"></option><option value="Cloud Native"></option><option value="TDD"></option><option value="Unit Testing"></option><option value="Scalability"></option><option value="Performance Optimization"></option>
         </datalist>
 
         <datalist id="dlNegatives">
-          <option value="Legacy"><option value="Unpaid"><option value="Cobol"><option value="WordPress"><option value="PHP only"><option value="Salesforce"><option value="Support"><option value="Helpdesk">
+          <option value="Legacy"></option><option value="Unpaid"></option><option value="Cobol"></option><option value="WordPress"></option><option value="PHP only"></option><option value="Salesforce"></option><option value="Support"></option><option value="Helpdesk"></option>
         </datalist>
 
         <!-- Active Subscription & Daily Send Quota Card -->
@@ -1114,11 +1114,11 @@
             <table class="data-table">
               <thead>
                 <tr>
-                  <th>Query ID</th>
-                  <th>Search Term</th>
-                  <th>Location</th>
-                  <th>Remote?</th>
-                  <th>Google Search Query</th>
+                  <th scope="col">Query ID</th>
+                  <th scope="col">Search Term</th>
+                  <th scope="col">Location</th>
+                  <th scope="col">Remote?</th>
+                  <th scope="col">Google Search Query</th>
                 </tr>
               </thead>
               <tbody id="previewMatrixBody">
@@ -1246,12 +1246,12 @@
               <table class="data-table">
                 <thead>
                   <tr>
-                    <th>Query / Search Term</th>
-                    <th>Target Boards</th>
-                    <th>Jobs Found</th>
-                    <th>Status</th>
-                    <th>Duration</th>
-                    <th>Diagnostics</th>
+                    <th scope="col">Query / Search Term</th>
+                    <th scope="col">Target Boards</th>
+                    <th scope="col">Jobs Found</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Duration</th>
+                    <th scope="col">Diagnostics</th>
                   </tr>
                 </thead>
                 <tbody id="pipelineSourcesTable"></tbody>
@@ -1293,15 +1293,15 @@
             <table class="data-table">
               <thead>
                 <tr>
-                  <th>Run ID</th>
-                  <th>Status</th>
-                  <th>Started At</th>
-                  <th>Duration</th>
-                  <th>Gross Scraped</th>
-                  <th>Fresh Postings</th>
-                  <th>AI Evaluated</th>
-                  <th>Apps Dispatched</th>
-                  <th>Diagnostics</th>
+                  <th scope="col">Run ID</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Started At</th>
+                  <th scope="col">Duration</th>
+                  <th scope="col">Gross Scraped</th>
+                  <th scope="col">Fresh Postings</th>
+                  <th scope="col">AI Evaluated</th>
+                  <th scope="col">Apps Dispatched</th>
+                  <th scope="col">Diagnostics</th>
                 </tr>
               </thead>
               <tbody id="pipelineHistoryBody">
@@ -1379,12 +1379,12 @@
           <table class="data-table">
             <thead>
               <tr>
-                <th style="width:130px">Received</th>
-                <th style="width:220px">Company & Role</th>
-                <th style="width:160px">Sender</th>
-                <th style="width:140px">Classification</th>
-                <th>Subject & Snippet</th>
-                <th style="width:120px;text-align:right">Actions</th>
+                <th scope="col" style="width:130px">Received</th>
+                <th scope="col" style="width:220px">Company & Role</th>
+                <th scope="col" style="width:160px">Sender</th>
+                <th scope="col" style="width:140px">Classification</th>
+                <th scope="col">Subject & Snippet</th>
+                <th scope="col" style="width:120px;text-align:right">Actions</th>
               </tr>
             </thead>
             <tbody id="inboxTableBody"></tbody>
@@ -1466,14 +1466,14 @@
           <table class="data-table">
             <thead>
               <tr>
-                <th style="width:130px">Date / Time</th>
-                <th style="width:230px">Target Job & Company</th>
-                <th style="width:150px">Channel</th>
-                <th style="width:180px">Recipient / Target</th>
-                <th style="width:120px">Status</th>
-                <th style="width:120px">Attachments</th>
-                <th>Application Details</th>
-                <th style="width:130px;text-align:right">Actions</th>
+                <th scope="col" style="width:130px">Date / Time</th>
+                <th scope="col" style="width:230px">Target Job & Company</th>
+                <th scope="col" style="width:150px">Channel</th>
+                <th scope="col" style="width:180px">Recipient / Target</th>
+                <th scope="col" style="width:120px">Status</th>
+                <th scope="col" style="width:120px">Attachments</th>
+                <th scope="col">Application Details</th>
+                <th scope="col" style="width:130px;text-align:right">Actions</th>
               </tr>
             </thead>
             <tbody id="outboundTableBody"></tbody>
@@ -1790,9 +1790,9 @@
             <table class="data-table">
               <thead>
                 <tr>
-                  <th style="width:40%">Variable Name (KEY)</th>
-                  <th style="width:50%">Value</th>
-                  <th style="width:10%">Action</th>
+                  <th scope="col" style="width:40%">Variable Name (KEY)</th>
+                  <th scope="col" style="width:50%">Value</th>
+                  <th scope="col" style="width:10%">Action</th>
                 </tr>
               </thead>
               <tbody id="userEnvTableBody">
@@ -1933,15 +1933,15 @@
             <table class="data-table">
               <thead>
                 <tr>
-                  <th>ID</th>
-                  <th>Plan</th>
-                  <th>Amount</th>
-                  <th>Method</th>
-                  <th>Reference / TxHash</th>
-                  <th>Proof Receipt</th>
-                  <th>Status</th>
-                  <th>Submitted At</th>
-                  <th>Notes</th>
+                  <th scope="col">ID</th>
+                  <th scope="col">Plan</th>
+                  <th scope="col">Amount</th>
+                  <th scope="col">Method</th>
+                  <th scope="col">Reference / TxHash</th>
+                  <th scope="col">Proof Receipt</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Submitted At</th>
+                  <th scope="col">Notes</th>
                 </tr>
               </thead>
               <tbody id="userPaymentsTableBody">
@@ -2009,7 +2009,7 @@
             <table class="data-table">
               <thead>
                 <tr>
-                  <th>ID</th><th>User</th><th>Email</th><th>Role</th><th>Active Plan</th><th>Daily Limit</th><th>Status</th><th>Registered</th><th>Actions</th>
+                  <th scope="col">ID</th><th scope="col">User</th><th scope="col">Email</th><th scope="col">Role</th><th scope="col">Active Plan</th><th scope="col">Daily Limit</th><th scope="col">Status</th><th scope="col">Registered</th><th scope="col">Actions</th>
                 </tr>
               </thead>
               <tbody id="adminUsersTable">
@@ -2025,7 +2025,7 @@
             <table class="data-table">
               <thead>
                 <tr>
-                  <th>ID</th><th>User</th><th>Plan</th><th>Amount</th><th>Method</th><th>Reference Code</th><th>Receipt</th><th>Status</th><th>Submitted</th><th>Actions</th>
+                  <th scope="col">ID</th><th scope="col">User</th><th scope="col">Plan</th><th scope="col">Amount</th><th scope="col">Method</th><th scope="col">Reference Code</th><th scope="col">Receipt</th><th scope="col">Status</th><th scope="col">Submitted</th><th scope="col">Actions</th>
                 </tr>
               </thead>
               <tbody id="adminPaymentsTable">
@@ -2471,7 +2471,7 @@
             </div>
             <div id="mJobScreenshotPreviewBox">
               <a id="mJobScreenshotLink" href="" target="_blank" title="Click to view full size screenshot in new tab">
-                <img id="mJobScreenshotImg" src="" style="width:100%;max-height:280px;object-fit:cover;object-position:top;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:#020617;cursor:zoom-in" alt="Application Screenshot">
+                <img id="mJobScreenshotImg" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3C/svg%3E" style="width:100%;max-height:280px;object-fit:cover;object-position:top;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:#020617;cursor:zoom-in" alt="Application Screenshot">
               </a>
               <div style="font-size:10px;color:var(--text-faint);margin-top:4px">👆 Click screenshot to expand full page verification evidence in a new tab. Tip: Press <b>Ctrl+V</b> anywhere to paste screenshot proof directly from clipboard!</div>
             </div>
@@ -3125,7 +3125,7 @@
 
           <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
             <div style="background:#fff;padding:8px;border-radius:10px;display:flex;align-items:center;justify-content:center;min-width:140px;min-height:140px">
-              <img id="cryptoQrImg" src="" alt="Crypto QR Code" style="width:140px;height:140px;display:block;border-radius:6px">
+              <img id="cryptoQrImg" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3C/svg%3E" alt="Crypto QR Code" style="width:140px;height:140px;display:block;border-radius:6px">
             </div>
             <div style="flex:1;min-width:240px">
               <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">
@@ -3290,7 +3290,7 @@
                   <div style="font-size:11px;color:var(--text-muted);margin-top:2px">PNG, JPG, or WEBP (Max 10MB)</div>
                 </div>
                 <div id="receiptPreviewWrap" style="display:none;align-items:center;justify-content:center;gap:12px;position:relative">
-                  <img id="receiptPreviewImg" src="" alt="Receipt Preview" style="max-height:80px;border-radius:6px;border:1px solid rgba(255,255,255,0.2)">
+                  <img id="receiptPreviewImg" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3C/svg%3E" alt="Receipt Preview" style="max-height:80px;border-radius:6px;border:1px solid rgba(255,255,255,0.2)">
                   <div style="text-align:left">
                     <div id="receiptFileName" style="font-size:12px;font-weight:700;color:#fff;word-break:break-all">screenshot.png</div>
                     <div id="receiptFileSize" style="font-size:11px;color:var(--text-muted)">120 KB</div>
@@ -3325,7 +3325,7 @@
         <button type="button" class="btn btn-sm btn-icon" onclick="closeReceiptModal()">✕</button>
       </div>
       <div class="modal-body" style="padding:18px;text-align:center;background:rgba(0,0,0,0.5)">
-        <img id="receiptModalImg" src="" alt="Payment Receipt" style="max-width:100%;max-height:75vh;border-radius:8px;box-shadow:0 8px 30px rgba(0,0,0,0.8);object-fit:contain">
+        <img id="receiptModalImg" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3C/svg%3E" alt="Payment Receipt" style="max-width:100%;max-height:75vh;border-radius:8px;box-shadow:0 8px 30px rgba(0,0,0,0.8);object-fit:contain">
       </div>
     </div>
   </div>
