@@ -71,9 +71,9 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      background: radial-gradient(circle at 30% 25%, #38bdf8 0%, #818cf8 38%, #7c3aed 72%, #4f46e5 100%);
+      background: radial-gradient(circle at 30% 25%, #fca5a5 0%, #f87171 35%, #ef4444 68%, #b91c1c 100%);
       box-shadow: 
-        0 0 24px rgba(124, 58, 237, 0.45),
+        0 0 24px rgba(239, 68, 68, 0.5),
         0 8px 18px rgba(0, 0, 0, 0.35),
         inset 0 3px 5px rgba(255, 255, 255, 0.75),
         inset 0 -3px 5px rgba(0, 0, 0, 0.45);
@@ -85,8 +85,8 @@
     .logo:hover .brand-bubble-orb {
       transform: scale(1.1) rotate(-6deg);
       box-shadow: 
-        0 0 32px rgba(56, 189, 248, 0.65),
-        0 10px 22px rgba(124, 58, 237, 0.55),
+        0 0 32px rgba(239, 68, 68, 0.75),
+        0 10px 22px rgba(185, 28, 28, 0.55),
         inset 0 3px 6px rgba(255, 255, 255, 0.9),
         inset 0 -3px 6px rgba(0, 0, 0, 0.4);
     }
@@ -122,15 +122,15 @@
     }
     .bubble-jobest {
       font-size: 24px;
-      font-weight: 800;
-      background: linear-gradient(135deg, #ffffff 0%, #e0e7ff 35%, #c4b5fd 70%, #93c5fd 100%);
+      font-weight: 900;
+      background: linear-gradient(135deg, #ff4d4d 0%, #ef4444 38%, #dc2626 72%, #b91c1c 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
-      filter: drop-shadow(0 2px 8px rgba(147, 197, 253, 0.28));
+      filter: drop-shadow(0 2px 8px rgba(239, 68, 68, 0.45));
       transition: filter 0.25s ease;
     }
     .logo:hover .bubble-jobest {
-      filter: drop-shadow(0 2px 14px rgba(192, 132, 252, 0.55));
+      filter: drop-shadow(0 2px 14px rgba(239, 68, 68, 0.75));
     }
     .bubble-hub {
       display: inline-flex;
@@ -142,13 +142,13 @@
       font-weight: 900;
       text-transform: uppercase;
       letter-spacing: 0.06em;
-      color: #ffffff;
+      color: #ffffff !important;
       border-radius: 9999px;
-      background: linear-gradient(135deg, #06b6d4 0%, #3b82f6 50%, #8b5cf6 100%);
+      background: linear-gradient(135deg, #ef4444 0%, #dc2626 48%, #991b1b 100%);
       box-shadow: 
-        0 3px 12px rgba(6, 182, 212, 0.45),
-        inset 0 2px 3px rgba(255, 255, 255, 0.8),
-        inset 0 -2px 3px rgba(0, 0, 0, 0.35);
+        0 3px 12px rgba(220, 38, 38, 0.55),
+        inset 0 2px 3px rgba(255, 255, 255, 0.85),
+        inset 0 -2px 3px rgba(0, 0, 0, 0.4);
       position: relative;
       overflow: hidden;
       transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.25s ease;
@@ -156,9 +156,9 @@
     .logo:hover .bubble-hub {
       transform: scale(1.08) rotate(2deg);
       box-shadow: 
-        0 4px 16px rgba(139, 92, 246, 0.6),
-        inset 0 2px 3px rgba(255, 255, 255, 0.9),
-        inset 0 -2px 3px rgba(0, 0, 0, 0.35);
+        0 4px 18px rgba(220, 38, 38, 0.75),
+        inset 0 2px 3px rgba(255, 255, 255, 0.95),
+        inset 0 -2px 3px rgba(0, 0, 0, 0.4);
     }
     .bubble-hub::after {
       content: '';
@@ -177,10 +177,10 @@
       font-weight: 700;
       padding: 2px 9px;
       border-radius: 9999px;
-      background: rgba(168, 85, 247, 0.16);
-      border: 1px solid rgba(168, 85, 247, 0.4);
-      color: #c084fc;
-      box-shadow: 0 0 10px rgba(168, 85, 247, 0.2);
+      background: rgba(239, 68, 68, 0.14);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      color: #f87171;
+      box-shadow: 0 0 10px rgba(239, 68, 68, 0.2);
       letter-spacing: 0.02em;
     }
     @keyframes floatBubbleOrb {
