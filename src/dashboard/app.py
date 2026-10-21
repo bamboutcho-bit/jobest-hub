@@ -114,12 +114,75 @@ def _aware_dt(value: datetime | None) -> datetime | None:
     return value.astimezone(timezone.utc)
 
 
-def _stage_counts(session, user_id: int | None = None) -> dict[str, int]:
+def _stage_counts(session, user_id: int | None = None, is_admin: bool = False) -> dict[str, int]:
     stmt = select(JobPosting.pipeline_stage, func.count())
     if user_id is not None:
-        stmt = stmt.where(or_(JobPosting.user_id == user_id, JobPosting.user_id.is_(None)))
+        if is_admin:
+            stmt = stmt.where(or_(JobPosting.user_id == user_id, JobPosting.user_id.is_(None)))
+        else:
+            stmt = stmt.where(JobPosting.user_id == user_id)
     rows = session.execute(stmt.group_by(JobPosting.pipeline_stage)).all()
     return {stage.value if hasattr(stage, "value") else str(stage): int(count) for stage, count in rows}
+
+
+def _get_screenshot_directories() -> list[Path]:
+    dirs: list[Path] = []
+    # 1. Configured directory from settings (e.g. /app/outreach_drafts/application_screenshots)
+    if settings.apply_screenshot_dir:
+        dirs.append(Path(settings.apply_screenshot_dir))
+    # 2. Local workspace directory relative to project root
+    workspace_dir = Path(__file__).resolve().parent.parent.parent / "outreach_drafts" / "application_screenshots"
+    dirs.append(workspace_dir)
+    # 3. Relative to current working directory
+    dirs.append(Path.cwd() / "outreach_drafts" / "application_screenshots")
+    dirs.append(Path.cwd() / "outreach_drafts")
+    # 4. Standard Windows / Docker fallback
+    dirs.append(Path("C:/app/outreach_drafts/application_screenshots"))
+
+    seen = set()
+    res = []
+    for d in dirs:
+        try:
+            resolved = str(d.resolve())
+            if resolved not in seen:
+                seen.add(resolved)
+                res.append(d)
+        except Exception:
+            if str(d) not in seen:
+                seen.add(str(d))
+                res.append(d)
+    return res
+
+
+def _resolve_screenshot_path(job_id: int, stored_path: str | None = None) -> Path | None:
+    if stored_path:
+        p = Path(stored_path)
+        try:
+            if p.is_file():
+                return p
+        except Exception:
+            pass
+
+        # Check by filename across all candidate screenshot directories
+        fname = p.name
+        for d in _get_screenshot_directories():
+            try:
+                cand = d / fname
+                if cand.is_file():
+                    return cand
+            except Exception:
+                pass
+
+    # Fallback search by job ID pattern in all candidate directories
+    for d in _get_screenshot_directories():
+        try:
+            if d.is_dir():
+                matches = list(d.glob(f"{job_id}_*.png")) + list(d.glob(f"{job_id}_*.jpg")) + list(d.glob(f"{job_id}.*"))
+                if matches and matches[0].is_file():
+                    return matches[0]
+        except Exception:
+            pass
+    return None
 
 
 def _job_dict(job: JobPosting) -> dict:
@@ -149,10 +212,7 @@ def _job_dict(job: JobPosting) -> dict:
         "application_method": job.application_method,
         "application_error": job.application_error,
         "application_screenshot_path": job.application_screenshot_path,
-        "has_screenshot": bool(
-            (job.application_screenshot_path and Path(job.application_screenshot_path).is_file())
-            or list(Path(settings.apply_screenshot_dir).glob(f"{job.id}_*.png"))
-        ),
+        "has_screenshot": bool(_resolve_screenshot_path(job.id, job.application_screenshot_path) is not None),
         "applied_at": _aware(job.applied_at or job.application_attempted_at or (job.last_contact_at if job.pipeline_stage.value == 'applied' else None)),
         "application_attempted_at": _aware(job.application_attempted_at),
         "last_contact_at": _aware(job.last_contact_at),
@@ -322,7 +382,7 @@ def startup():
     except Exception as cons_err:
         logger.warning("Could not launch notification consumer: %s", cons_err)
 
-    logger.info("AutoHunt Pro dashboard startup completed. Operational log stream active.")
+    logger.info("JoBestHub dashboard startup completed. Operational log stream active.")
 
 
 @app.get("/health")
@@ -364,11 +424,11 @@ def api_summary(request: Request, _: bool = Depends(_auth)):
             run_query = run_query.where(PipelineRun.user_id == user_id)
         latest_run = session.scalar(run_query.order_by(desc(PipelineRun.started_at)).limit(1))
 
-        counts = _stage_counts(session, user_id=None if is_admin else user_id)
+        counts = _stage_counts(session, user_id=None if is_admin else user_id, is_admin=is_admin)
 
         def _scope_q(stmt):
             if not is_admin and user_id is not None:
-                return stmt.where(or_(JobPosting.user_id == user_id, JobPosting.user_id.is_(None)))
+                return stmt.where(JobPosting.user_id == user_id)
             return stmt
 
         jobs_total = session.scalar(_scope_q(select(func.count(JobPosting.id)))) or 0
@@ -749,21 +809,24 @@ def api_job(job_id: int, request: Request, _: bool = Depends(_auth)):
  
 
 @app.get("/api/jobs/{job_id}/screenshot")
-def api_job_screenshot(job_id: int, _: bool = Depends(_auth)):
+def api_job_screenshot(job_id: int, request: Request):
+    from src.auth.service import get_current_user_optional
+    user = get_current_user_optional(request)
+    if not user:
+        try:
+            _auth(request)
+        except Exception:
+            raise HTTPException(401, "Authentication required to view screenshots")
+
     with get_session() as session:
         job = session.get(JobPosting, job_id)
         if not job:
             raise HTTPException(404, "Job not found")
-        path_str = job.application_screenshot_path
-        if not path_str or not Path(path_str).is_file():
-            # Fallback search by job ID prefix in screenshot directory
-            screenshot_dir = Path(settings.apply_screenshot_dir)
-            matches = list(screenshot_dir.glob(f"{job_id}_*.png"))
-            if matches:
-                path_str = str(matches[0])
-        if not path_str or not Path(path_str).is_file():
+        path = _resolve_screenshot_path(job.id, job.application_screenshot_path)
+        if not path or not path.is_file():
             raise HTTPException(404, "No application screenshot found for this job")
-        return FileResponse(path_str, media_type="image/png")
+        media = "image/jpeg" if path.suffix.lower() in (".jpg", ".jpeg") else "image/png"
+        return FileResponse(str(path), media_type=media)
 
 
 @app.post("/api/jobs/{job_id}/screenshot")
@@ -793,13 +856,28 @@ async def api_upload_job_screenshot(job_id: int, request: Request, _: bool = Dep
         if not job:
             raise HTTPException(404, "Job not found")
 
-        directory = Path(settings.apply_screenshot_dir)
-        directory.mkdir(parents=True, exist_ok=True)
+        # Pick primary screenshot directory (prefer project workspace)
+        target_dir = Path(__file__).resolve().parent.parent.parent / "outreach_drafts" / "application_screenshots"
+        try:
+            target_dir.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            target_dir = Path(settings.apply_screenshot_dir)
+            target_dir.mkdir(parents=True, exist_ok=True)
+
         import re
         company = re.sub(r"[^A-Za-z0-9]+", "_", str(job.company or "company"))[:40].strip("_")
         title = re.sub(r"[^A-Za-z0-9]+", "_", str(job.title or "job"))[:50].strip("_")
-        path = directory / f"{job.id}_{company}_{title}.png"
+        path = target_dir / f"{job.id}_{company}_{title}.png"
         path.write_bytes(image_bytes)
+
+        # Also mirror to settings.apply_screenshot_dir if distinct and accessible
+        try:
+            alt_dir = Path(settings.apply_screenshot_dir)
+            if alt_dir.resolve() != target_dir.resolve():
+                alt_dir.mkdir(parents=True, exist_ok=True)
+                (alt_dir / path.name).write_bytes(image_bytes)
+        except Exception:
+            pass
 
         job.application_screenshot_path = str(path)
         session.commit()
@@ -1064,9 +1142,14 @@ def api_inbox(request: Request, limit: int = 250, status_filter: str | None = No
     with get_session() as session:
         query = select(InboxMessage)
         if not (is_admin and all_users) and user_id is not None:
-            query = query.outerjoin(JobPosting, InboxMessage.job_id == JobPosting.id).where(
-                or_(InboxMessage.user_id == user_id, JobPosting.user_id == user_id, InboxMessage.user_id.is_(None))
-            )
+            if is_admin:
+                query = query.outerjoin(JobPosting, InboxMessage.job_id == JobPosting.id).where(
+                    or_(InboxMessage.user_id == user_id, JobPosting.user_id == user_id, InboxMessage.user_id.is_(None))
+                )
+            else:
+                query = query.outerjoin(JobPosting, InboxMessage.job_id == JobPosting.id).where(
+                    or_(InboxMessage.user_id == user_id, JobPosting.user_id == user_id)
+                )
 
         if sf:
             if sf in ("bounce", "bounced", "delivery_bounce", "bounces"):
@@ -1285,9 +1368,14 @@ def api_outbound(request: Request, limit: int = 250, status_filter: str | None =
             q_out = select(OutboundMessage)
             joined_job = False
             if not (is_admin and all_users) and user_id is not None:
-                q_out = q_out.outerjoin(JobPosting, OutboundMessage.job_id == JobPosting.id).where(
-                    or_(OutboundMessage.user_id == user_id, JobPosting.user_id == user_id, OutboundMessage.user_id.is_(None))
-                )
+                if is_admin:
+                    q_out = q_out.outerjoin(JobPosting, OutboundMessage.job_id == JobPosting.id).where(
+                        or_(OutboundMessage.user_id == user_id, JobPosting.user_id == user_id, OutboundMessage.user_id.is_(None))
+                    )
+                else:
+                    q_out = q_out.outerjoin(JobPosting, OutboundMessage.job_id == JobPosting.id).where(
+                        or_(OutboundMessage.user_id == user_id, JobPosting.user_id == user_id)
+                    )
                 joined_job = True
             if sf in ("sent", "submitted"):
                 q_out = q_out.where(OutboundMessage.status == "sent")
@@ -1373,7 +1461,10 @@ def api_outbound(request: Request, limit: int = 250, status_filter: str | None =
         if query_jobs:
             q_jobs = select(JobPosting)
             if not (is_admin and all_users) and user_id is not None:
-                q_jobs = q_jobs.where(or_(JobPosting.user_id == user_id, JobPosting.user_id.is_(None)))
+                if is_admin:
+                    q_jobs = q_jobs.where(or_(JobPosting.user_id == user_id, JobPosting.user_id.is_(None)))
+                else:
+                    q_jobs = q_jobs.where(JobPosting.user_id == user_id)
 
             if sf in ("blocked", "failed", "recruiter_email_blocked"):
                 q_jobs = q_jobs.where(
@@ -2530,7 +2621,10 @@ def _set_auth_cookie(response: Response, token: str, request: Request | None = N
         httponly=True,
         samesite="lax",
         secure=is_secure,
+        path="/",
     )
+    response.delete_cookie(key="autohunt_logged_out", path="/")
+    response.delete_cookie(key="logged_out", path="/")
 
 
 @app.post("/api/auth/register")
@@ -2873,9 +2967,54 @@ def api_auth_me(request: Request):
 
 
 @app.post("/api/auth/logout")
+@app.get("/api/auth/logout")
 def api_auth_logout(response: Response):
+    response.delete_cookie(key="session_token", path="/")
     response.delete_cookie(key="session_token")
+    response.set_cookie(
+        key="session_token",
+        value="",
+        max_age=0,
+        expires=0,
+        httponly=True,
+        samesite="lax",
+        path="/"
+    )
+    response.set_cookie(
+        key="autohunt_logged_out",
+        value="1",
+        max_age=7 * 24 * 3600,
+        httponly=False,
+        samesite="lax",
+        path="/"
+    )
     return {"ok": True, "message": "Logged out successfully"}
+
+
+@app.get("/logout")
+def logout_redirect():
+    from fastapi.responses import RedirectResponse
+    resp = RedirectResponse(url="/?logged_out=1", status_code=302)
+    resp.delete_cookie(key="session_token", path="/")
+    resp.delete_cookie(key="session_token")
+    resp.set_cookie(
+        key="session_token",
+        value="",
+        max_age=0,
+        expires=0,
+        httponly=True,
+        samesite="lax",
+        path="/"
+    )
+    resp.set_cookie(
+        key="autohunt_logged_out",
+        value="1",
+        max_age=7 * 24 * 3600,
+        httponly=False,
+        samesite="lax",
+        path="/"
+    )
+    return resp
 
 
 
@@ -5195,7 +5334,7 @@ async def api_chat_send(request: Request, payload: ChatSendMessageRequest):
         bot_msg = SupportMessage(
             user_id=user.id,
             sender_role="bot",
-            sender_name="AutoHunt Assistant",
+            sender_name="JoBestHub Assistant",
             message=bot_reply_text,
             language=detected_lang,
             is_read_by_user=True,
@@ -7260,16 +7399,38 @@ def n8n_system_status(request: Request):
         }
 
 @app.get("/", response_class=HTMLResponse)
+@app.get("/login", response_class=HTMLResponse)
 def landing_page(request: Request):
     from src.auth.service import get_current_user_optional
     from fastapi.responses import RedirectResponse
+    is_logged_out = (
+        request.cookies.get("autohunt_logged_out") == "1"
+        or request.cookies.get("logged_out") == "1"
+        or request.query_params.get("logged_out") == "1"
+    )
+    if is_logged_out:
+        tpl_file = TEMPLATES_DIR / "landing.html"
+        html = tpl_file.read_text(encoding="utf-8") if tpl_file.exists() else "<h1>JoBestHub — Stop Chasing Recruiters</h1>"
+        resp = HTMLResponse(html)
+        resp.delete_cookie(key="session_token", path="/")
+        resp.delete_cookie(key="session_token")
+        resp.set_cookie(
+            key="session_token",
+            value="",
+            max_age=0,
+            expires=0,
+            httponly=True,
+            samesite="lax",
+            path="/"
+        )
+        return resp
     user = get_current_user_optional(request)
     if user:
         return RedirectResponse(url="/app", status_code=302)
     tpl_file = TEMPLATES_DIR / "landing.html"
     if tpl_file.exists():
         return HTMLResponse(tpl_file.read_text(encoding="utf-8"))
-    return HTMLResponse("<h1>AutoHunt AI — Stop Chasing Recruiters</h1>")
+    return HTMLResponse("<h1>JoBestHub — Stop Chasing Recruiters</h1>")
 
 
 @app.get("/app", response_class=HTMLResponse)

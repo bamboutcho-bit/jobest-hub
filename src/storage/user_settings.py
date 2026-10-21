@@ -60,10 +60,18 @@ def get_user_effective_settings(user_id: Optional[int] = None) -> dict[str, Any]
     try:
         with get_session() as session:
             user_setting = None
+            is_admin = False
             if user_id:
+                try:
+                    from src.storage.models import User, UserRole
+                    u = session.get(User, user_id)
+                    is_admin = bool(u and u.role == UserRole.ADMIN.value)
+                except Exception:
+                    pass
                 user_setting = session.scalar(select(UserSetting).where(UserSetting.user_id == user_id))
-            if not user_setting:
-                # Fallback to admin user's settings
+
+            # Only fall back to admin / global settings if user is admin or running globally without user_id
+            if not user_setting and (user_id is None or is_admin):
                 try:
                     from src.storage.models import User, UserRole
                     admin = session.scalar(select(User).where(User.role == UserRole.ADMIN.value).order_by(User.id))
@@ -71,7 +79,7 @@ def get_user_effective_settings(user_id: Optional[int] = None) -> dict[str, Any]
                         user_setting = session.scalar(select(UserSetting).where(UserSetting.user_id == admin.id))
                 except Exception:
                     pass
-            if not user_setting:
+            if not user_setting and (user_id is None or is_admin):
                 user_setting = session.scalar(select(UserSetting).order_by(UserSetting.updated_at.desc()).limit(1))
 
             if user_setting:

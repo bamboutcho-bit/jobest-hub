@@ -242,16 +242,47 @@
       refreshCurrentView();
     }
 
+    let currentLiveSyncState = 'green';
+
+    function setLiveSyncStatus(state, label) {
+      currentLiveSyncState = state;
+      const dot = document.getElementById('livePulseDot') || document.querySelector('.status-pulse .pulse-dot');
+      const text = document.getElementById('liveStatusText');
+
+      if (dot) {
+        dot.classList.remove('status-green', 'status-orange', 'status-red', 'live', 'paused', 'disconnected', 'offline', 'error');
+        if (state === 'orange' || state === 'paused') {
+          dot.classList.add('status-orange');
+          dot.style.setProperty('background', '#f59e0b', 'important');
+          dot.style.setProperty('box-shadow', '0 0 10px rgba(245, 158, 11, 0.85)', 'important');
+          dot.setAttribute('title', 'Live Sync: Paused');
+        } else if (state === 'red' || state === 'error' || state === 'disconnected' || state === 'offline') {
+          dot.classList.add('status-red');
+          dot.style.setProperty('background', '#ef4444', 'important');
+          dot.style.setProperty('box-shadow', '0 0 10px rgba(239, 68, 68, 0.9)', 'important');
+          dot.setAttribute('title', 'Live Sync: Disconnected / Not Working');
+        } else {
+          dot.classList.add('status-green');
+          dot.style.setProperty('background', '#10b981', 'important');
+          dot.style.setProperty('box-shadow', '0 0 10px rgba(16, 185, 129, 0.75)', 'important');
+          dot.setAttribute('title', 'Live Sync: Active Real-Time');
+        }
+      }
+
+      if (text && label !== undefined) {
+        text.textContent = label;
+      }
+    }
+
     function changeSyncInterval(val) {
       syncDelayMs = parseInt(val, 10);
       if (syncIntervalId) clearInterval(syncIntervalId);
       if (syncDelayMs > 0) {
         startAutoSync();
-        const el = document.getElementById('liveStatusText');
-        if (el) el.textContent = 'Live Sync';
+        const isWsActive = (typeof notifWs !== 'undefined' && notifWs && notifWs.readyState === WebSocket.OPEN);
+        setLiveSyncStatus('green', isWsActive ? '⚡ Live (Real-Time)' : 'Live Sync');
       } else {
-        const el = document.getElementById('liveStatusText');
-        if (el) el.textContent = 'Paused';
+        setLiveSyncStatus('orange', 'Paused');
       }
     }
 
@@ -279,12 +310,15 @@
         console.warn('User auth sync warning:', err);
       }
 
+      let syncSuccessful = true;
       try {
         if (currentAppMode === 'freelance') {
           if (currentFreelanceTab === 'kanban' || currentFreelanceTab === 'leads') {
-            await Promise.allSettled([loadFreelanceStats(), loadFreelanceLeads(), fetchSystemMetrics()]);
+            const results = await Promise.allSettled([loadFreelanceStats(), loadFreelanceLeads(), fetchSystemMetrics()]);
+            syncSuccessful = results.some(r => r.status === 'fulfilled');
           } else {
-            await Promise.allSettled([loadFreelanceStats(), fetchSystemMetrics()]);
+            const results = await Promise.allSettled([loadFreelanceStats(), fetchSystemMetrics()]);
+            syncSuccessful = results.some(r => r.status === 'fulfilled');
           }
         } else {
           // Smart sub-tab refresh: only refresh what is currently visible on screen
@@ -299,10 +333,23 @@
             tasks.push(loadPipelineRuns());
           }
           tasks.push(fetchSystemMetrics());
-          await Promise.allSettled(tasks);
+          const results = await Promise.allSettled(tasks);
+          syncSuccessful = results.some(r => r.status === 'fulfilled');
+        }
+
+        if (syncDelayMs > 0) {
+          if (syncSuccessful) {
+            const isWs = (typeof notifWs !== 'undefined' && notifWs && notifWs.readyState === WebSocket.OPEN);
+            setLiveSyncStatus('green', isWs ? '⚡ Live (Real-Time)' : 'Live Sync');
+          } else {
+            setLiveSyncStatus('red', 'Offline / Error');
+          }
         }
       } catch (err) {
         console.error('Sync error:', err);
+        if (syncDelayMs > 0) {
+          setLiveSyncStatus('red', 'Offline / Error');
+        }
       }
     }
 
@@ -2024,7 +2071,10 @@
       } else if (type === 'email') {
         if (hrSelect) hrSelect.value = 'has_hr';
       } else if (type === 'portal') {
+        if (stageSelect) stageSelect.value = '';
         if (hrSelect) hrSelect.value = 'web_form';
+        const minScore = document.getElementById('jobsMinScoreFilter');
+        if (minScore) minScore.value = '';
       }
       loadJobs();
     }
@@ -2062,8 +2112,17 @@
 
       if (hrFilter === 'has_hr') {
         allJobsList = allJobsList.filter(j => (j.application_emails && j.application_emails.trim() !== '') || (j.application_email && j.application_email.trim() !== '') || (j.application_method && j.application_method.includes('email')));
-      } else if (hrFilter === 'web_form') {
-        allJobsList = allJobsList.filter(j => (!j.application_emails || j.application_emails.trim() === '') && (!j.application_email || j.application_email.trim() === '') && (!j.application_method || !j.application_method.includes('email')));
+      } else if (hrFilter === 'web_form' || hrFilter === 'portal') {
+        allJobsList = allJobsList.filter(j => {
+          const m = (j.application_method || '').toLowerCase();
+          const s = (j.source_site || '').toLowerCase();
+          const u = (j.job_url || '').toLowerCase();
+          const au = (j.application_url || '').toLowerCase();
+          const isEmail = (j.application_emails && j.application_emails.trim() !== '') || (j.application_email && j.application_email.trim() !== '') || m.includes('email');
+          const isLinkedIn = m.includes('linkedin') || s.includes('linkedin') || u.includes('linkedin.com') || au.includes('linkedin.com');
+          const isIndeed = m.includes('indeed') || s.includes('indeed') || u.includes('indeed.com') || au.includes('indeed.com');
+          return !isEmail && !isLinkedIn && !isIndeed;
+        });
       } else if (hrFilter === 'linkedin') {
         allJobsList = allJobsList.filter(j => {
           const m = (j.application_method || '').toLowerCase();
@@ -2380,51 +2439,56 @@
         const screenImg = document.getElementById('mJobScreenshotImg');
         const screenLink = document.getElementById('mJobScreenshotLink');
 
-        const isWebAttempt = (j.application_method && (j.application_method.includes('portal') || j.application_method.includes('web') || j.application_method.includes('manual'))) || j.application_status === 'submitted' || j.application_status === 'submitted_unverified' || j.has_screenshot;
+        const isWebAttempt = (j.application_method && (j.application_method.includes('portal') || j.application_method.includes('web') || j.application_method.includes('manual'))) || j.application_status === 'submitted' || j.application_status === 'submitted_unverified';
 
         if (atsSec) {
-          if (isWebAttempt) {
-            atsSec.style.display = 'block';
-            if (j.application_status === 'submitted') {
-              atsBadge.textContent = '✅ Verified Employer Confirmation';
-              atsBadge.className = 'pill pill-stage-deal_won';
-              atsNote.textContent = j.application_error || 'Form was filled and submitted. Confirmation text was verified on the landing page.';
-            } else if (j.application_status === 'submitted_unverified') {
-              atsBadge.textContent = '⚠️ Unverified (No Confirmation Text)';
-              atsBadge.className = 'pill pill-stage-pitched';
-              atsNote.textContent = j.application_error || 'Form was submitted via browser, but explicit confirmation text was not detected on the final landing page. Inspect the screenshot proof below.';
-            } else if (j.application_status === 'manual_security_challenge') {
-              atsBadge.textContent = '🛡️ Cloudflare / CAPTCHA Challenge';
-              atsBadge.className = 'pill pill-stage-lost';
-              atsNote.textContent = j.application_error || 'A bot/security challenge was detected on the portal; browser stopped safely without bypassing it.';
-            } else if (j.application_status === 'manual_required_fields') {
-              atsBadge.textContent = '🛑 Unanswered Mandatory Fields';
-              atsBadge.className = 'pill pill-stage-lost';
-              atsNote.textContent = j.application_error || 'Form contained custom required screening questions that could not be filled automatically.';
-            } else {
-              atsBadge.textContent = j.application_status || 'Attempted';
-              atsBadge.className = 'pill';
-              atsNote.textContent = j.application_error || 'Browser portal interaction recorded.';
-            }
-
-            const prevBox = document.getElementById('mJobScreenshotPreviewBox');
-            const emptyBox = document.getElementById('mJobScreenshotEmptyBox');
-
-            screenWrap.style.display = 'block';
-            if (j.has_screenshot) {
-              if (prevBox) prevBox.style.display = 'block';
-              if (emptyBox) emptyBox.style.display = 'none';
-              const sUrl = `/api/jobs/${j.id}/screenshot?t=${Date.now()}`;
-              screenImg.src = sUrl;
-              screenLink.href = sUrl;
-            } else {
-              if (prevBox) prevBox.style.display = 'none';
-              if (emptyBox) emptyBox.style.display = 'block';
-              screenImg.src = '';
-              screenLink.href = '';
-            }
+          // Always make Application Verification & Screenshot Proof accessible for review & uploads
+          atsSec.style.display = 'block';
+          if (j.application_status === 'submitted') {
+            atsBadge.textContent = '✅ Verified Employer Confirmation';
+            atsBadge.className = 'pill pill-stage-deal_won';
+            atsNote.textContent = j.application_error || 'Form was filled and submitted. Confirmation text was verified on the landing page.';
+          } else if (j.application_status === 'submitted_unverified') {
+            atsBadge.textContent = '⚠️ Unverified (No Confirmation Text)';
+            atsBadge.className = 'pill pill-stage-pitched';
+            atsNote.textContent = j.application_error || 'Form was submitted via browser, but explicit confirmation text was not detected on the final landing page. Inspect the screenshot proof below.';
+          } else if (j.application_status === 'manual_security_challenge') {
+            atsBadge.textContent = '🛡️ Cloudflare / CAPTCHA Challenge';
+            atsBadge.className = 'pill pill-stage-lost';
+            atsNote.textContent = j.application_error || 'A bot/security challenge was detected on the portal; browser stopped safely without bypassing it.';
+          } else if (j.application_status === 'manual_required_fields') {
+            atsBadge.textContent = '🛑 Unanswered Mandatory Fields';
+            atsBadge.className = 'pill pill-stage-lost';
+            atsNote.textContent = j.application_error || 'Form contained custom required screening questions that could not be filled automatically.';
+          } else if (j.stage === 'applied' || j.applied_at || j.application_status === 'sent') {
+            atsBadge.textContent = j.has_screenshot ? '📸 Verified Application Proof' : '⏳ Application Recorded';
+            atsBadge.className = j.has_screenshot ? 'pill pill-stage-deal_won' : 'pill pill-stage-pitched';
+            atsNote.textContent = j.has_screenshot
+              ? 'Application verification screenshot evidence attached.'
+              : 'Application recorded. Attach confirmation screenshot proof below or paste directly with Ctrl+V.';
           } else {
-            atsSec.style.display = 'none';
+            atsBadge.textContent = j.has_screenshot ? '📸 Screenshot Attached' : (j.application_status || 'Ready');
+            atsBadge.className = j.has_screenshot ? 'pill pill-stage-deal_won' : 'pill';
+            atsNote.textContent = j.has_screenshot
+              ? 'Verified screenshot proof attached for this opportunity.'
+              : 'Attach confirmation screenshot proof below or paste directly from clipboard with Ctrl+V.';
+          }
+
+          const prevBox = document.getElementById('mJobScreenshotPreviewBox');
+          const emptyBox = document.getElementById('mJobScreenshotEmptyBox');
+
+          if (screenWrap) screenWrap.style.display = 'block';
+          if (j.has_screenshot) {
+            if (prevBox) prevBox.style.display = 'block';
+            if (emptyBox) emptyBox.style.display = 'none';
+            const sUrl = `/api/jobs/${j.id}/screenshot?t=${Date.now()}`;
+            if (screenImg) screenImg.src = sUrl;
+            if (screenLink) screenLink.href = sUrl;
+          } else {
+            if (prevBox) prevBox.style.display = 'none';
+            if (emptyBox) emptyBox.style.display = 'block';
+            if (screenImg) screenImg.src = '';
+            if (screenLink) screenLink.href = '';
           }
         }
 
@@ -4910,9 +4974,15 @@
 
     async function handleLogout() {
       try {
-        await fetch('/api/auth/logout', { method: 'POST' });
+        await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
       } catch (_) {}
-      window.location.href = '/';
+      document.cookie = 'autohunt_logged_out=1; path=/; max-age=604800';
+      document.cookie = 'session_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; max-age=0';
+      try {
+        localStorage.removeItem('autohunt_token');
+        sessionStorage.clear();
+      } catch (_) {}
+      window.location.href = '/logout';
     }
 
     function switchAdminSubTab(sub) {
@@ -7226,7 +7296,7 @@
       const waLink = document.getElementById('moroccoWhatsappLink');
       if (waLink) {
         const userEmail = (currentUser && currentUser.email) ? currentUser.email : '';
-        const msg = encodeURIComponent(`Bonjour AutoHunt, je viens de payer pour le plan ${planObj.name || planSlug} (${priceInfo.display}). Mon email est: ${userEmail}`);
+        const msg = encodeURIComponent(`Bonjour JoBestHub, je viens de payer pour le plan ${planObj.name || planSlug} (${priceInfo.display}). Mon email est: ${userEmail}`);
         waLink.href = `https://wa.me/212600000000?text=${msg}`;
       }
 
@@ -7526,11 +7596,14 @@
           console.log('[NotificationWS] Connected to real-time broker hub');
           const dot = document.getElementById('notifStatusDot');
           if (dot) dot.style.background = '#10b981';
-          const liveStatus = document.getElementById('liveStatusText');
-          if (liveStatus) liveStatus.textContent = '⚡ Live (Real-Time)';
           if (notifReconnectTimer) {
             clearTimeout(notifReconnectTimer);
             notifReconnectTimer = null;
+          }
+          if (syncDelayMs <= 0) {
+            setLiveSyncStatus('orange', 'Paused');
+          } else {
+            setLiveSyncStatus('green', '⚡ Live (Real-Time)');
           }
           // Relax background polling to 60s when real-time WebSocket is active
           if (syncDelayMs < 60000 && syncDelayMs > 0) {
@@ -7570,9 +7643,16 @@
           console.debug('[NotificationWS] Connection closed. Retrying in 5s…');
           const dot = document.getElementById('notifStatusDot');
           if (dot) dot.style.background = '#f59e0b';
-          const liveStatus = document.getElementById('liveStatusText');
-          if (liveStatus) liveStatus.textContent = 'Reconnecting (Fallback)';
           if (notifHeartbeatTimer) clearInterval(notifHeartbeatTimer);
+
+          if (syncDelayMs <= 0) {
+            setLiveSyncStatus('orange', 'Paused');
+          } else if (typeof navigator !== 'undefined' && !navigator.onLine) {
+            setLiveSyncStatus('red', 'Offline');
+          } else {
+            setLiveSyncStatus('orange', 'Reconnecting (Fallback)');
+          }
+
           // Restore 15s fallback polling during disconnect
           if (syncDelayMs > 15000) {
             syncDelayMs = 15000;
@@ -7586,10 +7666,16 @@
         notifWs.onerror = () => {
           const dot = document.getElementById('notifStatusDot');
           if (dot) dot.style.background = '#ef4444';
+          if (syncDelayMs > 0) {
+            setLiveSyncStatus('red', 'Disconnected / Error');
+          }
           try { notifWs.close(); } catch (_) {}
         };
       } catch (err) {
         console.debug('[NotificationWS] Connection error:', err);
+        if (syncDelayMs > 0) {
+          setLiveSyncStatus('red', 'Disconnected / Error');
+        }
         if (!notifReconnectTimer) {
           notifReconnectTimer = setTimeout(initNotificationsWebSocket, 8000);
         }
@@ -7752,7 +7838,7 @@
       const isHighPriority = ['job_match', 'reply_received', 'interview_invite', 'quota_warning', 'app_sent'].includes(notif.event_type);
       if (document.hidden || isHighPriority) {
         try {
-          const n = new Notification(notif.title || 'AutoHunt Notification', {
+          const n = new Notification(notif.title || 'JoBestHub Notification', {
             body: notif.message || '',
             icon: '/static/favicon.ico',
             tag: String(notif.id || notif.event_type || Date.now()),
@@ -7781,7 +7867,7 @@
         if (perm === 'granted') {
           showNotificationToast({ title: 'Desktop Alerts Enabled', message: 'You will receive real-time alerts even when the browser is minimized! ✓', event_type: 'job_match' });
           try {
-            new Notification('AutoHunt Desktop Alerts Enabled', {
+            new Notification('JoBestHub Desktop Alerts Enabled', {
               body: 'Real-time alerts enabled for high job matches and recruiter replies.',
               icon: '/static/favicon.ico'
             });
@@ -8084,7 +8170,7 @@
       wrap.className = `chat-bubble-wrap ${role}`;
 
       let senderIcon = isUser ? '👤' : (isAdmin ? '🛡️' : '🤖');
-      let senderTitle = msg.sender_name || (isUser ? 'You' : (isAdmin ? 'Platform Support' : 'AutoHunt Assistant'));
+      let senderTitle = msg.sender_name || (isUser ? 'You' : (isAdmin ? 'Platform Support' : 'JoBestHub Assistant'));
       let adminBadgeHtml = isAdmin ? '<span style="background:rgba(16,185,129,0.2);color:#34d399;font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px;text-transform:uppercase">Support Admin</span>' : '';
 
       wrap.innerHTML = `
@@ -8151,7 +8237,7 @@
         if (typing) typing.style.display = 'none';
         renderChatMessage({
           sender_role: 'bot',
-          sender_name: 'AutoHunt Assistant',
+          sender_name: 'JoBestHub Assistant',
           message: '⚠️ Sorry, I encountered an issue connecting. Please try again or visit Settings.',
           created_at: new Date().toISOString()
         }, container, true);
@@ -8180,7 +8266,7 @@
           badge.style.display = 'inline-block';
         }
         showNotificationToast({
-          title: msg.sender_name || '💬 AutoHunt Support',
+          title: msg.sender_name || '💬 JoBestHub Support',
           message: (msg.message || '').slice(0, 100),
           event_type: 'support_reply',
           link: '#chat'
@@ -8495,7 +8581,7 @@
             topBtn.style.borderColor = 'rgba(245,158,11,0.5)';
             topBtn.style.color = '#facc15';
             topBtn.innerHTML = `<span>⚡ Setup:</span> <span>${res.completion_percent}%</span>`;
-            topBtn.title = 'Complete required information & environments to start using AutoHunt';
+            topBtn.title = 'Complete required information & environments to start using JoBestHub';
           } else {
             topBtn.style.background = 'rgba(16,185,129,0.15)';
             topBtn.style.borderColor = 'rgba(16,185,129,0.4)';
@@ -9014,6 +9100,24 @@
     window.launchBatchIndeedTabs = launchBatchIndeedTabs;
     window.updateBulkIndeedBadge = updateBulkIndeedBadge;
     window.uploadScreenshotFromFileInput = uploadScreenshotFromFileInput;
+    window.handleLogout = handleLogout;
+    window.setJobQuickFilter = setJobQuickFilter;
+    window.changeSyncInterval = changeSyncInterval;
+    window.setLiveSyncStatus = setLiveSyncStatus;
+
+    // Listen to browser network state changes for real-time status indication
+    window.addEventListener('offline', () => {
+      if (typeof syncDelayMs !== 'undefined' && syncDelayMs > 0) {
+        setLiveSyncStatus('red', 'Offline');
+      }
+    });
+    window.addEventListener('online', () => {
+      if (typeof syncDelayMs !== 'undefined' && syncDelayMs > 0) {
+        const isWs = (typeof notifWs !== 'undefined' && notifWs && notifWs.readyState === WebSocket.OPEN);
+        setLiveSyncStatus('green', isWs ? '⚡ Live (Real-Time)' : 'Live Sync');
+        refreshCurrentView();
+      }
+    });
 
 
 

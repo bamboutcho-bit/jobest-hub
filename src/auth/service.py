@@ -166,16 +166,29 @@ def verify_google_id_token(id_token: str) -> Optional[dict[str, Any]]:
 def get_current_user_optional(request: Request) -> Optional[User]:
     """Retrieve the currently authenticated user from session cookie, Bearer token, or Basic Auth fallback.
     
-    Returns None if unauthenticated.
+    Returns None if unauthenticated. Each user is independent and sessions are strictly scoped.
     """
+    # If the user explicitly logged out, return None immediately
+    try:
+        if request:
+            is_explicitly_logged_out = (
+                request.cookies.get("autohunt_logged_out") == "1"
+                or request.cookies.get("logged_out") == "1"
+                or (hasattr(request, "query_params") and request.query_params.get("logged_out") == "1")
+            )
+            if is_explicitly_logged_out:
+                return None
+    except Exception:
+        pass
+
     # 1. Check Authorization header: Bearer <token>
-    auth_header = request.headers.get("Authorization", "")
+    auth_header = request.headers.get("Authorization", "") if request else ""
     token = None
-    if auth_header.startswith("Bearer "):
+    if auth_header and auth_header.startswith("Bearer "):
         token = auth_header[7:].strip()
 
     # 2. Check HTTP-only cookie
-    if not token:
+    if not token and request:
         token = request.cookies.get("session_token")
 
     if token:
@@ -188,7 +201,7 @@ def get_current_user_optional(request: Request) -> Optional[User]:
                     return user
 
     # 3. Fallback to Basic Auth for existing admin scripts / n8n / backwards compatibility
-    if auth_header.startswith("Basic "):
+    if auth_header and auth_header.startswith("Basic "):
         try:
             raw = base64.b64decode(auth_header[6:].strip()).decode("utf-8")
             u, p = raw.split(":", 1)
@@ -223,32 +236,6 @@ def get_current_user_optional(request: Request) -> Optional[User]:
                         return admin_user
         except Exception:
             pass
-
-    # 4. Fallback for local desktop / loopback access:
-    # If accessed on loopback interface (localhost / 127.0.0.1) and no explicit authorization header or session cookie was provided,
-    # resolve the active local administrator account so local dashboard sessions never get stranded in "Loading... / USER / FREE TIER".
-    try:
-        host = request.headers.get("host", request.url.hostname or "") if request else ""
-        client_host = request.client.host if (request and request.client) else ""
-        is_local_request = (
-            "localhost" in host
-            or "127.0.0.1" in host
-            or client_host in ("127.0.0.1", "::1", "localhost", "testclient")
-        )
-        if is_local_request:
-            with get_session() as session:
-                admin_user = session.scalar(
-                    select(User).where(User.role == UserRole.ADMIN.value, User.is_active.is_(True)).order_by(User.id)
-                )
-                if not admin_user:
-                    admin_user = session.scalar(
-                        select(User).where(User.is_active.is_(True)).order_by(User.id)
-                    )
-                if admin_user:
-                    session.expunge(admin_user)
-                    return admin_user
-    except Exception:
-        pass
 
     return None
 

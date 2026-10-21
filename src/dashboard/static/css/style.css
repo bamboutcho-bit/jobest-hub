@@ -111,26 +111,233 @@
       z-index: 50;
     }
 
-    .brand { display: flex; align-items: center; gap: 14px; }
-    .brand-logo {
+    /* ==========================================================================
+       JoBestHub Bubbly Brand Identity & 3D Glass Design System
+       ========================================================================== */
+    @keyframes floatBubbleOrb {
+      0%, 100% {
+        transform: translateY(0) scale(1) rotate(0deg);
+      }
+      50% {
+        transform: translateY(-3.5px) scale(1.03) rotate(2.5deg);
+      }
+    }
+
+    @keyframes bubblePulseDot {
+      0%, 100% {
+        transform: scale(0.85);
+        opacity: 0.5;
+      }
+      50% {
+        transform: scale(1.25);
+        opacity: 1;
+      }
+    }
+
+    @keyframes bubbleSheen {
+      0% {
+        left: -130%;
+      }
+      28%, 100% {
+        left: 140%;
+      }
+    }
+
+    .brand { display: flex; align-items: center; gap: 14px; text-decoration: none; }
+    
+    .brand-bubbly-wrap {
+      display: flex;
+      align-items: center;
+      gap: 13px;
+      text-decoration: none;
+      cursor: pointer;
+      transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .brand-bubbly-wrap:hover {
+      transform: translateY(-1px);
+    }
+
+    .brand-bubble-orb {
       width: 44px;
       height: 44px;
-      border-radius: var(--radius-md);
-      background: linear-gradient(135deg, #7c3aed, #06b6d4);
+      border-radius: 50%;
+      position: relative;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 22px;
-      box-shadow: 0 0 16px rgba(124, 58, 237, 0.4);
+      background: radial-gradient(circle at 30% 25%, #38bdf8 0%, #818cf8 38%, #7c3aed 72%, #4f46e5 100%);
+      box-shadow: 
+        0 0 24px rgba(124, 58, 237, 0.45),
+        0 8px 18px rgba(0, 0, 0, 0.35),
+        inset 0 3px 5px rgba(255, 255, 255, 0.75),
+        inset 0 -3px 5px rgba(0, 0, 0, 0.45);
+      animation: floatBubbleOrb 4.5s ease-in-out infinite;
+      transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.35s ease;
+      user-select: none;
+      flex-shrink: 0;
     }
-    .brand-title {
+
+    .brand-bubbly-wrap:hover .brand-bubble-orb {
+      transform: scale(1.1) rotate(-6deg);
+      box-shadow: 
+        0 0 32px rgba(56, 189, 248, 0.65),
+        0 10px 22px rgba(124, 58, 237, 0.55),
+        inset 0 3px 6px rgba(255, 255, 255, 0.9),
+        inset 0 -3px 6px rgba(0, 0, 0, 0.4);
+    }
+
+    .bubble-reflection {
+      position: absolute;
+      top: 5px;
+      left: 9px;
+      width: 14px;
+      height: 8px;
+      border-radius: 50%;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.85) 0%, rgba(255, 255, 255, 0.15) 100%);
+      transform: rotate(-25deg);
+      pointer-events: none;
+      filter: blur(0.3px);
+    }
+
+    .bubble-sparkle-dot {
+      position: absolute;
+      border-radius: 50%;
+      pointer-events: none;
+      animation: bubblePulseDot 2.8s ease-in-out infinite;
+    }
+    .bubble-sparkle-dot.dot-1 {
+      width: 5px;
+      height: 5px;
+      top: -2px;
+      right: 1px;
+      background: #38bdf8;
+      box-shadow: 0 0 6px #38bdf8;
+    }
+    .bubble-sparkle-dot.dot-2 {
+      width: 4px;
+      height: 4px;
+      bottom: 0px;
+      left: -2px;
+      background: #c084fc;
+      box-shadow: 0 0 6px #c084fc;
+      animation-delay: 1.4s;
+    }
+
+    .bubble-inner-icon {
       font-size: 20px;
+      filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+      transition: transform 0.3s ease;
+      line-height: 1;
+    }
+    .brand-bubbly-wrap:hover .bubble-inner-icon {
+      transform: scale(1.15) rotate(8deg);
+    }
+
+    .brand-title-bubbly {
+      display: inline-flex;
+      align-items: center;
+      font-family: 'Outfit', 'Plus Jakarta Sans', system-ui, sans-serif;
+      line-height: 1.15;
+      letter-spacing: -0.03em;
+      user-select: none;
+      margin: 0;
+    }
+
+    .bubble-jobest {
+      font-size: 22px;
+      font-weight: 800;
+      background: linear-gradient(135deg, #ffffff 0%, #e0e7ff 35%, #c4b5fd 70%, #93c5fd 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      filter: drop-shadow(0 2px 8px rgba(147, 197, 253, 0.28));
+      transition: filter 0.25s ease;
+    }
+    .brand-bubbly-wrap:hover .bubble-jobest {
+      filter: drop-shadow(0 2px 14px rgba(192, 132, 252, 0.55));
+    }
+
+    .bubble-hub {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-left: 4px;
+      padding: 2px 10px;
+      font-size: 13.5px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #ffffff;
+      border-radius: 9999px;
+      background: linear-gradient(135deg, #06b6d4 0%, #3b82f6 50%, #8b5cf6 100%);
+      box-shadow: 
+        0 3px 12px rgba(6, 182, 212, 0.45),
+        inset 0 2px 3px rgba(255, 255, 255, 0.8),
+        inset 0 -2px 3px rgba(0, 0, 0, 0.35);
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.25s ease;
+    }
+    .brand-bubbly-wrap:hover .bubble-hub {
+      transform: scale(1.08) rotate(2deg);
+      box-shadow: 
+        0 4px 16px rgba(139, 92, 246, 0.6),
+        inset 0 2px 3px rgba(255, 255, 255, 0.9),
+        inset 0 -2px 3px rgba(0, 0, 0, 0.35);
+    }
+    .bubble-hub::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -130%;
+      width: 60%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.65), transparent);
+      transform: skewX(-20deg);
+      animation: bubbleSheen 4.5s ease-in-out infinite;
+    }
+
+    .brand-badge-bubble {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10.5px;
+      font-weight: 700;
+      padding: 2px 9px;
+      border-radius: 9999px;
+      background: rgba(168, 85, 247, 0.16);
+      border: 1px solid rgba(168, 85, 247, 0.4);
+      color: #c084fc;
+      box-shadow: 0 0 10px rgba(168, 85, 247, 0.2);
+      letter-spacing: 0.02em;
+    }
+
+    .brand-subtitle-bubbly {
+      font-size: 11.5px;
+      color: var(--text-muted);
+      letter-spacing: -0.01em;
+      font-weight: 500;
+    }
+
+    /* Fallback brand-title for backwards compatibility */
+    .brand-title {
+      font-family: 'Outfit', 'Plus Jakarta Sans', system-ui, sans-serif;
+      font-size: 21px;
       font-weight: 800;
       letter-spacing: -0.02em;
-      background: linear-gradient(to right, #ffffff, #cbd5e1);
+      background: linear-gradient(135deg, #ffffff, #c4b5fd);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       line-height: 1.2;
+    }
+    .brand-logo {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 30% 25%, #38bdf8 0%, #818cf8 40%, #7c3aed 75%, #4f46e5 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      box-shadow: 0 0 18px rgba(124, 58, 237, 0.45), inset 0 2px 4px rgba(255, 255, 255, 0.6);
+      animation: floatBubbleOrb 4.5s ease-in-out infinite;
     }
     .brand-badge {
       font-family: 'JetBrains Mono', monospace;
@@ -143,6 +350,7 @@
       border-radius: var(--radius-full);
       margin-left: 8px;
     }
+
 
     /* Mode Switcher */
     .mode-switcher {
@@ -191,19 +399,78 @@
       padding: 7px 12px;
       border-radius: var(--radius-full);
       border: 1px solid var(--border);
+      white-space: nowrap;
+      user-select: none;
     }
     .pulse-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--good);
-      box-shadow: 0 0 10px var(--good);
-      animation: pulse 2s infinite;
+      display: inline-block !important;
+      width: 9px !important;
+      height: 9px !important;
+      min-width: 9px !important;
+      min-height: 9px !important;
+      max-width: 9px !important;
+      max-height: 9px !important;
+      aspect-ratio: 1 / 1 !important;
+      border-radius: 50% !important;
+      flex-shrink: 0 !important;
+      flex-grow: 0 !important;
+      box-sizing: border-box !important;
+      vertical-align: middle;
+      background: #10b981;
+      box-shadow: 0 0 10px rgba(16, 185, 129, 0.75);
+      animation: pulseGreen 2s infinite;
+      transition: background 0.3s ease, box-shadow 0.3s ease;
+      position: relative;
     }
+
+    /* Green / Live state */
+    .pulse-dot.status-green,
+    .pulse-dot.live {
+      background: #10b981 !important;
+      box-shadow: 0 0 10px rgba(16, 185, 129, 0.75) !important;
+      animation: pulseGreen 2s infinite !important;
+    }
+
+    /* Orange / Paused state */
+    .pulse-dot.status-orange,
+    .pulse-dot.paused {
+      background: #f59e0b !important;
+      box-shadow: 0 0 10px rgba(245, 158, 11, 0.85) !important;
+      animation: pulseOrange 2.5s infinite !important;
+    }
+
+    /* Red / Disconnected / Error / Offline state */
+    .pulse-dot.status-red,
+    .pulse-dot.disconnected,
+    .pulse-dot.offline,
+    .pulse-dot.error {
+      background: #ef4444 !important;
+      box-shadow: 0 0 10px rgba(239, 68, 68, 0.9) !important;
+      animation: pulseRed 1.8s infinite !important;
+    }
+
     @keyframes pulse {
       0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
       70% { transform: scale(1.1); box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
       100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+
+    @keyframes pulseGreen {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.75); }
+      70% { transform: scale(1.1); box-shadow: 0 0 0 7px rgba(16, 185, 129, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+
+    @keyframes pulseOrange {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.75); }
+      70% { transform: scale(1.1); box-shadow: 0 0 0 7px rgba(245, 158, 11, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+    }
+
+    @keyframes pulseRed {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.85); }
+      70% { transform: scale(1.15); box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
     }
 
     /* Buttons */

@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>AutoHunt AI — Stop Chasing Recruiters. Make Dream Jobs Come To You.</title>
+  <title>JoBestHub — Stop Chasing Recruiters. Make Dream Jobs Come To You.</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800;900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <!-- Google Identity Services client script for verified Gmail loggers -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
@@ -56,19 +56,140 @@
     .logo {
       display: flex;
       align-items: center;
-      gap: 10px;
-      font-size: 20px;
-      font-weight: 800;
-      letter-spacing: -0.5px;
-      color: #fff;
+      gap: 12px;
       text-decoration: none;
+      transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
-    .logo-badge {
-      background: linear-gradient(135deg, #0284c7, #7c3aed);
-      padding: 4px 10px;
-      border-radius: 8px;
-      font-size: 13px;
+    .logo:hover {
+      transform: translateY(-1px);
+    }
+    .brand-bubble-orb {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at 30% 25%, #38bdf8 0%, #818cf8 38%, #7c3aed 72%, #4f46e5 100%);
+      box-shadow: 
+        0 0 24px rgba(124, 58, 237, 0.45),
+        0 8px 18px rgba(0, 0, 0, 0.35),
+        inset 0 3px 5px rgba(255, 255, 255, 0.75),
+        inset 0 -3px 5px rgba(0, 0, 0, 0.45);
+      animation: floatBubbleOrb 4.5s ease-in-out infinite;
+      transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.35s ease;
+      user-select: none;
+      flex-shrink: 0;
+    }
+    .logo:hover .brand-bubble-orb {
+      transform: scale(1.1) rotate(-6deg);
+      box-shadow: 
+        0 0 32px rgba(56, 189, 248, 0.65),
+        0 10px 22px rgba(124, 58, 237, 0.55),
+        inset 0 3px 6px rgba(255, 255, 255, 0.9),
+        inset 0 -3px 6px rgba(0, 0, 0, 0.4);
+    }
+    .bubble-reflection {
+      position: absolute;
+      top: 5px;
+      left: 8px;
+      width: 13px;
+      height: 7px;
+      border-radius: 50%;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.85) 0%, rgba(255, 255, 255, 0.15) 100%);
+      transform: rotate(-25deg);
+      pointer-events: none;
+      filter: blur(0.3px);
+    }
+    .bubble-inner-icon {
+      font-size: 19px;
+      filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+      transition: transform 0.3s ease;
+      line-height: 1;
+    }
+    .logo:hover .bubble-inner-icon {
+      transform: scale(1.15) rotate(8deg);
+    }
+    .brand-title-bubbly {
+      display: inline-flex;
+      align-items: center;
+      font-family: 'Outfit', 'Plus Jakarta Sans', system-ui, sans-serif;
+      line-height: 1.15;
+      letter-spacing: -0.03em;
+      user-select: none;
+      margin: 0;
+    }
+    .bubble-jobest {
+      font-size: 24px;
+      font-weight: 800;
+      background: linear-gradient(135deg, #ffffff 0%, #e0e7ff 35%, #c4b5fd 70%, #93c5fd 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      filter: drop-shadow(0 2px 8px rgba(147, 197, 253, 0.28));
+      transition: filter 0.25s ease;
+    }
+    .logo:hover .bubble-jobest {
+      filter: drop-shadow(0 2px 14px rgba(192, 132, 252, 0.55));
+    }
+    .bubble-hub {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-left: 4px;
+      padding: 2px 11px;
+      font-size: 14px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #ffffff;
+      border-radius: 9999px;
+      background: linear-gradient(135deg, #06b6d4 0%, #3b82f6 50%, #8b5cf6 100%);
+      box-shadow: 
+        0 3px 12px rgba(6, 182, 212, 0.45),
+        inset 0 2px 3px rgba(255, 255, 255, 0.8),
+        inset 0 -2px 3px rgba(0, 0, 0, 0.35);
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.25s ease;
+    }
+    .logo:hover .bubble-hub {
+      transform: scale(1.08) rotate(2deg);
+      box-shadow: 
+        0 4px 16px rgba(139, 92, 246, 0.6),
+        inset 0 2px 3px rgba(255, 255, 255, 0.9),
+        inset 0 -2px 3px rgba(0, 0, 0, 0.35);
+    }
+    .bubble-hub::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -130%;
+      width: 60%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.65), transparent);
+      transform: skewX(-20deg);
+      animation: bubbleSheen 4.5s ease-in-out infinite;
+    }
+    .brand-badge-bubble {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10.5px;
       font-weight: 700;
+      padding: 2px 9px;
+      border-radius: 9999px;
+      background: rgba(168, 85, 247, 0.16);
+      border: 1px solid rgba(168, 85, 247, 0.4);
+      color: #c084fc;
+      box-shadow: 0 0 10px rgba(168, 85, 247, 0.2);
+      letter-spacing: 0.02em;
+    }
+    @keyframes floatBubbleOrb {
+      0%, 100% { transform: translateY(0) scale(1) rotate(0deg); }
+      50% { transform: translateY(-3.5px) scale(1.03) rotate(2.5deg); }
+    }
+    @keyframes bubbleSheen {
+      0% { left: -130%; }
+      28%, 100% { left: 140%; }
     }
     .nav-links { display: flex; align-items: center; gap: 20px; }
     .nav-links a { color: var(--text-muted); text-decoration: none; font-size: 14px; font-weight: 500; transition: color .2s; }
@@ -442,9 +563,15 @@
   <div class="container">
     <!-- Header -->
     <header>
-      <a href="/" class="logo">
-        <span class="logo-badge">⚡ AutoHunt</span>
-        <span>AI Career Agent</span>
+      <a href="/" class="logo" title="JoBestHub — AI Career Suite">
+        <div class="brand-bubble-orb">
+          <div class="bubble-reflection"></div>
+          <span class="bubble-inner-icon">⚡</span>
+        </div>
+        <div class="brand-title-bubbly">
+          <span class="bubble-jobest">JoBest</span><span class="bubble-hub">Hub</span>
+        </div>
+        <span class="brand-badge-bubble">AI Career Suite</span>
       </a>
       <div class="nav-links">
         <a href="#features">How It Works</a>
@@ -464,7 +591,7 @@
         Make <span class="highlight">Dream Jobs Come To You.</span>
       </h1>
       <p>
-        AutoHunt scans 10,000+ opportunities across Europe and Global Remote hubs 24/7.
+        JoBestHub scans 10,000+ opportunities across Europe and Global Remote hubs 24/7.
         It parses your CV using pure Machine Learning, identifies direct hiring managers, and applies with personalized outreach while you sleep.
       </p>
 
@@ -488,7 +615,7 @@
     <!-- Features Section -->
     <section id="features">
       <div class="section-title">
-        <h2>How AutoHunt Inverts the Job Market</h2>
+        <h2>How JoBestHub Inverts the Job Market</h2>
         <p>Built for job seekers, professionals, and creators across all industries who want results without wasting hours on repetitive forms.</p>
       </div>
 
@@ -637,7 +764,7 @@
 
     <!-- Footer -->
     <footer>
-      <p>© 2026 AutoHunt AI. Transforming the job search into an autonomous, candidate-first experience.</p>
+      <p>© 2026 JoBestHub. Transforming the job search into an autonomous, candidate-first experience.</p>
     </footer>
   </div>
 
@@ -694,12 +821,15 @@
     let currentAuthMode = 'login';
     let isLandingUserLoggedIn = false;
 
-    // Check if visitor is already logged in
-    fetch('/api/auth/me').then(r => r.json()).then(d => {
-      if (d && d.email) {
-        isLandingUserLoggedIn = true;
-      }
-    }).catch(() => {});
+    // Check if visitor is already logged in (skip if explicitly logged out)
+    const isExplicitlyLoggedOut = window.location.search.includes('logged_out=1') || document.cookie.includes('autohunt_logged_out=1');
+    if (!isExplicitlyLoggedOut) {
+      fetch('/api/auth/me').then(r => r.ok ? r.json() : null).then(d => {
+        if (d && (d.ok || d.user || d.email)) {
+          isLandingUserLoggedIn = true;
+        }
+      }).catch(() => {});
+    }
 
     function openAuthModal(mode = 'login', plan = 'free') {
       if (isLandingUserLoggedIn && plan && plan !== 'free') {
@@ -783,20 +913,26 @@
       }).catch(e => alert('Network error: ' + e.message));
     }
 
-    // Auto-check if already logged in
-    fetch('/api/auth/me').then(r => {
-      if (r.ok) {
-        // If already logged in, provide direct access
-        const links = document.querySelector('.nav-links');
-        if (links) {
-          links.innerHTML = `
-            <a href="#features">How It Works</a>
-            <a href="#pricing">Pricing</a>
-            <a href="/app" class="btn btn-primary">Go to Dashboard 🚀</a>
-          `;
+    // Auto-check if already logged in (skip if explicitly logged out)
+    if (!isExplicitlyLoggedOut) {
+      fetch('/api/auth/me').then(r => {
+        if (r.ok) {
+          return r.json();
         }
-      }
-    }).catch(() => {});
+        return null;
+      }).then(d => {
+        if (d && (d.ok || d.user || d.email)) {
+          const links = document.querySelector('.nav-links');
+          if (links) {
+            links.innerHTML = `
+              <a href="#features">How It Works</a>
+              <a href="#pricing">Pricing</a>
+              <a href="/app" class="btn btn-primary">Go to Dashboard 🚀</a>
+            `;
+          }
+        }
+      }).catch(() => {});
+    }
 
     // Dynamic Pricing & Gateways propagation from DB
     let landingPricingPlans = [];

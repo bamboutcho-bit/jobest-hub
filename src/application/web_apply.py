@@ -1476,12 +1476,29 @@ def _handle_indeed_portal(page, job_record: dict, profile: dict | None, resume: 
 
 def _screenshot(page, job_record: dict) -> str | None:
     try:
-        directory = Path(settings.apply_screenshot_dir)
-        directory.mkdir(parents=True, exist_ok=True)
+        # Prefer project workspace directory when outside Docker container
+        directory = Path(__file__).resolve().parent.parent.parent / "outreach_drafts" / "application_screenshots"
+        try:
+            directory.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            directory = Path(settings.apply_screenshot_dir)
+            directory.mkdir(parents=True, exist_ok=True)
+
         company = re.sub(r"[^A-Za-z0-9]+", "_", str(job_record.get("company") or "company"))[:40].strip("_")
         title = re.sub(r"[^A-Za-z0-9]+", "_", str(job_record.get("title") or "job"))[:50].strip("_")
         path = directory / f"{job_record.get('id','x')}_{company}_{title}.png"
         page.screenshot(path=str(path), full_page=True)
+
+        # If configured directory is distinct and writable, mirror screenshot
+        try:
+            alt_dir = Path(settings.apply_screenshot_dir)
+            if alt_dir.resolve() != directory.resolve():
+                alt_dir.mkdir(parents=True, exist_ok=True)
+                import shutil
+                shutil.copy2(str(path), str(alt_dir / path.name))
+        except Exception:
+            pass
+
         return str(path)
     except Exception:
         logger.exception("Could not save application screenshot")

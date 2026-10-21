@@ -110,17 +110,20 @@ def get_active_profile(user_id: int | None = None, session=None) -> dict[str, An
         if not row and user_id is not None:
             # Fallback to any profile belonging to this user
             row = s.scalar(select(CandidateProfile).where(CandidateProfile.user_id == user_id).order_by(desc(CandidateProfile.id)).limit(1))
-        if not row:
-            # Fallback to unassigned active profile or global profile
+        if not row and user_id is None:
+            # Fallback to unassigned active profile or global profile ONLY when no user_id is specified
             row = s.scalar(select(CandidateProfile).where(CandidateProfile.user_id.is_(None), CandidateProfile.is_active.is_(True)).limit(1))
-        if not row:
-            # Global fallback to the latest profile in DB
+        if not row and user_id is None:
+            # Global fallback to the latest profile in DB ONLY when no user_id is specified
             row = s.scalar(select(CandidateProfile).order_by(desc(CandidateProfile.is_active), desc(CandidateProfile.id)).limit(1))
         if row:
             if user_id is not None and row.user_id is None:
                 try:
-                    row.user_id = user_id
-                    s.flush()
+                    from src.storage.models import User, UserRole
+                    u = s.get(User, user_id)
+                    if u and u.role == UserRole.ADMIN.value:
+                        row.user_id = user_id
+                        s.flush()
                 except Exception:
                     pass
             return _profile_to_dict(row)
@@ -151,13 +154,19 @@ def list_profiles(user_id: int | None = None, session=None) -> list[dict[str, An
 
     def _fetch(s):
         from sqlalchemy import or_
+        from src.storage.models import User, UserRole
         stmt = select(CandidateProfile)
+        is_admin = False
         if user_id is not None:
-            # Return profiles belonging to this user or any unassigned profiles
-            stmt = stmt.where(or_(CandidateProfile.user_id == user_id, CandidateProfile.user_id.is_(None)))
+            u = s.get(User, user_id)
+            is_admin = bool(u and u.role == UserRole.ADMIN.value)
+            if is_admin:
+                stmt = stmt.where(or_(CandidateProfile.user_id == user_id, CandidateProfile.user_id.is_(None)))
+            else:
+                stmt = stmt.where(CandidateProfile.user_id == user_id)
         rows = s.scalars(stmt.order_by(desc(CandidateProfile.is_active), CandidateProfile.name)).all()
-        # Automatically claim unassigned profile for this user if found
-        if user_id is not None:
+        # Automatically claim unassigned profile ONLY for admin
+        if user_id is not None and is_admin:
             for r in rows:
                 if r.user_id is None:
                     try:

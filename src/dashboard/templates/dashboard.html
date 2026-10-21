@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>AutoHunt Pro — AI Job Search & Freelance Client Acquisition</title>
+  <title>JoBestHub — AI Job Search & Freelance Client Acquisition</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/style.css?v=6.6.2">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/style.css?v=6.6.3">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
@@ -124,14 +124,22 @@
     
     <!-- Top Nav Header -->
     <header class="top-bar">
-      <div class="brand">
-        <div class="brand-logo">⚡</div>
+      <!-- Brand Logo & Title with Bubbly 3D Design -->
+      <div class="brand brand-bubbly-wrap" onclick="manualRefresh()" title="JoBestHub — AI Autonomous Job & Client Acquisition Suite">
+        <div class="brand-bubble-orb">
+          <div class="bubble-reflection"></div>
+          <div class="bubble-sparkle-dot dot-1"></div>
+          <div class="bubble-sparkle-dot dot-2"></div>
+          <span class="bubble-inner-icon">⚡</span>
+        </div>
         <div>
-          <div style="display:flex;align-items:center;">
-            <h1 class="brand-title">AutoHunt Pro</h1>
-            <span class="brand-badge">v3.2 Hybrid</span>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <div class="brand-title-bubbly">
+              <span class="bubble-jobest">JoBest</span><span class="bubble-hub">Hub</span>
+            </div>
+            <span class="brand-badge-bubble">v3.2 Hybrid</span>
           </div>
-          <div style="font-size:12px;color:var(--text-muted);">AI Job Search & Freelance Client Acquisition Suite</div>
+          <div class="brand-subtitle-bubbly">AI Job Search & Freelance Client Acquisition Suite</div>
         </div>
       </div>
 
@@ -147,8 +155,8 @@
 
       <!-- Header Controls -->
       <div class="header-controls">
-        <div class="status-pulse">
-          <div class="pulse-dot"></div>
+        <div class="status-pulse" id="statusPulseContainer" title="System Synchronization Status">
+          <div id="livePulseDot" class="pulse-dot status-green" title="Live Realtime Status Indicator"></div>
           <span id="liveStatusText">Live Sync</span>
           <select id="syncIntervalSelect" onchange="changeSyncInterval(this.value)" style="background:transparent;border:none;color:var(--text-faint);font-size:11px;padding:0 2px;cursor:pointer">
             <option value="60000" selected>Live Push (60s)</option>
@@ -185,7 +193,7 @@
             <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.02)">
               <div style="font-weight:700;font-size:13px;display:flex;align-items:center;gap:6px">
                 <span>🔔 Notifications</span>
-                <span id="notifStatusDot" style="width:7px;height:7px;border-radius:50%;background:#10b981;display:inline-block" title="Real-Time Broker Connected"></span>
+                <span id="notifStatusDot" style="width:7px;height:7px;min-width:7px;min-height:7px;max-width:7px;max-height:7px;aspect-ratio:1/1;border-radius:50% !important;flex-shrink:0;background:#10b981;display:inline-block" title="Real-Time Broker Connected"></span>
               </div>
               <div style="display:flex;gap:8px;align-items:center">
                 <button id="osAlertsBtn" onclick="toggleDesktopAlerts()" style="background:none;border:none;color:var(--cyan-light);font-size:11px;cursor:pointer;padding:0" title="Toggle Desktop OS Notifications">OS Alerts</button>
@@ -201,7 +209,7 @@
         </div>
 
         <!-- Setup Assistant Quick Launch Button -->
-        <button id="topbarSetupBtn" onclick="openOnboardingModal()" class="btn btn-sm" style="display:none;align-items:center;gap:6px;background:rgba(245,158,11,0.18);border:1px solid rgba(245,158,11,0.5);color:#facc15;font-weight:700;padding:4px 10px;border-radius:8px;font-size:11px;cursor:pointer" title="Complete required information & environments to start using AutoHunt">
+        <button id="topbarSetupBtn" onclick="openOnboardingModal()" class="btn btn-sm" style="display:none;align-items:center;gap:6px;background:rgba(245,158,11,0.18);border:1px solid rgba(245,158,11,0.5);color:#facc15;font-weight:700;padding:4px 10px;border-radius:8px;font-size:11px;cursor:pointer" title="Complete required information & environments to start using JoBestHub">
           <span>⚡ Setup:</span>
           <span id="topbarSetupPercent">0%</span>
         </button>
@@ -434,6 +442,7 @@
             <button id="qfLinkedIn" class="btn btn-sm" onclick="setJobQuickFilter('linkedin')" title="Show jobs applied on LinkedIn">💼 LinkedIn</button>
             <button id="qfIndeed" class="btn btn-sm" onclick="setJobQuickFilter('indeed')" title="Show jobs applied on Indeed">🔵 Indeed</button>
             <button id="qfEmail" class="btn btn-sm" onclick="setJobQuickFilter('email')" title="Show jobs targeted with recruiter email outreach">✉️ Email Channel</button>
+            <button id="qfPortal" class="btn btn-sm" onclick="setJobQuickFilter('portal')" title="Show Web Portal & ATS applications (Workday, Greenhouse, Lever, etc. — excludes LinkedIn & Indeed)">🌐 Web Portals</button>
             <button type="button" class="btn btn-sm btn-linkedin" onclick="openBulkLinkedInModal()" style="margin-left:6px" title="Open LinkedIn Auto-Apply Assistant">💼 Auto-Apply LinkedIn Queue</button>
             <button type="button" class="btn btn-sm btn-indeed" onclick="openBulkIndeedModal()" style="margin-left:4px" title="Open Indeed Auto-Apply Assistant">🔵 Auto-Apply Indeed Queue</button>
           </div>
@@ -475,7 +484,7 @@
           <select id="jobsHrFilter" onchange="loadJobs()">
             <option value="">📧 All Apply Types & Channels</option>
             <option value="has_hr">✉️ Recruiter Email Target</option>
-            <option value="web_form">🌐 Web ATS Form Only</option>
+            <option value="web_form">🌐 Web Portal / ATS (Non-LinkedIn/Indeed)</option>
             <option value="linkedin">💼 Applied via LinkedIn</option>
             <option value="indeed">🔵 Applied via Indeed</option>
           </select>
@@ -2456,7 +2465,7 @@
         <div id="mJobAtsAuditSection" class="panel" style="background:rgba(15,23,42,0.7);border:1px solid rgba(6,182,212,0.3);margin-bottom:16px;display:none">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
             <h4 style="font-size:13px;text-transform:uppercase;color:var(--cyan-light);margin:0;display:flex;align-items:center;gap:6px">
-              <span>🤖 Browser ATS Submission Proof</span>
+              <span>📸 Application Verification & Screenshot Proof</span>
             </h4>
             <span id="mJobAtsVerifyBadge" class="pill" style="font-size:10px;font-weight:700"></span>
           </div>
@@ -3521,7 +3530,7 @@
           </div>
           <div>
             <h3 style="font-size:18px;font-weight:800;color:#fff;display:flex;align-items:center;gap:8px">
-              <span>AutoHunt Quick Setup & Launch Assistant</span>
+              <span>JoBestHub Quick Setup & Launch Assistant</span>
               <span id="onbBadgeMode" class="pill" style="font-size:10px;background:rgba(6,182,212,0.2);color:#22d3ee;border-color:rgba(6,182,212,0.4)">New User Guide</span>
             </h3>
             <div style="font-size:12px;color:var(--text-muted)">Configure your career profile, CV, and outbound email to unleash autonomous job discovery.</div>
@@ -3839,7 +3848,7 @@
   <!-- FLOATING CHATBOT WIDGET (Bottom Right Corner) -->
   <!-- ================================================================= -->
   <!-- Floating Launcher Button -->
-  <div id="chatbotToggleBtn" class="chatbot-launcher" onclick="toggleChatbot()" title="Open AutoHunt AI Assistant & Support">
+  <div id="chatbotToggleBtn" class="chatbot-launcher" onclick="toggleChatbot()" title="Open JoBestHub AI Assistant & Support">
     <span style="font-size:24px" id="chatbotLauncherIcon">🤖</span>
     <span id="chatbotUnreadBadge" class="chatbot-launcher-badge" style="display:none">0</span>
   </div>
@@ -3855,7 +3864,7 @@
         </div>
         <div>
           <div class="chatbot-title">
-            AutoHunt AI Assistant
+            JoBestHub AI Assistant
             <span style="font-size:10px;background:rgba(139,92,246,0.25);color:var(--purple-light);padding:1px 6px;border-radius:4px;font-weight:700">AI + Support</span>
           </div>
           <div class="chatbot-subtitle" id="chatbotHeaderSub">Any language (EN, FR, العربية, ES...)</div>
@@ -3880,10 +3889,10 @@
       <!-- Welcome message -->
       <div class="chat-bubble-wrap bot">
         <div class="chat-sender-label">
-          <span>🤖 AutoHunt Assistant</span>
+          <span>🤖 JoBestHub Assistant</span>
         </div>
         <div class="chat-bubble bot">
-          👋 <strong>Hello! I am your AutoHunt AI Assistant.</strong><br><br>
+          👋 <strong>Hello! I am your JoBestHub AI Assistant.</strong><br><br>
           I can help you navigate the platform, set up your CV & email, explain daily quotas, and answer your questions in <strong>any language</strong> (Français, العربية, English, Español...).<br><br>
           An administrator can also join this conversation directly if you ever need human support! How can I assist you today?
         </div>
