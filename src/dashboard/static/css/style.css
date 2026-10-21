@@ -2819,9 +2819,12 @@
       color: #0f172a !important;
       font-weight: 700 !important;
     }
-    [data-theme="light"] .pricing-card {
+    /* Pricing Plan Cards & Feature Lists (Universal Light Mode) */
+    [data-theme="light"] .pricing-card,
+    [data-theme="light"] .pricing-plan-card,
+    [data-theme="light"] #pricingCardsGrid .panel {
       background: #ffffff !important;
-      border-color: #cbd5e1 !important;
+      border: 1px solid #cbd5e1 !important;
       box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06) !important;
       color: #0f172a !important;
     }
@@ -2829,19 +2832,51 @@
       border-color: #7c3aed !important;
       box-shadow: 0 8px 28px rgba(124, 58, 237, 0.15) !important;
     }
+    [data-theme="light"] .pricing-plan-card[style*="#10b981"],
+    [data-theme="light"] #pricingCardsGrid .panel[style*="#10b981"] {
+      background: #f0fdf4 !important;
+      border: 2px solid #10b981 !important;
+      box-shadow: 0 6px 24px rgba(16, 185, 129, 0.18) !important;
+    }
+    [data-theme="light"] .pricing-plan-card[style*="rgba(139,92,246"],
+    [data-theme="light"] #pricingCardsGrid .panel[style*="rgba(139,92,246"] {
+      background: #faf5ff !important;
+      border: 2px solid #8b5cf6 !important;
+      box-shadow: 0 6px 24px rgba(139, 92, 246, 0.18) !important;
+    }
     [data-theme="light"] .pricing-plan-name,
-    [data-theme="light"] .pricing-amount {
+    [data-theme="light"] .pricing-amount,
+    [data-theme="light"] .pricing-plan-card h3,
+    [data-theme="light"] #pricingCardsGrid h3 {
       color: #0f172a !important;
       font-weight: 800 !important;
     }
     [data-theme="light"] .pricing-period,
-    [data-theme="light"] .pricing-desc {
+    [data-theme="light"] .pricing-desc,
+    [data-theme="light"] .pricing-plan-card div[style*="color:var(--text-muted)"],
+    [data-theme="light"] #pricingCardsGrid div[style*="color:var(--text-muted)"] {
       color: #1e293b !important;
-      font-weight: 500 !important;
+      font-weight: 600 !important;
     }
-    [data-theme="light"] .pricing-feature-item {
+    [data-theme="light"] .pricing-feature-item,
+    [data-theme="light"] .pricing-plan-card div[style*="font-size:12.5px"],
+    [data-theme="light"] #pricingCardsGrid div[style*="font-size:12.5px"],
+    [data-theme="light"] #pricingCardsGrid div[style*="color:#e2e8f0"],
+    [data-theme="light"] .pricing-features li {
       color: #0f172a !important;
       font-weight: 600 !important;
+    }
+    [data-theme="light"] .pricing-feature-item span,
+    [data-theme="light"] .pricing-plan-card div[style*="font-size:12.5px"] span,
+    [data-theme="light"] #pricingCardsGrid div[style*="font-size:12.5px"] span {
+      color: #0f172a !important;
+    }
+    [data-theme="light"] .pricing-feature-item span[style*="color:var(--good)"],
+    [data-theme="light"] #pricingCardsGrid span[style*="color:var(--good)"],
+    [data-theme="light"] #pricingCardsGrid span[style*="color: var(--good)"],
+    [data-theme="light"] .pricing-features span.check {
+      color: #047857 !important;
+      font-weight: 900 !important;
     }
     [data-theme="light"] #hrBatchStatusBox,
     [data-theme="light"] #mlCvAnalysisPanel,
@@ -2887,7 +2922,7 @@
     /* UNIVERSAL LIGHT MODE HIGH CONTRAST & LEGIBILITY ENGINE              */
     /* =================================================================== */
 
-    /* Overwrite all washed-out grey text across cards, tables, and settings */
+    /* Overwrite all washed-out grey and pale text across cards, tables, and settings */
     [data-theme="light"] [style*="color:var(--text-muted)"],
     [data-theme="light"] [style*="color: var(--text-muted)"],
     [data-theme="light"] [style*="color:var(--text-faint)"],
@@ -2906,6 +2941,49 @@
     [data-theme="light"] [style*="color:#ccc"] {
       color: #1e293b !important;
       font-weight: 500;
+    }
+
+    /* Pale white / off-white text (#e2e8f0, #cbd5e1, #f1f5f9, #f8fafc) -> Deep slate in light mode */
+    [data-theme="light"] [style*="color:#e2e8f0"],
+    [data-theme="light"] [style*="color: #e2e8f0"],
+    [data-theme="light"] [style*="color:#cbd5e1"],
+    [data-theme="light"] [style*="color: #cbd5e1"],
+    [data-theme="light"] [style*="color:#f1f5f9"],
+    [data-theme="light"] [style*="color: #f1f5f9"],
+    [data-theme="light"] [style*="color:#f8fafc"],
+    [data-theme="light"] [style*="color: #f8fafc"] {
+      color: #0f172a !important;
+      font-weight: 500;
+    }
+
+    /* Pale cyan/blue/green/purple pastels adapted to high contrast in light mode */
+    [data-theme="light"] [style*="color:#a5f3fc"],
+    [data-theme="light"] [style*="color: #a5f3fc"],
+    [data-theme="light"] [style*="color:#67e8f9"],
+    [data-theme="light"] [style*="color: #67e8f9"] {
+      color: #0369a1 !important;
+      font-weight: 600 !important;
+    }
+    [data-theme="light"] [style*="color:#bae6fd"],
+    [data-theme="light"] [style*="color: #bae6fd"],
+    [data-theme="light"] [style*="color:#bfdbfe"],
+    [data-theme="light"] [style*="color: #bfdbfe"] {
+      color: #1d4ed8 !important;
+      font-weight: 600 !important;
+    }
+    [data-theme="light"] [style*="color:#a7f3d0"],
+    [data-theme="light"] [style*="color: #a7f3d0"],
+    [data-theme="light"] [style*="color:#6ee7b7"],
+    [data-theme="light"] [style*="color: #6ee7b7"] {
+      color: #047857 !important;
+      font-weight: 600 !important;
+    }
+    [data-theme="light"] [style*="color:#d8b4fe"],
+    [data-theme="light"] [style*="color: #d8b4fe"],
+    [data-theme="light"] [style*="color:#a5b4fc"],
+    [data-theme="light"] [style*="color: #a5b4fc"] {
+      color: #6d28d9 !important;
+      font-weight: 600 !important;
     }
 
     /* Convert all dark panels with inline backgrounds to clean, readable cards */
@@ -2932,8 +3010,15 @@
     [data-theme="light"] div[style*="background: rgba(0,0,0,0.25)"],
     [data-theme="light"] div[style*="background: rgba(0,0,0,0.3)"],
     [data-theme="light"] div[style*="background: rgba(0,0,0,0.4)"],
+    [data-theme="light"] div[style*="background:rgba(0,0,0,0.2)"],
+    [data-theme="light"] div[style*="background: rgba(0,0,0,0.2)"],
+    [data-theme="light"] div[style*="background:rgba(255,255,255,0.03)"],
+    [data-theme="light"] div[style*="background: rgba(255,255,255,0.03)"],
+    [data-theme="light"] div[style*="background:rgba(255,255,255,0.02)"],
+    [data-theme="light"] div[style*="background: rgba(255,255,255,0.02)"],
     [data-theme="light"] #bulkLiPitchText,
-    [data-theme="light"] #bulkIndPitchText {
+    [data-theme="light"] #bulkIndPitchText,
+    [data-theme="light"] #mJobScreenshotEmptyBox {
       background: #f8fafc !important;
       border: 1px solid #cbd5e1 !important;
       color: #0f172a !important;

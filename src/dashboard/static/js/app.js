@@ -2968,7 +2968,7 @@
               📋 Copy Pitch
             </button>
           </div>
-          <div id="bulkLiPitchText" style="background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:12px;font-size:12px;color:#e2e8f0;line-height:1.5;max-height:120px;overflow-y:auto;white-space:pre-wrap;font-family:'Plus Jakarta Sans',sans-serif">${esc(pitch)}</div>
+          <div id="bulkLiPitchText" style="background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:12px;font-size:12px;color:var(--text);line-height:1.5;max-height:120px;overflow-y:auto;white-space:pre-wrap;font-family:'Plus Jakarta Sans',sans-serif">${esc(pitch)}</div>
         </div>
 
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;border-top:1px solid rgba(255,255,255,0.08);padding-top:14px">
@@ -3246,7 +3246,7 @@
               📋 Copy Pitch
             </button>
           </div>
-          <div id="bulkIndPitchText" style="background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:12px;font-size:12px;color:#e2e8f0;line-height:1.5;max-height:120px;overflow-y:auto;white-space:pre-wrap;font-family:'Plus Jakarta Sans',sans-serif">${esc(pitch)}</div>
+          <div id="bulkIndPitchText" style="background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:12px;font-size:12px;color:var(--text);line-height:1.5;max-height:120px;overflow-y:auto;white-space:pre-wrap;font-family:'Plus Jakarta Sans',sans-serif">${esc(pitch)}</div>
         </div>
 
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;border-top:1px solid rgba(255,255,255,0.08);padding-top:14px">
@@ -5552,7 +5552,7 @@
                 <div style="font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase">Entitlements:</div>
                 <div style="display:flex;flex-direction:column;gap:4px">
                   ${p.can_access_freelance ? '<div style="font-size:11.5px;color:var(--good)">✓ Freelance Deal Client Engine Included</div>' : '<div style="font-size:11.5px;color:var(--text-muted)">✕ Freelance Deals Excluded</div>'}
-                  ${feats.slice(0, 4).map(f => `<div style="font-size:11.5px;color:#cbd5e1;display:flex;align-items:center;gap:6px"><span style="color:var(--cyan-light)">•</span> ${esc(f)}</div>`).join('')}
+                  ${feats.slice(0, 4).map(f => `<div style="font-size:11.5px;color:var(--text);display:flex;align-items:center;gap:6px"><span style="color:var(--cyan-light)">•</span> ${esc(f)}</div>`).join('')}
                   ${feats.length > 4 ? `<div style="font-size:10.5px;color:var(--text-muted)">+ ${feats.length - 4} more features</div>` : ''}
                 </div>
               </div>
@@ -7011,7 +7011,7 @@
                 <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:10px">Included Features:</div>
                 <div style="display:flex;flex-direction:column;gap:9px">
                   ${planFeatures.map(f => `
-                    <div style="display:flex;align-items:flex-start;gap:8px;font-size:12.5px;color:#e2e8f0;line-height:1.4">
+                    <div class="pricing-feature-item" style="display:flex;align-items:flex-start;gap:8px;font-size:12.5px;color:var(--text);line-height:1.4">
                       <span style="color:var(--good);font-weight:800">✓</span>
                       <span>${esc(f)}</span>
                     </div>
@@ -8050,7 +8050,7 @@
         <div style="font-size: 20px; line-height: 1;">${icon}</div>
         <div style="flex: 1; min-width: 0;">
           <div style="font-size: 13px; font-weight: 700; color: #38bdf8; margin-bottom: 2px;">${esc(notif.title)}</div>
-          <div style="font-size: 11px; color: #cbd5e1; line-height: 1.35;">${esc(notif.message)}</div>
+          <div style="font-size: 11px; color: var(--text-muted); line-height: 1.35;">${esc(notif.message)}</div>
         </div>
         <button style="background:none;border:none;color:#64748b;font-size:14px;cursor:pointer;padding:0;line-height:1">✕</button>
       `;
